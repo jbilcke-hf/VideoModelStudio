@@ -1,10 +1,14 @@
 import os
 import shutil
+import subprocess
 from huggingface_hub import HfApi, create_repo
 from pathlib import Path
 import json
 import re
+import logging
 from typing import Any, Optional, Dict, List, Union, Tuple
+
+logger = logging.getLogger(__name__)
 
 def make_archive(source: str | Path, destination: str | Path):
     source = str(source)
@@ -17,6 +21,44 @@ def make_archive(source: str | Path, destination: str | Path):
     archive_to = os.path.basename(source.strip(os.sep))
     shutil.make_archive(name, format, archive_from, archive_to)
     shutil.move('%s.%s'%(name,format), destination)
+
+def get_video_fps(video_path: Path) -> Optional[str]:
+    """Get FPS information from video file using ffprobe
+    
+    Args:
+        video_path: Path to video file
+        
+    Returns:
+        FPS string (e.g. "24 FPS, ") or None if unable to determine
+    """
+    try:
+        cmd = [
+            'ffprobe',
+            '-v', 'error',
+            '-select_streams', 'v:0',
+            '-show_entries', 'stream=avg_frame_rate',
+            '-of', 'default=noprint_wrappers=1:nokey=1',
+            str(video_path)
+        ]
+        
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            logger.warning(f"Error getting FPS for {video_path}: {result.stderr}")
+            return None
+            
+        fps = result.stdout.strip()
+        if '/' in fps:
+            # Convert fraction to decimal
+            num, den = map(int, fps.split('/'))
+            if den == 0:
+                return None
+            fps = str(round(num / den))
+            
+        return f"{fps} FPS, "
+        
+    except Exception as e:
+        logger.warning(f"Failed to get FPS for {video_path}: {e}")
+        return None
 
 def extract_scene_info(filename: str) -> Tuple[str, Optional[int]]:
     """Extract base name and scene number from filename

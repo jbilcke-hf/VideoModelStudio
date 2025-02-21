@@ -4,7 +4,7 @@ import logging
 import shutil
 from typing import Any, Optional, Dict, List, Union, Tuple
 from config import STORAGE_PATH, TRAINING_PATH, STAGING_PATH, TRAINING_VIDEOS_PATH, MODEL_PATH, OUTPUT_PATH, HF_API_TOKEN, MODEL_TYPES
-from utils import extract_scene_info, make_archive, is_image_file, is_video_file
+from utils import get_video_fps, extract_scene_info, make_archive, is_image_file, is_video_file
 
 logger = logging.getLogger(__name__)
 
@@ -109,6 +109,14 @@ def copy_files_to_training_dir(prompt_prefix: str) -> int:
 
         if parent_caption and not caption.endswith(parent_caption):
             caption = f"{caption}\n{parent_caption}"
+
+        # Add FPS information for videos
+        if is_video_file(file_path) and caption:
+            # Only add FPS if not already present
+            if not any(f"FPS, " in line for line in caption.split('\n')):
+                fps_info = get_video_fps(file_path)
+                if fps_info:
+                    caption = f"{fps_info}{caption}"
 
         if prompt_prefix and not caption.startswith(prompt_prefix):
             caption = f"{prompt_prefix}{caption}"
