@@ -36,7 +36,7 @@ from splitting_service import SplittingService
 from import_service import ImportService
 from config import (
     STORAGE_PATH, VIDEOS_TO_SPLIT_PATH, STAGING_PATH,
-    TRAINING_PATH, LOG_FILE_PATH, TRAINING_VIDEOS_PATH, MODEL_PATH, OUTPUT_PATH, DEFAULT_CAPTIONING_BOT_INSTRUCTIONS,
+    TRAINING_PATH, LOG_FILE_PATH, TRAINING_PRESETS, TRAINING_VIDEOS_PATH, MODEL_PATH, OUTPUT_PATH, DEFAULT_CAPTIONING_BOT_INSTRUCTIONS,
     DEFAULT_PROMPT_PREFIX, HF_API_TOKEN, ASK_USER_TO_DUPLICATE_SPACE, MODEL_TYPES, SMALL_TRAINING_BUCKETS
 )
 from utils import make_archive, count_media_files, format_media_title, is_image_file, is_video_file, validate_model_repo, format_time
