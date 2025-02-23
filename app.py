@@ -37,7 +37,7 @@ from import_service import ImportService
 from config import (
     STORAGE_PATH, VIDEOS_TO_SPLIT_PATH, STAGING_PATH,
     TRAINING_PATH, LOG_FILE_PATH, TRAINING_VIDEOS_PATH, MODEL_PATH, OUTPUT_PATH, DEFAULT_CAPTIONING_BOT_INSTRUCTIONS,
-    DEFAULT_PROMPT_PREFIX, HF_API_TOKEN, ASK_USER_TO_DUPLICATE_SPACE, MODEL_TYPES, TRAINING_BUCKETS
+    DEFAULT_PROMPT_PREFIX, HF_API_TOKEN, ASK_USER_TO_DUPLICATE_SPACE, MODEL_TYPES, SMALL_TRAINING_BUCKETS
 )
 from utils import make_archive, count_media_files, format_media_title, is_image_file, is_video_file, validate_model_repo, format_time
 from finetrainers_utils import copy_files_to_training_dir, prepare_finetrainers_dataset
@@ -500,7 +500,7 @@ class VideoTrainerUI:
                 "batch_size": 1,
                 "learning_rate": 2e-5,
                 "save_iterations": 500,
-                "video_resolution_buckets": TRAINING_BUCKETS,
+                "video_resolution_buckets": SMALL_TRAINING_BUCKETS,
                 "video_reshape_mode": "center",
                 "caption_dropout_p": 0.05,
                 "gradient_accumulation_steps": 1,
@@ -513,7 +513,7 @@ class VideoTrainerUI:
                 "batch_size": 1,
                 "learning_rate": 3e-5,
                 "save_iterations": 500,
-                "video_resolution_buckets": TRAINING_BUCKETS,
+                "video_resolution_buckets": SMALL_TRAINING_BUCKETS,
                 "video_reshape_mode": "center",
                 "caption_dropout_p": 0.05,
                 "gradient_accumulation_steps": 4,

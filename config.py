@@ -183,7 +183,7 @@ class TrainingConfig:
     caption_column: str = "prompts.txt"
 
     id_token: Optional[str] = None
-    video_resolution_buckets: List[Tuple[int, int, int]] = field(default_factory=lambda: TRAINING_BUCKETS)
+    video_resolution_buckets: List[Tuple[int, int, int]] = field(default_factory=lambda: SMALL_TRAINING_BUCKETS)
     video_reshape_mode: str = "center"
     caption_dropout_p: float = 0.05
     caption_dropout_technique: str = "empty"
