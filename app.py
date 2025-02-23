@@ -661,6 +661,26 @@ class VideoTrainerUI:
             training_dataset
         )
 
+    def update_training_params(self, preset_name: str) -> Dict:
+        """Update UI components based on selected preset"""
+        preset = TRAINING_PRESETS[preset_name]
+               
+        # Get preset description for display
+        description = preset.get("description", "")
+        bucket_info = f"\nBucket configuration: {len(preset['training_buckets'])} buckets"
+        info_text = f"{description}{bucket_info}"
+        
+        return {
+            "model_type": gr.Dropdown(value=MODEL_TYPES[preset["model_type"]]),
+            "lora_rank": gr.Dropdown(value=preset["lora_rank"]),
+            "lora_alpha": gr.Dropdown(value=preset["lora_alpha"]),
+            "num_epochs": gr.Number(value=preset["num_epochs"]),
+            "batch_size": gr.Number(value=preset["batch_size"]),
+            "learning_rate": gr.Number(value=preset["learning_rate"]),
+            "save_iterations": gr.Number(value=preset["save_iterations"]),
+            "preset_info": gr.Markdown(value=info_text)
+        }
+
     def create_ui(self):
         """Create Gradio interface"""
 
@@ -819,6 +839,15 @@ class VideoTrainerUI:
 
                             with gr.Row():
                                 train_title = gr.Markdown("## 0 files available for training (0 bytes)")
+
+                            with gr.Row():
+                                with gr.Column():
+                                    training_preset = gr.Dropdown(
+                                        choices=list(TRAINING_PRESETS.keys()),
+                                        label="Training Preset",
+                                        value=list(TRAINING_PRESETS.keys())[0]
+                                    )
+                                preset_info = gr.Markdown()
 
                             with gr.Row():
                                 with gr.Column():
@@ -1096,16 +1125,28 @@ class VideoTrainerUI:
                 outputs=[training_dataset]
             )
             
+            training_preset.change(
+                fn=self.update_training_params,
+                inputs=[training_preset],
+                outputs=[
+                    model_type, lora_rank, lora_alpha, 
+                    num_epochs, batch_size, learning_rate, 
+                    save_iterations, preset_info
+                ]
+            )
+
             # Training control events
             start_btn.click(
-                fn=lambda model_type, *args: (
+                fn=lambda preset, model_type, *args: (
                     self.log_parser.reset(),
                     self.trainer.start_training(
                         MODEL_TYPES[model_type],
-                        *args
+                        *args,
+                        preset_name=preset
                     )
                 ),
                 inputs=[
+                    training_preset,
                     model_type,
                     lora_rank,
                     lora_alpha,

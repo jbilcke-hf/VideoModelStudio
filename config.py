@@ -55,8 +55,8 @@ MODEL_TYPES = {
 # it is best to use resolutions that are powers of 8
 # The resolution should be divisible by 32
 # so we cannot use 1080, 540 etc as they are not divisible by 32
-TRAINING_WIDTH = 768 # 32 * 24
-TRAINING_HEIGHT = 512 # 32 * 16
+MEDIUM_19_9_RATIO_WIDTH = 768 # 32 * 24
+MEDIUM_19_9_RATIO_HEIGHT = 512 # 32 * 16
 
 # 1920 = 32 * 60 (divided by 2: 960 = 32 * 30)
 # 1920 = 32 * 60 (divided by 2: 960 = 32 * 30)
@@ -65,25 +65,99 @@ TRAINING_HEIGHT = 512 # 32 * 16
 # it is important that the resolution buckets properly cover the training dataset,
 # or else that we exclude from the dataset videos that are out of this range
 # right now, finetrainers will crash if that happens, so the workaround is to have more buckets in here
-        
-TRAINING_BUCKETS = [
-    (1, TRAINING_HEIGHT, TRAINING_WIDTH), #  1
-    (8 + 1, TRAINING_HEIGHT, TRAINING_WIDTH), # 8 + 1
-    (8 * 2 + 1, TRAINING_HEIGHT, TRAINING_WIDTH), # 16 + 1
-    (8 * 4 + 1, TRAINING_HEIGHT, TRAINING_WIDTH), # 32 + 1
-    (8 * 6 + 1, TRAINING_HEIGHT, TRAINING_WIDTH), # 48 + 1
-    (8 * 8 + 1, TRAINING_HEIGHT, TRAINING_WIDTH), # 64 + 1
-    (8 * 10 + 1, TRAINING_HEIGHT, TRAINING_WIDTH), # 80 + 1
-    (8 * 12 + 1, TRAINING_HEIGHT, TRAINING_WIDTH), # 96 + 1
-    (8 * 14 + 1, TRAINING_HEIGHT, TRAINING_WIDTH), # 112 + 1
-    (8 * 16 + 1, TRAINING_HEIGHT, TRAINING_WIDTH), # 128 + 1
-    (8 * 18 + 1, TRAINING_HEIGHT, TRAINING_WIDTH), # 144 + 1
-    (8 * 20 + 1, TRAINING_HEIGHT, TRAINING_WIDTH), # 160 + 1
-    (8 * 22 + 1, TRAINING_HEIGHT, TRAINING_WIDTH), # 176 + 1
-    (8 * 24 + 1, TRAINING_HEIGHT, TRAINING_WIDTH), # 192 + 1
-    (8 * 28 + 1, TRAINING_HEIGHT, TRAINING_WIDTH), # 224 + 1
-    (8 * 32 + 1, TRAINING_HEIGHT, TRAINING_WIDTH), # 256 + 1
+
+NB_FRAMES_1 = 1  #  1
+NB_FRAMES_9 = 8 + 1 # 8 + 1
+NB_FRAMES_17 = 8 * 2 + 1 # 16 + 1
+NB_FRAMES_32 = 8 * 4 + 1  # 32 + 1
+NB_FRAMES_48 = 8 * 6 + 1 # 48 + 1
+NB_FRAMES_64 = 8 * 8 + 1  # 64 + 1
+NB_FRAMES_80 = 8 * 10 + 1  # 80 + 1
+NB_FRAMES_96 = 8 * 12 + 1  # 96 + 1
+NB_FRAMES_112 = 8 * 14 + 1  # 112 + 1
+NB_FRAMES_128 = 8 * 16 + 1  # 128 + 1
+NB_FRAMES_144 = 8 * 18 + 1  # 144 + 1
+NB_FRAMES_160  = 8 * 20 + 1  # 160 + 1
+NB_FRAMES_176 = 8 * 22 + 1  # 176 + 1
+NB_FRAMES_192 = 8 * 24 + 1  # 192 + 1
+NB_FRAMES_224 = 8 * 28 + 1  # 224 + 1
+NB_FRAMES_256 = 8 * 32 + 1  # 256 + 1
+# 256 isn't a lot by the way, especially with 60 FPS videos.. 
+# can we crank it and put more frames in here?
+
+SMALL_TRAINING_BUCKETS = [
+    (NB_FRAMES_1,   MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 1
+    (NB_FRAMES_9,   MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 8 + 1
+    (NB_FRAMES_17,  MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 16 + 1
+    (NB_FRAMES_32,  MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 32 + 1
+    (NB_FRAMES_48,  MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 48 + 1
+    (NB_FRAMES_64,  MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 64 + 1
+    (NB_FRAMES_80,  MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 80 + 1
+    (NB_FRAMES_96,  MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 96 + 1
+    (NB_FRAMES_112, MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 112 + 1
+    (NB_FRAMES_128, MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 128 + 1
+    (NB_FRAMES_144, MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 144 + 1
+    (NB_FRAMES_160, MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 160 + 1
+    (NB_FRAMES_176, MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 176 + 1
+    (NB_FRAMES_192, MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 192 + 1
+    (NB_FRAMES_224, MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 224 + 1
+    (NB_FRAMES_256, MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 256 + 1
 ]
+
+MEDIUM_19_9_RATIO_WIDTH = 928 # 32 * 29
+MEDIUM_19_9_RATIO_HEIGHT = 512 # 32 * 16
+
+MEDIUM_19_9_RATIO_BUCKETS = [
+    (NB_FRAMES_1,   MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), #  1
+    (NB_FRAMES_9,   MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 8 + 1
+    (NB_FRAMES_17,  MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 16 + 1
+    (NB_FRAMES_32,  MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 32 + 1
+    (NB_FRAMES_48,  MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 48 + 1
+    (NB_FRAMES_64,  MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 64 + 1
+    (NB_FRAMES_80,  MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 80 + 1
+    (NB_FRAMES_96,  MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 96 + 1
+    (NB_FRAMES_112, MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 112 + 1
+    (NB_FRAMES_128, MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 128 + 1
+    (NB_FRAMES_144, MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 144 + 1
+    (NB_FRAMES_160, MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 160 + 1
+    (NB_FRAMES_176, MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 176 + 1
+    (NB_FRAMES_192, MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 192 + 1
+    (NB_FRAMES_224, MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 224 + 1
+    (NB_FRAMES_256, MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 256 + 1
+]
+
+TRAINING_PRESETS = {
+    "HunyuanVideo (normal)": {
+        "model_type": "hunyuan_video",
+        "lora_rank": "128",
+        "lora_alpha": "128",
+        "num_epochs": 70,
+        "batch_size": 1,
+        "learning_rate": 2e-5,
+        "save_iterations": 500,
+        "training_buckets": SMALL_TRAINING_BUCKETS,
+    },
+    "LTX-Video (normal)": {
+        "model_type": "ltx_video", 
+        "lora_rank": "128",
+        "lora_alpha": "128",
+        "num_epochs": 70,
+        "batch_size": 1,
+        "learning_rate": 3e-5,
+        "save_iterations": 500,
+        "training_buckets": SMALL_TRAINING_BUCKETS,
+    },
+    "LTX-Video (16:9, HQ)": {
+        "model_type": "ltx_video",
+        "lora_rank": "256", 
+        "lora_alpha": "128",
+        "num_epochs": 50,
+        "batch_size": 1,
+        "learning_rate": 3e-5,
+        "save_iterations": 200,
+        "training_buckets": MEDIUM_19_9_RATIO_BUCKETS,
+    }
+}
 
 @dataclass
 class TrainingConfig:
@@ -159,7 +233,7 @@ class TrainingConfig:
     nccl_timeout: int = 1800
 
     @classmethod
-    def hunyuan_video_lora(cls, data_path: str, output_path: str) -> 'TrainingConfig':
+    def hunyuan_video_lora(cls, data_path: str, output_path: str, buckets=None) -> 'TrainingConfig':
         """Configuration for Hunyuan video-to-video LoRA training"""
         return cls(
             model_name="hunyuan_video",
@@ -174,13 +248,13 @@ class TrainingConfig:
             gradient_accumulation_steps=1,
             lora_rank=128,
             lora_alpha=128,
-            video_resolution_buckets=TRAINING_BUCKETS,
+            video_resolution_buckets=buckets or SMALL_TRAINING_BUCKETS,
             caption_dropout_p=0.05,
             flow_weighting_scheme="none"  # Hunyuan specific
         )
     
     @classmethod
-    def ltx_video_lora(cls, data_path: str, output_path: str) -> 'TrainingConfig':
+    def ltx_video_lora(cls, data_path: str, output_path: str, buckets=None) -> 'TrainingConfig':
         """Configuration for LTX-Video LoRA training"""
         return cls(
             model_name="ltx_video",
@@ -195,7 +269,7 @@ class TrainingConfig:
             gradient_accumulation_steps=4,
             lora_rank=128,
             lora_alpha=128,
-            video_resolution_buckets=TRAINING_BUCKETS,
+            video_resolution_buckets=buckets or SMALL_TRAINING_BUCKETS,
             caption_dropout_p=0.05,
             flow_weighting_scheme="logit_normal"  # LTX specific
         )

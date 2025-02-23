@@ -257,18 +257,25 @@ class TrainingService:
                 logger.error(error_msg)
                 return error_msg, "No training data available"
 
-            # Get config for selected model type
+
+             # Get preset configuration
+            preset = TRAINING_PRESETS[preset_name]
+            training_buckets = preset["training_buckets"]
+
+            # Get config for selected model type with preset buckets
             if model_type == "hunyuan_video":
                 config = TrainingConfig.hunyuan_video_lora(
                     data_path=str(TRAINING_PATH),
-                    output_path=str(OUTPUT_PATH)
+                    output_path=str(OUTPUT_PATH),
+                    buckets=training_buckets
                 )
             else:  # ltx_video
                 config = TrainingConfig.ltx_video_lora(
                     data_path=str(TRAINING_PATH),
-                    output_path=str(OUTPUT_PATH)
+                    output_path=str(OUTPUT_PATH),
+                    buckets=training_buckets
                 )
-
+            
             # Update with UI parameters
             config.train_epochs = int(num_epochs)
             config.lora_rank = int(lora_rank)
