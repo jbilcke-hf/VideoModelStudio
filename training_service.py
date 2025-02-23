@@ -19,7 +19,7 @@ import select
 from typing import Any, Optional, Dict, List, Union, Tuple
 
 from huggingface_hub import upload_folder, create_repo
-from config import TrainingConfig,TRAINING_PRESETS,  LOG_FILE_PATH, TRAINING_VIDEOS_PATH, STORAGE_PATH, TRAINING_PATH, MODEL_PATH, OUTPUT_PATH, HF_API_TOKEN, MODEL_TYPES
+from config import TrainingConfig, TRAINING_PRESETS,  LOG_FILE_PATH, TRAINING_VIDEOS_PATH, STORAGE_PATH, TRAINING_PATH, MODEL_PATH, OUTPUT_PATH, HF_API_TOKEN, MODEL_TYPES
 from utils import make_archive, parse_training_log, is_image_file, is_video_file
 from finetrainers_utils import prepare_finetrainers_dataset, copy_files_to_training_dir
 
@@ -214,8 +214,18 @@ class TrainingService:
             return f"Configuration validation failed: {str(e)}"
         
         
-    def start_training(self, model_type: str, lora_rank: str, lora_alpha: str, num_epochs: int, batch_size: int, 
-                  learning_rate: float, save_iterations: int, repo_id: str) -> Tuple[str, str]:
+    def start_training(
+        self,
+        model_type: str,
+        lora_rank: str,
+        lora_alpha: str,
+        num_epochs: int,
+        batch_size: int, 
+        learning_rate: float,
+        save_iterations: int,
+        repo_id: str,
+        preset_name: str,
+    ) -> Tuple[str, str]:
         """Start training with finetrainers"""
             
         self.clear_logs()

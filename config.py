@@ -262,7 +262,7 @@ class TrainingConfig:
             data_root=data_path,
             output_dir=output_path,
             batch_size=1,
-            train_epochs=70,
+            train_epochs=40,
             lr=3e-5,
             gradient_checkpointing=True,
             id_token="BW_STYLE",

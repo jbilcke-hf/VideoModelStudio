@@ -661,25 +661,39 @@ class VideoTrainerUI:
             training_dataset
         )
 
-    def update_training_params(self, preset_name: str) -> Dict:
+    def update_training_params(self, preset_name: str) -> Tuple:
         """Update UI components based on selected preset"""
         preset = TRAINING_PRESETS[preset_name]
-               
+        
+        # Find the display name that maps to our model type
+        model_display_name = next(
+            key for key, value in MODEL_TYPES.items() 
+            if value == preset["model_type"]
+        )
+            
         # Get preset description for display
         description = preset.get("description", "")
-        bucket_info = f"\nBucket configuration: {len(preset['training_buckets'])} buckets"
+        
+        # Get max values from buckets
+        buckets = preset["training_buckets"]
+        max_frames = max(frames for frames, _, _ in buckets)
+        max_height = max(height for _, height, _ in buckets)
+        max_width = max(width for _, _, width in buckets)
+        bucket_info = f"\nMaximum video size: {max_frames} frames at {max_width}x{max_height} resolution"
+        
         info_text = f"{description}{bucket_info}"
         
-        return {
-            "model_type": gr.Dropdown(value=MODEL_TYPES[preset["model_type"]]),
-            "lora_rank": gr.Dropdown(value=preset["lora_rank"]),
-            "lora_alpha": gr.Dropdown(value=preset["lora_alpha"]),
-            "num_epochs": gr.Number(value=preset["num_epochs"]),
-            "batch_size": gr.Number(value=preset["batch_size"]),
-            "learning_rate": gr.Number(value=preset["learning_rate"]),
-            "save_iterations": gr.Number(value=preset["save_iterations"]),
-            "preset_info": gr.Markdown(value=info_text)
-        }
+        # Return values in the same order as the output components
+        return (
+            model_display_name,
+            preset["lora_rank"],
+            preset["lora_alpha"],
+            preset["num_epochs"],
+            preset["batch_size"],
+            preset["learning_rate"],
+            preset["save_iterations"],
+            info_text
+        )
 
     def create_ui(self):
         """Create Gradio interface"""
