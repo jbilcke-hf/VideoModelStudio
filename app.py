@@ -575,16 +575,14 @@ class VideoTrainerUI:
         """Get information about the selected model type"""
         if model_type == "hunyuan_video":
             return """### HunyuanVideo (LoRA)
-    - Best for learning complex video generation patterns
-    - Required VRAM: ~47GB minimum
+    - Required VRAM: ~48GB minimum
     - Recommended batch size: 1-2
     - Typical training time: 2-4 hours
     - Default resolution: 49x512x768
-    - Default LoRA rank: 128"""
+    - Default LoRA rank: 128 (~600 MB)"""
                 
         elif model_type == "ltx_video":
             return """### LTX-Video (LoRA)
-    - Lightweight video model
     - Required VRAM: ~18GB minimum 
     - Recommended batch size: 1-4
     - Typical training time: 1-3 hours
@@ -978,13 +976,13 @@ class VideoTrainerUI:
                             with gr.Row():
                                 lora_rank = gr.Dropdown(
                                     label="LoRA Rank",
-                                    choices=["16", "32", "64", "128", "256"],
+                                    choices=["16", "32", "64", "128", "256", "512", "1024"],
                                     value="128",
                                     type="value"
                                 )
                                 lora_alpha = gr.Dropdown(
                                     label="LoRA Alpha",
-                                    choices=["16", "32", "64", "128", "256"],
+                                    choices=["16", "32", "64", "128", "256", "512", "1024"],
                                     value="128",
                                     type="value"
                                 )
