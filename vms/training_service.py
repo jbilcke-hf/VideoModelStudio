@@ -241,7 +241,8 @@ class TrainingService:
         try:
             # Get absolute paths
             current_dir = Path(__file__).parent.absolute()
-            train_script = current_dir / "train.py"
+            train_script = current_dir.parent / "train.py"
+
             
             if not train_script.exists():
                 error_msg = f"Training script not found at {train_script}"
