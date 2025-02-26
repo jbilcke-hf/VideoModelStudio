@@ -61,36 +61,38 @@ class VideoTrainerUI:
         self.log_parser = TrainingLogParser()
     
     def update_captioning_buttons_start(self):
-        return {
-            "run_autocaption_btn": gr.Button(
+        """Return individual button values instead of a dictionary"""
+        return (
+            gr.Button(
                 interactive=False,
                 variant="secondary",
             ),
-            "stop_autocaption_btn": gr.Button(
+            gr.Button(
                 interactive=True,
                 variant="stop",
             ),
-            "copy_files_to_training_dir_btn": gr.Button(
+            gr.Button(
                 interactive=False,
                 variant="secondary",
             )
-        }
+        )
     
     def update_captioning_buttons_end(self):
-        return {
-            "run_autocaption_btn": gr.Button(
+        """Return individual button values instead of a dictionary"""
+        return (
+            gr.Button(
                 interactive=True,
                 variant="primary",
             ),
-            "stop_autocaption_btn": gr.Button(
+            gr.Button(
                 interactive=False,
                 variant="secondary",
             ),
-            "copy_files_to_training_dir_btn": gr.Button(
+            gr.Button(
                 interactive=True,
                 variant="primary",
             )
-        }
+        )
 
     def show_refreshing_status(self) -> List[List[str]]:
         """Show a 'Refreshing...' status in the dataframe"""
