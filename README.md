@@ -61,12 +61,14 @@ In practice, a PR (pull request) will be necessary to adapt the UI a bit to acco
 
 ### LTX-Video
 
-I have tested training a LoRA model using videos, on a single A100 instance.
+I have tested training a LTX-Video LoRA model using videos (not images), on a single A100 instance.
+It requires about 18/19 Gb of VRAM, depending on your settings.
 
 ### HunyuanVideo
 
-I haven't tested it yet, but in theory it should work out of the box.
-Please keep in mind that this requires a lot of processing mower.
+I have tested training a HunyuanVideo LoRA model using videos (not images),, on a single A100 instance.
+
+It requires about 47~49 Gb of VRAM, depending on your settings.
 
 ### CogVideoX
 
