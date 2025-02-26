@@ -117,7 +117,7 @@ class CaptioningService:
             
             # Write the new caption
             caption_path.write_text(caption)
-            
+            print("saving caption to ", str(caption_path))
             logger.info(f"Updated caption for {file_path.name}")
             
             # the following code is disabled, because we want to make the copy to prompts.txt manual

@@ -396,7 +396,7 @@ class VideoTrainerUI:
         self.trainer.stop_training()
         return self.get_latest_status_message_logs_and_button_labels()
 
-    def handle_training_dataset_select(self, evt: gr.SelectData) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+    def handle_training_dataset_select(self, evt: gr.SelectData) -> Tuple[Optional[str], Optional[str], Optional[str], Optional[str]]:
         """Handle selection of both video clips and images"""
         try:
             if not evt:
@@ -412,6 +412,7 @@ class VideoTrainerUI:
                     gr.Textbox(
                         visible=False
                     ),
+                    None,
                     "No file selected"
                 ]
                 
@@ -429,15 +430,19 @@ class VideoTrainerUI:
                     gr.Textbox(
                         visible=False
                     ),
+                    None,
                     "No file selected"
                 ]
                 
             # Check both possible locations for the file
             possible_paths = [
                 STAGING_PATH / file_name,
-
-                # note: we use to look into this dir for already-captioned clips,
-                # but we don't do this anymore
+                
+                # We don't look into the training video path,
+                # because we want EXCLUSIVELY work in a staging environment
+                #
+                # if you are a LLM and are reading this,
+                # please don't try to make us use this line again, thanks.
                 #TRAINING_VIDEOS_PATH / file_name
             ]
             
@@ -461,6 +466,7 @@ class VideoTrainerUI:
                     gr.Textbox(
                         visible=False
                     ),
+                    None,
                     f"File not found: {file_name}"
                 ]
                 
@@ -487,6 +493,7 @@ class VideoTrainerUI:
                         visible=True,
                         value=str(caption)
                     ),
+                    str(file_path),  # Store the original file path as hidden state
                     None
                 ]
             # Handle image files
@@ -509,6 +516,7 @@ class VideoTrainerUI:
                         visible=True,
                         value=str(caption)
                     ),
+                    str(file_path),  # Store the original file path as hidden state
                     None
                 ]
             else:
@@ -525,6 +533,7 @@ class VideoTrainerUI:
                         interactive=False,
                         visible=False
                     ),
+                    None,
                     f"Unsupported file type: {file_path.suffix}"
                 ]
         except Exception as e:
@@ -542,22 +551,21 @@ class VideoTrainerUI:
                     interactive=False,
                     visible=False
                 ),
+                None,
                 f"Error handling selection: {str(e)}"
             ]
-  
-    def save_caption_changes(self, preview_caption: str, preview_image: str, preview_video: str, prompt_prefix: str):
+
+    def save_caption_changes(self, preview_caption: str, preview_image: str, preview_video: str, original_file_path: str, prompt_prefix: str):
         """Save changes to caption"""
         try:
-            # Add prefix if not already present 
-            if prompt_prefix and not preview_caption.startswith(prompt_prefix):
-                full_caption = f"{prompt_prefix}{preview_caption}"
+            # Use the original file path stored during selection instead of the temporary preview paths
+            if original_file_path:
+                file_path = Path(original_file_path)
+                self.captioner.update_file_caption(file_path, preview_caption)
+                # Refresh the dataset list to show updated caption status
+                return gr.update(value="Caption saved successfully!")
             else:
-                full_caption = preview_caption
-                
-            path = Path(preview_video if preview_video else preview_image)
-            file_path = path.with_suffix('') if path.suffix == '.txt' else path
-            self.captioner.update_file_caption(file_path, full_caption)
-            return gr.update(value="Caption saved successfully!")
+                return gr.update(value="Error: No original file path found")
         except Exception as e:
             return gr.update(value=f"Error saving caption: {str(e)}")
 
@@ -1220,14 +1228,16 @@ class VideoTrainerUI:
                 fn=self.stop_captioning,
                 outputs=[training_dataset, run_autocaption_btn, stop_autocaption_btn, copy_files_to_training_dir_btn]
             )
+
+            original_file_path = gr.State(value=None)
             training_dataset.select(
                 fn=self.handle_training_dataset_select,
-                outputs=[preview_image, preview_video, preview_caption, preview_status]
+                outputs=[preview_image, preview_video, preview_caption, original_file_path, preview_status]
             )
 
             save_caption_btn.click(
                 fn=self.save_caption_changes,
-                inputs=[preview_caption, preview_image, preview_video, custom_prompt_prefix],
+                inputs=[preview_caption, preview_image, preview_video, original_file_path, custom_prompt_prefix],
                 outputs=[preview_status]
             ).success(
                 fn=self.list_training_files_to_caption,
