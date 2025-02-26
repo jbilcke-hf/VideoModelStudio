@@ -30,18 +30,19 @@ import tempfile
 import zipfile
 from typing import Any, Optional, Dict, List, Union, Tuple
 from typing import AsyncGenerator
-from training_service import TrainingService
-from captioning_service import CaptioningService
-from splitting_service import SplittingService
-from import_service import ImportService
-from config import (
+
+from vms.training_service import TrainingService
+from vms.captioning_service import CaptioningService
+from vms.splitting_service import SplittingService
+from vms.import_service import ImportService
+from vms.config import (
     STORAGE_PATH, VIDEOS_TO_SPLIT_PATH, STAGING_PATH,
     TRAINING_PATH, LOG_FILE_PATH, TRAINING_PRESETS, TRAINING_VIDEOS_PATH, MODEL_PATH, OUTPUT_PATH, DEFAULT_CAPTIONING_BOT_INSTRUCTIONS,
     DEFAULT_PROMPT_PREFIX, HF_API_TOKEN, ASK_USER_TO_DUPLICATE_SPACE, MODEL_TYPES, SMALL_TRAINING_BUCKETS
 )
-from utils import make_archive, count_media_files, format_media_title, is_image_file, is_video_file, validate_model_repo, format_time
-from finetrainers_utils import copy_files_to_training_dir, prepare_finetrainers_dataset
-from training_log_parser import TrainingLogParser
+from vms.utils import make_archive, count_media_files, format_media_title, is_image_file, is_video_file, validate_model_repo, format_time
+from vms.finetrainers_utils import copy_files_to_training_dir, prepare_finetrainers_dataset
+from vms.training_log_parser import TrainingLogParser
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -462,10 +463,8 @@ class VideoTrainerUI:
                 full_caption = preview_caption
                 
             path = Path(preview_video if preview_video else preview_image)
-            if path.suffix == '.txt':
-                self.trainer.update_file_caption(path.with_suffix(''), full_caption)
-            else:
-                self.trainer.update_file_caption(path, full_caption)
+            file_path = path.with_suffix('') if path.suffix == '.txt' else path
+            self.captioner.update_file_caption(file_path, full_caption)
             return gr.update(value="Caption saved successfully!")
         except Exception as e:
             return gr.update(value=f"Error saving caption: {str(e)}")

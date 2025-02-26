@@ -100,6 +100,40 @@ class CaptioningService:
             cls._model_loading = None
             raise
 
+
+    def update_file_caption(self, file_path: Path, caption: str) -> None:
+        """Update caption for a training file
+        
+        Args:
+            file_path: Path to the media file
+            caption: New caption text
+        """
+        try:
+            # Ensure we're working with Path objects
+            file_path = Path(file_path)
+            
+            # Create the caption file path
+            caption_path = file_path.with_suffix('.txt')
+            
+            # Write the new caption
+            caption_path.write_text(caption)
+            
+            logger.info(f"Updated caption for {file_path.name}")
+            
+            # the following code is disabled, because we want to make the copy to prompts.txt manual
+            # If the file is in TRAINING_VIDEOS_PATH, update prompts.txt as well
+            # if TRAINING_VIDEOS_PATH in file_path.parents:
+            #     # Try to update the training dataset
+            #     try:
+            #         prepare_finetrainers_dataset()
+            #         logger.info("Updated training dataset with new caption")
+            #     except Exception as e:
+            #         logger.warning(f"Could not update training dataset: {str(e)}")
+                    
+        except Exception as e:
+            logger.error(f"Error updating caption: {str(e)}")
+            raise
+  
     async def ensure_model_loaded(self):
         """Ensure model is loaded before processing"""
         if USE_MOCK_CAPTIONING_MODEL:

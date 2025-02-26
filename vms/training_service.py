@@ -212,8 +212,7 @@ class TrainingService:
         except Exception as e:
             logger.error(f"Error during config validation: {str(e)}")
             return f"Configuration validation failed: {str(e)}"
-        
-        
+    
     def start_training(
         self,
         model_type: str,
