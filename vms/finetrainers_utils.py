@@ -3,8 +3,9 @@ from pathlib import Path
 import logging
 import shutil
 from typing import Any, Optional, Dict, List, Union, Tuple
-from config import STORAGE_PATH, TRAINING_PATH, STAGING_PATH, TRAINING_VIDEOS_PATH, MODEL_PATH, OUTPUT_PATH, HF_API_TOKEN, MODEL_TYPES
-from utils import get_video_fps, extract_scene_info, make_archive, is_image_file, is_video_file
+
+from .config import STORAGE_PATH, TRAINING_PATH, STAGING_PATH, TRAINING_VIDEOS_PATH, MODEL_PATH, OUTPUT_PATH, HF_API_TOKEN, MODEL_TYPES
+from .utils import get_video_fps, extract_scene_info, make_archive, is_image_file, is_video_file
 
 logger = logging.getLogger(__name__)
 

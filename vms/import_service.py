@@ -7,10 +7,10 @@ from pathlib import Path
 from typing import List, Dict, Optional, Tuple
 from pytubefix import YouTube
 import logging
-from utils import is_image_file, is_video_file, add_prefix_to_caption
-from image_preprocessing import normalize_image
 
-from config import NORMALIZE_IMAGES_TO, TRAINING_VIDEOS_PATH, VIDEOS_TO_SPLIT_PATH, TRAINING_PATH, DEFAULT_PROMPT_PREFIX
+from .utils import is_image_file, is_video_file, add_prefix_to_caption
+from .image_preprocessing import normalize_image
+from .config import NORMALIZE_IMAGES_TO, TRAINING_VIDEOS_PATH, VIDEOS_TO_SPLIT_PATH, TRAINING_PATH, DEFAULT_PROMPT_PREFIX
 
 logger = logging.getLogger(__name__)
 

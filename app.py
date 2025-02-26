@@ -60,6 +60,71 @@ class VideoTrainerUI:
         self._should_stop_captioning = False
         self.log_parser = TrainingLogParser()
     
+    def update_captioning_buttons_start(self):
+        return {
+            "run_autocaption_btn": gr.Button(
+                interactive=False,
+                variant="secondary",
+            ),
+            "stop_autocaption_btn": gr.Button(
+                interactive=True,
+                variant="stop",
+            ),
+            "copy_files_to_training_dir_btn": gr.Button(
+                interactive=False,
+                variant="secondary",
+            )
+        }
+    
+    def update_captioning_buttons_end(self):
+        return {
+            "run_autocaption_btn": gr.Button(
+                interactive=True,
+                variant="primary",
+            ),
+            "stop_autocaption_btn": gr.Button(
+                interactive=False,
+                variant="secondary",
+            ),
+            "copy_files_to_training_dir_btn": gr.Button(
+                interactive=True,
+                variant="primary",
+            )
+        }
+
+    def show_refreshing_status(self) -> List[List[str]]:
+        """Show a 'Refreshing...' status in the dataframe"""
+        return [["Refreshing...", "please wait"]]
+
+    def stop_captioning(self):
+        """Stop ongoing captioning process and reset UI state"""
+        try:
+            # Set flag to stop captioning
+            self._should_stop_captioning = True
+            
+            # Call stop method on captioner
+            if self.captioner:
+                self.captioner.stop_captioning()
+                
+            # Get updated file list
+            updated_list = self.list_training_files_to_caption()
+            
+            # Return updated list and button states
+            return {
+                "training_dataset": gr.update(value=updated_list),
+                "run_autocaption_btn": gr.Button(interactive=True, variant="primary"),
+                "stop_autocaption_btn": gr.Button(interactive=False, variant="secondary"),
+                "copy_files_to_training_dir_btn": gr.Button(interactive=True, variant="primary")
+            }
+        except Exception as e:
+            logger.error(f"Error stopping captioning: {str(e)}")
+            return {
+                "training_dataset": gr.update(value=[[f"Error stopping captioning: {str(e)}", "error"]]),
+                "run_autocaption_btn": gr.Button(interactive=True, variant="primary"),
+                "stop_autocaption_btn": gr.Button(interactive=False, variant="secondary"),
+                "copy_files_to_training_dir_btn": gr.Button(interactive=True, variant="primary")
+            }
+
     def update_training_ui(self, training_state: Dict[str, Any]):
         """Update UI components based on training state"""
         updates = {}
@@ -221,48 +286,75 @@ class VideoTrainerUI:
             # Initialize captioner if not already done
             self._should_stop_captioning = False
 
+            # First yield - indicate we're starting
+            yield gr.update(
+                value=[["Starting captioning service...", "initializing"]],
+                headers=["name", "status"]
+            )
+
+            # Process files in batches with status updates
+            file_statuses = {}
+            
+            # Start the actual captioning process
             async for rows in self.captioner.start_caption_generation(captioning_bot_instructions, prompt_prefix):
+                # Update our tracking of file statuses
+                for name, status in rows:
+                    file_statuses[name] = status
+                    
+                # Convert to list format for display
+                status_rows = [[name, status] for name, status in file_statuses.items()]
+                
+                # Sort by name for consistent display
+                status_rows.sort(key=lambda x: x[0])
+                
                 # Yield UI update
                 yield gr.update(
-                    value=rows,
+                    value=status_rows,
                     headers=["name", "status"]
                 )
 
-            # Final update after completion
+            # Final update after completion with fresh data
             yield gr.update(
                 value=self.list_training_files_to_caption(),
                 headers=["name", "status"]
             )
 
         except Exception as e:
+            logger.error(f"Error in captioning: {str(e)}")
             yield gr.update(
-                value=[[str(e), "error"]],
+                value=[[f"Error: {str(e)}", "error"]],
                 headers=["name", "status"]
             )
 
     def list_training_files_to_caption(self) -> List[List[str]]:
         """List all clips and images - both pending and captioned"""
         files = []
-        already_listed: Dict[str, bool] = {}
+        already_listed = {}
 
-        # Check files in STAGING_PATH
+        # First check files in STAGING_PATH
         for file in STAGING_PATH.glob("*.*"):
             if is_video_file(file) or is_image_file(file):
                 txt_file = file.with_suffix('.txt')
-                status = "captioned" if txt_file.exists() else "no caption"
+                
+                # Check if caption file exists and has content
+                has_caption = txt_file.exists() and txt_file.stat().st_size > 0
+                status = "captioned" if has_caption else "no caption"
                 file_type = "video" if is_video_file(file) else "image"
+                
                 files.append([file.name, f"{status} ({file_type})", str(file)])
-                already_listed[str(file.name)] = True
-   
-        # Check files in TRAINING_VIDEOS_PATH 
+                already_listed[file.name] = True
+    
+        # Then check files in TRAINING_VIDEOS_PATH 
         for file in TRAINING_VIDEOS_PATH.glob("*.*"):
-            if not str(file.name) in already_listed:
-                if is_video_file(file) or is_image_file(file):
-                    txt_file = file.with_suffix('.txt')
-                    if txt_file.exists():
-                        file_type = "video" if is_video_file(file) else "image"
-                        files.append([file.name, f"captioned ({file_type})", str(file)])
-                    
+            if (is_video_file(file) or is_image_file(file)) and file.name not in already_listed:
+                txt_file = file.with_suffix('.txt')
+                
+                # Only include files with captions
+                if txt_file.exists() and txt_file.stat().st_size > 0:
+                    file_type = "video" if is_video_file(file) else "image"
+                    files.append([file.name, f"captioned ({file_type})", str(file)])
+                    already_listed[file.name] = True
+                
         # Sort by filename
         files.sort(key=lambda x: x[0])
         
@@ -1106,24 +1198,28 @@ class VideoTrainerUI:
                 }
             
             run_autocaption_btn.click(
+                fn=self.show_refreshing_status,
+                outputs=[training_dataset]
+            ).then(
+                fn=lambda: self.update_captioning_buttons_start(),
+                outputs=[run_autocaption_btn, stop_autocaption_btn, copy_files_to_training_dir_btn]
+            ).then(
                 fn=self.start_caption_generation,
                 inputs=[captioning_bot_instructions, custom_prompt_prefix],
                 outputs=[training_dataset],
             ).then(
-                fn=lambda: update_button_states(True),
-                outputs=[run_autocaption_btn, stop_autocaption_btn]
+                fn=lambda: self.update_captioning_buttons_end(),
+                outputs=[run_autocaption_btn, stop_autocaption_btn, copy_files_to_training_dir_btn]
             )
-
+            
             copy_files_to_training_dir_btn.click(
                 fn=self.copy_files_to_training_dir,
                 inputs=[custom_prompt_prefix]
             )
-            
             stop_autocaption_btn.click(
-                fn=lambda: (self.captioner.stop_captioning() if self.captioner else None, update_button_states(False)),
-                outputs=[run_autocaption_btn, stop_autocaption_btn]
+                fn=self.stop_captioning,
+                outputs=[training_dataset, run_autocaption_btn, stop_autocaption_btn, copy_files_to_training_dir_btn]
             )
-
             training_dataset.select(
                 fn=self.handle_training_dataset_select,
                 outputs=[preview_image, preview_video, preview_caption, preview_status]
