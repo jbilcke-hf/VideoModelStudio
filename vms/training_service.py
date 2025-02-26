@@ -519,7 +519,6 @@ class TrainingService:
 
     def _start_log_monitor(self, process: subprocess.Popen) -> None:
         """Start monitoring process output for logs"""
-
         
         def monitor():
             self.append_log("Starting log monitor thread")
@@ -546,15 +545,27 @@ class TrainingService:
                         return True
                 return False
 
-            # Use select to monitor both stdout and stderr
-            while process.poll() is None:
-                outputs = [process.stdout, process.stderr]
-                readable, _, _ = select.select(outputs, [], [], 1.0)
-                
-                for stream in readable:
-                    is_error = (stream == process.stderr)
-                    read_stream(stream, is_error)
-
+            # Create separate threads to monitor stdout and stderr
+            def monitor_stream(stream, is_error=False):
+                while process.poll() is None:
+                    if not read_stream(stream, is_error):
+                        time.sleep(0.1)  # Short sleep to avoid CPU thrashing
+            
+            # Start threads to monitor each stream
+            stdout_thread = threading.Thread(target=monitor_stream, args=(process.stdout, False))
+            stderr_thread = threading.Thread(target=monitor_stream, args=(process.stderr, True))
+            stdout_thread.daemon = True
+            stderr_thread.daemon = True
+            stdout_thread.start()
+            stderr_thread.start()
+            
+            # Wait for process to complete
+            process.wait()
+            
+            # Wait for threads to finish reading any remaining output
+            stdout_thread.join(timeout=2)
+            stderr_thread.join(timeout=2)
+            
             # Process any remaining output after process ends
             while read_stream(process.stdout):
                 pass
