@@ -2,7 +2,8 @@ import os
 from dataclasses import dataclass, field
 from typing import Dict, Any, Optional, List, Tuple
 from pathlib import Path
-from utils import parse_bool_env
+
+from .utils import parse_bool_env
 
 HF_API_TOKEN = os.getenv("HF_API_TOKEN")
 ASK_USER_TO_DUPLICATE_SPACE = parse_bool_env(os.getenv("ASK_USER_TO_DUPLICATE_SPACE"))
