@@ -59,7 +59,43 @@ class VideoTrainerUI:
         self.captioner = CaptioningService()
         self._should_stop_captioning = False
         self.log_parser = TrainingLogParser()
-    
+      
+        # Try to recover any interrupted training sessions
+        recovery_result = self.trainer.recover_interrupted_training()
+        
+        self.recovery_status = recovery_result.get("status", "unknown")
+        self.ui_updates = recovery_result.get("ui_updates", {})
+        
+        if recovery_result["status"] == "recovered":
+            logger.info(f"Training recovery: {recovery_result['message']}")
+            # No need to do anything else - the training is already running
+        elif recovery_result["status"] == "running":
+            logger.info("Training process is already running")
+            # No need to do anything - the process is still alive
+        elif recovery_result["status"] in ["error", "idle"]:
+            logger.warning(f"Training status: {recovery_result['message']}")
+            # UI will be in ready-to-start mode
+            
+
+    def update_ui_state(self, **kwargs):
+        """Update UI state with new values"""
+        current_state = self.trainer.load_ui_state()
+        current_state.update(kwargs)
+        self.trainer.save_ui_state(current_state)
+        return current_state
+
+    def load_ui_values(self):
+        """Load UI state values for initializing form fields"""
+        ui_state = self.trainer.load_ui_state()
+        
+        # Convert types as needed since JSON stores everything as strings
+        ui_state["num_epochs"] = int(ui_state.get("num_epochs", 70))
+        ui_state["batch_size"] = int(ui_state.get("batch_size", 1))
+        ui_state["learning_rate"] = float(ui_state.get("learning_rate", 3e-5))
+        ui_state["save_iterations"] = int(ui_state.get("save_iterations", 500))
+        
+        return ui_state
+        
     def update_captioning_buttons_start(self):
         """Return individual button values instead of a dictionary"""
         return (
@@ -1120,10 +1156,53 @@ class VideoTrainerUI:
                 return gr.update(value=repo_id, error=None)
             
             # Connect events 
+
+            # Save state when model type changes
             model_type.change(
+                fn=lambda v: self.update_ui_state(model_type=v),
+                inputs=[model_type],
+                outputs=[] # No UI update needed
+            ).then(
                 fn=update_model_info,
                 inputs=[model_type],
                 outputs=[model_info, num_epochs, batch_size, learning_rate, save_iterations]
+            )
+
+            # the following change listeners are used for UI persistence
+            lora_rank.change(
+                fn=lambda v: self.update_ui_state(lora_rank=v),
+                inputs=[lora_rank],
+                outputs=[]
+            )
+
+            lora_alpha.change(
+                fn=lambda v: self.update_ui_state(lora_alpha=v),
+                inputs=[lora_alpha],
+                outputs=[]
+            )
+
+            num_epochs.change(
+                fn=lambda v: self.update_ui_state(num_epochs=v),
+                inputs=[num_epochs],
+                outputs=[]
+            )
+
+            batch_size.change(
+                fn=lambda v: self.update_ui_state(batch_size=v),
+                inputs=[batch_size],
+                outputs=[]
+            )
+
+            learning_rate.change(
+                fn=lambda v: self.update_ui_state(learning_rate=v),
+                inputs=[learning_rate],
+                outputs=[]
+            )
+
+            save_iterations.change(
+                fn=lambda v: self.update_ui_state(save_iterations=v),
+                inputs=[save_iterations],
+                outputs=[]
             )
 
             async def on_import_success(enable_splitting, enable_automatic_content_captioning, prompt_prefix):
@@ -1243,8 +1322,13 @@ class VideoTrainerUI:
                 fn=self.list_training_files_to_caption,
                 outputs=[training_dataset]
             )
-            
+
+            # Save state when training preset changes
             training_preset.change(
+                fn=lambda v: self.update_ui_state(training_preset=v),
+                inputs=[training_preset],
+                outputs=[] # No UI update needed
+            ).then(
                 fn=self.update_training_params,
                 inputs=[training_preset],
                 outputs=[
@@ -1337,13 +1421,49 @@ class VideoTrainerUI:
                 ]
             )
 
+            # Add this new method to get initial button states:
+            def get_initial_button_states(self):
+                """Get the initial states for training buttons based on recovery status"""
+                recovery_result = self.trainer.recover_interrupted_training()
+                ui_updates = recovery_result.get("ui_updates", {})
+                
+                # Return button states in the correct order
+                return (
+                    gr.Button(**ui_updates.get("start_btn", {"interactive": True, "variant": "primary"})),
+                    gr.Button(**ui_updates.get("stop_btn", {"interactive": False, "variant": "secondary"})),
+                    gr.Button(**ui_updates.get("pause_resume_btn", {"interactive": False, "variant": "secondary"}))
+                )
+
+            def initialize_ui_from_state(self):
+                """Initialize UI components from saved state"""
+                ui_state = self.load_ui_values()
+                
+                # Return values in order matching the outputs in app.load
+                return (
+                    ui_state.get("training_preset", list(TRAINING_PRESETS.keys())[0]),
+                    ui_state.get("model_type", list(MODEL_TYPES.keys())[0]),
+                    ui_state.get("lora_rank", "128"),
+                    ui_state.get("lora_alpha", "128"),
+                    ui_state.get("num_epochs", 70),
+                    ui_state.get("batch_size", 1),
+                    ui_state.get("learning_rate", 3e-5),
+                    ui_state.get("save_iterations", 500)
+                )
+
             # Auto-refresh timers
             app.load(
                 fn=lambda: (
-                    self.refresh_dataset()
+                    self.refresh_dataset(),
+                    *self.get_initial_button_states(),
+                    # Load saved UI state values
+                    *self.initialize_ui_from_state()
                 ),
                 outputs=[
-                    video_list, training_dataset
+                    video_list, training_dataset,
+                    start_btn, stop_btn, pause_resume_btn,
+                    # Add outputs for UI fields
+                    training_preset, model_type, lora_rank, lora_alpha,
+                    num_epochs, batch_size, learning_rate, save_iterations
                 ]
             )
             

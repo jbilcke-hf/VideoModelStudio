@@ -34,7 +34,14 @@ class TrainingState:
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert state to dictionary for UI updates"""
-        elapsed = str(datetime.now() - self.start_time) if self.start_time else "0:00:00"
+        # Calculate elapsed time only if training is active and we have a start time
+        if self.start_time and self.status in ["training", "initializing"]:
+            elapsed = str(datetime.now() - self.start_time)
+        else:
+            # Use the last known elapsed time or show 0
+            elapsed = "0:00:00" if not self.last_step_time else str(self.last_step_time - self.start_time if self.start_time else "0:00:00")
+        
+        # Use precomputed remaining time from logs if available
         remaining = str(self.estimated_remaining) if self.estimated_remaining else "calculating..."
         
         return {
@@ -74,10 +81,11 @@ class TrainingLogParser:
             if ("Started training" in line) or ("Starting training" in line):
                 self.state.status = "training"
             
+            # Check for "Training steps:" which contains the progress information
             if "Training steps:" in line:
                 # Set status to training if we see this
                 self.state.status = "training"
-                #print("setting status to 'training'")
+                
                 if not self.state.start_time:
                     self.state.start_time = datetime.now()
 
@@ -97,36 +105,23 @@ class TrainingLogParser:
                     if match:
                         setattr(self.state, attr, float(match.group(1)))
 
-                # Calculate time estimates based on total elapsed time
-                now = datetime.now()
-                if self.state.start_time and self.state.current_step > 0:
-                    # Calculate elapsed time and average time per step
-                    elapsed_seconds = (now - self.state.start_time).total_seconds()
-                    avg_time_per_step = elapsed_seconds / self.state.current_step
-                    
-                    # Calculate remaining time
-                    remaining_steps = self.state.total_steps - self.state.current_step
-                    estimated_remaining_seconds = avg_time_per_step * remaining_steps
-                    
-                    # Format as days, hours, minutes, seconds
-                    days = int(estimated_remaining_seconds // (24 * 3600))
-                    hours = int((estimated_remaining_seconds % (24 * 3600)) // 3600)
-                    minutes = int((estimated_remaining_seconds % 3600) // 60)
-                    seconds = int(estimated_remaining_seconds % 60)
-                    
-                    # Create formatted timedelta
-                    if days > 0:
-                        formatted_time = f"{days}d {hours}h {minutes}m {seconds}s"
-                    elif hours > 0:
-                        formatted_time = f"{hours}h {minutes}m {seconds}s"
-                    elif minutes > 0:
-                        formatted_time = f"{minutes}m {seconds}s"
-                    else:
-                        formatted_time = f"{seconds}s"
-                        
-                    self.state.estimated_remaining = formatted_time
-                    self.state.last_step_time = now
+                # Extract time remaining directly from the log
+                # Format: [MM:SS<M:SS:SS, SS.SSs/it]
+                time_remaining_match = re.search(r"<(\d+:\d+:\d+)", line)
+                if time_remaining_match:
+                    remaining_str = time_remaining_match.group(1)
+                    # Store the string directly - no need to parse it
+                    self.state.estimated_remaining = remaining_str
+                
+                # If no direct time estimate, look for hour:min format
+                if not time_remaining_match:
+                    hour_min_match = re.search(r"<(\d+h\s*\d+m)", line)
+                    if hour_min_match:
+                        self.state.estimated_remaining = hour_min_match.group(1)
 
+                # Update last processing time
+                self.state.last_step_time = datetime.now()
+                
                 logger.info(f"Updated training state: step={self.state.current_step}/{self.state.total_steps}, loss={self.state.step_loss}")
                 return self.state.to_dict()
 
@@ -162,12 +157,16 @@ class TrainingLogParser:
 
             # Completion states
             if "Training completed successfully" in line:
-                self.state.status = "completed"
+                self.status = "completed"
+                # Store final elapsed time
+                self.last_step_time = datetime.now()
                 logger.info("Training completed")
                 return self.state.to_dict()
 
             if any(x in line for x in ["Training process stopped", "Training stopped"]):
-                self.state.status = "stopped"
+                self.status = "stopped"
+                # Store final elapsed time
+                self.last_step_time = datetime.now()
                 logger.info("Training stopped")
                 return self.state.to_dict()
 

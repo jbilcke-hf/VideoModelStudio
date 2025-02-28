@@ -38,7 +38,7 @@ class TrainingService:
         self.setup_logging()
 
         logger.info("Training service initialized")
-        
+
     def setup_logging(self):
         """Set up logging with proper handler management"""
         global logger
@@ -96,16 +96,58 @@ class TrainingService:
         if self.file_handler:
             self.file_handler.close()
     
+            
+    def save_ui_state(self, values: Dict[str, Any]) -> None:
+        """Save current UI state to file"""
+        ui_state_file = OUTPUT_PATH / "ui_state.json"
+        try:
+            with open(ui_state_file, 'w') as f:
+                json.dump(values, f, indent=2)
+            logger.debug(f"UI state saved: {values}")
+        except Exception as e:
+            logger.error(f"Error saving UI state: {str(e)}")
+
+    def load_ui_state(self) -> Dict[str, Any]:
+        """Load saved UI state"""
+        ui_state_file = OUTPUT_PATH / "ui_state.json"
+        default_state = {
+            "model_type": list(MODEL_TYPES.keys())[0],
+            "lora_rank": "128",
+            "lora_alpha": "128", 
+            "num_epochs": 70,
+            "batch_size": 1,
+            "learning_rate": 3e-5,
+            "save_iterations": 500,
+            "training_preset": list(TRAINING_PRESETS.keys())[0]
+        }
+        
+        if not ui_state_file.exists():
+            return default_state
+            
+        try:
+            with open(ui_state_file, 'r') as f:
+                saved_state = json.load(f)
+                # Make sure we have all keys (in case structure changed)
+                merged_state = default_state.copy()
+                merged_state.update(saved_state)
+                return merged_state
+        except Exception as e:
+            logger.error(f"Error loading UI state: {str(e)}")
+            return default_state
+
+    # Modify save_session to also store the UI state at training start
     def save_session(self, params: Dict) -> None:
         """Save training session parameters"""
         session_data = {
             "timestamp": datetime.now().isoformat(),
             "params": params,
-            "status": self.get_status()
+            "status": self.get_status(),
+            # Add UI state at the time training started
+            "initial_ui_state": self.load_ui_state()
         }
         with open(self.session_file, 'w') as f:
             json.dump(session_data, f, indent=2)
-
+    
     def load_session(self) -> Optional[Dict]:
         """Load saved training session"""
         if self.session_file.exists():
@@ -225,6 +267,7 @@ class TrainingService:
         save_iterations: int,
         repo_id: str,
         preset_name: str,
+        resume_from_checkpoint: Optional[str] = None,
     ) -> Tuple[str, str]:
         """Start training with finetrainers"""
             
@@ -295,6 +338,11 @@ class TrainingService:
             config.lr = float(learning_rate)
             config.checkpointing_steps = int(save_iterations)
 
+            # Update with resume_from_checkpoint if provided
+            if resume_from_checkpoint:
+                config.resume_from_checkpoint = resume_from_checkpoint
+                self.append_log(f"Resuming from checkpoint: {resume_from_checkpoint}")
+                
             # Common settings for both models
             config.mixed_precision = "bf16"
             config.seed = 42
@@ -477,10 +525,146 @@ class TrainingService:
         try:
             with open(self.pid_file, 'r') as f:
                 pid = int(f.read().strip())
-            return psutil.pid_exists(pid)
+            
+            # Check if process exists AND is a Python process running train.py
+            if psutil.pid_exists(pid):
+                try:
+                    process = psutil.Process(pid)
+                    cmdline = process.cmdline()
+                    # Check if it's a Python process running train.py
+                    return any('train.py' in cmd for cmd in cmdline)
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    return False
+            return False
         except:
             return False
 
+    def recover_interrupted_training(self) -> Dict[str, Any]:
+        """Attempt to recover interrupted training
+        
+        Returns:
+            Dict with recovery status and UI updates
+        """
+        status = self.get_status()
+        ui_updates = {}
+        
+        # If status indicates training but process isn't running, try to recover
+        if status.get('status') == 'training' and not self.is_training_running():
+            logger.info("Detected interrupted training session, attempting to recover...")
+            
+            # Get the latest checkpoint
+            last_session = self.load_session()
+            if not last_session:
+                logger.warning("No session data found for recovery")
+                # Set buttons for no active training
+                ui_updates = {
+                    "start_btn": {"interactive": True, "variant": "primary"},
+                    "stop_btn": {"interactive": False, "variant": "secondary"},
+                    "pause_resume_btn": {"interactive": False, "variant": "secondary"}
+                }
+                return {"status": "error", "message": "No session data found", "ui_updates": ui_updates}
+                    
+            # Find the latest checkpoint
+            checkpoints = list(OUTPUT_PATH.glob("checkpoint-*"))
+            if not checkpoints:
+                logger.warning("No checkpoints found for recovery")
+                # Set buttons for no active training
+                ui_updates = {
+                    "start_btn": {"interactive": True, "variant": "primary"},
+                    "stop_btn": {"interactive": False, "variant": "secondary"},
+                    "pause_resume_btn": {"interactive": False, "variant": "secondary"}
+                }
+                return {"status": "error", "message": "No checkpoints found", "ui_updates": ui_updates}
+                    
+            latest_checkpoint = max(checkpoints, key=os.path.getmtime)
+            checkpoint_step = int(latest_checkpoint.name.split("-")[1])
+            
+            logger.info(f"Found checkpoint at step {checkpoint_step}, attempting to resume")
+            
+            # Extract parameters from the saved session (not current UI state)
+            # This ensures we use the original training parameters
+            params = last_session.get('params', {})
+            initial_ui_state = last_session.get('initial_ui_state', {})
+            
+            # Add UI updates to restore the training parameters in the UI
+            # This shows the user what values are being used for the resumed training
+            ui_updates.update({
+                "model_type": gr.update(value=params.get('model_type', list(MODEL_TYPES.keys())[0])),
+                "lora_rank": gr.update(value=params.get('lora_rank', "128")),
+                "lora_alpha": gr.update(value=params.get('lora_alpha', "128")),
+                "num_epochs": gr.update(value=params.get('num_epochs', 70)),
+                "batch_size": gr.update(value=params.get('batch_size', 1)),
+                "learning_rate": gr.update(value=params.get('learning_rate', 3e-5)),
+                "save_iterations": gr.update(value=params.get('save_iterations', 500)),
+                "training_preset": gr.update(value=params.get('preset_name', list(TRAINING_PRESETS.keys())[0]))
+            })
+            
+            # Attempt to resume training using the ORIGINAL parameters
+            try:
+                # Extract required parameters from the session
+                model_type = params.get('model_type')
+                lora_rank = params.get('lora_rank')
+                lora_alpha = params.get('lora_alpha')
+                num_epochs = params.get('num_epochs')
+                batch_size = params.get('batch_size')
+                learning_rate = params.get('learning_rate')
+                save_iterations = params.get('save_iterations')
+                repo_id = params.get('repo_id')
+                preset_name = params.get('preset_name', list(TRAINING_PRESETS.keys())[0])
+                
+                # Attempt to resume training
+                result = self.start_training(
+                    model_type=model_type,
+                    lora_rank=lora_rank,
+                    lora_alpha=lora_alpha,
+                    num_epochs=num_epochs,
+                    batch_size=batch_size,
+                    learning_rate=learning_rate,
+                    save_iterations=save_iterations,
+                    repo_id=repo_id,
+                    preset_name=preset_name,
+                    resume_from_checkpoint=str(latest_checkpoint)
+                )
+                
+                # Set buttons for active training
+                ui_updates.update({
+                    "start_btn": {"interactive": False, "variant": "secondary"},
+                    "stop_btn": {"interactive": True, "variant": "stop"},
+                    "pause_resume_btn": {"interactive": True, "variant": "secondary"}
+                })
+                
+                return {
+                    "status": "recovered", 
+                    "message": f"Training resumed from checkpoint {checkpoint_step}",
+                    "result": result,
+                    "ui_updates": ui_updates
+                }
+            except Exception as e:
+                logger.error(f"Failed to resume training: {str(e)}")
+                # Set buttons for no active training
+                ui_updates.update({
+                    "start_btn": {"interactive": True, "variant": "primary"},
+                    "stop_btn": {"interactive": False, "variant": "secondary"},
+                    "pause_resume_btn": {"interactive": False, "variant": "secondary"}
+                })
+                return {"status": "error", "message": f"Failed to resume: {str(e)}", "ui_updates": ui_updates}
+        elif self.is_training_running():
+            # Process is still running, set buttons accordingly
+            ui_updates = {
+                "start_btn": {"interactive": False, "variant": "secondary"},
+                "stop_btn": {"interactive": True, "variant": "stop"},
+                "pause_resume_btn": {"interactive": True, "variant": "secondary"}
+            }
+            return {"status": "running", "message": "Training process is running", "ui_updates": ui_updates}
+        else:
+            # No training process, set buttons to default state
+            ui_updates = {
+                "start_btn": {"interactive": True, "variant": "primary"},
+                "stop_btn": {"interactive": False, "variant": "secondary"},
+                "pause_resume_btn": {"interactive": False, "variant": "secondary"}
+            }
+            return {"status": "idle", "message": "No training in progress", "ui_updates": ui_updates}
+            
     def clear_training_data(self) -> str:
         """Clear all training data"""
         if self.is_training_running():
