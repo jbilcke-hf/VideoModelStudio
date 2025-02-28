@@ -144,7 +144,9 @@ class VideoTrainerUI:
         """Load UI state values for initializing form fields"""
         ui_state = self.trainer.load_ui_state()
         
-        # Convert types as needed since JSON stores everything as strings
+        # Ensure proper type conversion for numeric values
+        ui_state["lora_rank"] = ui_state.get("lora_rank", "128")
+        ui_state["lora_alpha"] = ui_state.get("lora_alpha", "128")
         ui_state["num_epochs"] = int(ui_state.get("num_epochs", 70))
         ui_state["batch_size"] = int(ui_state.get("batch_size", 1))
         ui_state["learning_rate"] = float(ui_state.get("learning_rate", 3e-5))
@@ -866,8 +868,11 @@ class VideoTrainerUI:
         )
 
     def update_training_params(self, preset_name: str) -> Tuple:
-        """Update UI components based on selected preset"""
+        """Update UI components based on selected preset while preserving custom settings"""
         preset = TRAINING_PRESETS[preset_name]
+        
+        # Load current UI state to check if user has customized values
+        current_state = self.load_ui_values()
         
         # Find the display name that maps to our model type
         model_display_name = next(
@@ -888,14 +893,22 @@ class VideoTrainerUI:
         info_text = f"{description}{bucket_info}"
         
         # Return values in the same order as the output components
+        # Use preset defaults but preserve user-modified values if they exist
+        lora_rank_val = current_state.get("lora_rank") if current_state.get("lora_rank") != preset.get("lora_rank", "128") else preset["lora_rank"]
+        lora_alpha_val = current_state.get("lora_alpha") if current_state.get("lora_alpha") != preset.get("lora_alpha", "128") else preset["lora_alpha"]
+        num_epochs_val = current_state.get("num_epochs") if current_state.get("num_epochs") != preset.get("num_epochs", 70) else preset["num_epochs"]
+        batch_size_val = current_state.get("batch_size") if current_state.get("batch_size") != preset.get("batch_size", 1) else preset["batch_size"]
+        learning_rate_val = current_state.get("learning_rate") if current_state.get("learning_rate") != preset.get("learning_rate", 3e-5) else preset["learning_rate"]
+        save_iterations_val = current_state.get("save_iterations") if current_state.get("save_iterations") != preset.get("save_iterations", 500) else preset["save_iterations"]
+        
         return (
             model_display_name,
-            preset["lora_rank"],
-            preset["lora_alpha"],
-            preset["num_epochs"],
-            preset["batch_size"],
-            preset["learning_rate"],
-            preset["save_iterations"],
+            lora_rank_val,
+            lora_alpha_val,
+            num_epochs_val,
+            batch_size_val,
+            learning_rate_val,
+            save_iterations_val,
             info_text
         )
 

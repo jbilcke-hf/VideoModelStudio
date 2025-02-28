@@ -114,19 +114,30 @@ class TrainingService:
             "model_type": list(MODEL_TYPES.keys())[0],
             "lora_rank": "128",
             "lora_alpha": "128", 
-            "num_epochs": 70,
+            "num_epochs": 50,
             "batch_size": 1,
             "learning_rate": 3e-5,
-            "save_iterations": 500,
+            "save_iterations": 200,
             "training_preset": list(TRAINING_PRESETS.keys())[0]
         }
         
         if not ui_state_file.exists():
             return default_state
-            
+                
         try:
             with open(ui_state_file, 'r') as f:
                 saved_state = json.load(f)
+                
+                # Convert numeric values to appropriate types
+                if "num_epochs" in saved_state:
+                    saved_state["num_epochs"] = int(saved_state["num_epochs"])
+                if "batch_size" in saved_state:
+                    saved_state["batch_size"] = int(saved_state["batch_size"])
+                if "learning_rate" in saved_state:
+                    saved_state["learning_rate"] = float(saved_state["learning_rate"])
+                if "save_iterations" in saved_state:
+                    saved_state["save_iterations"] = int(saved_state["save_iterations"])
+                    
                 # Make sure we have all keys (in case structure changed)
                 merged_state = default_state.copy()
                 merged_state.update(saved_state)
