@@ -131,7 +131,7 @@ class VideoTrainerUI:
         """Update UI components based on training state"""
         updates = {}
         
-        print("update_training_ui: training_state = ", training_state)
+        #print("update_training_ui: training_state = ", training_state)
 
         # Update status box with high-level information
         status_text = []
