@@ -21,15 +21,15 @@ VMS is a Gradio app that wraps around Finetrainers, to provide a simple UI to tr
 
 You can deploy it to a private space, and start long-running training jobs in the background.
 
-### One-user-per-space design
-
-Currently CMS can only support one training job at a time, anybody with access to your Gradio app will be able to upload or delete everything etc.
-
-This means you have to run VMS in a *PRIVATE* HF Space, or locally if you require full privacy.
-
 ### Similar projects
 
 I wasn't aware of its existence when I started my project, but there is also this open-source initiative: https://github.com/alisson-anjos/diffusion-pipe-ui
+
+## News
+
+- 🔥 **2025-02-18**: I am working to add better recovery in case of a failed run (this is still in beta)
+- 🔥 **2025-02-18**: I have added persistence of UI settings. So if you reload Gradio, you won't lose your settings!
+
 
 ## Features
 
@@ -73,6 +73,14 @@ It requires about 47~49 Gb of VRAM, depending on your settings.
 ### CogVideoX
 
 Do you want support for this one? Let me know in the comments!
+
+## Limitations
+
+### One-user-per-space design
+
+Currently CMS can only support one training job at a time, anybody with access to your Gradio app will be able to upload or delete everything etc.
+
+This means you have to run VMS in a *PRIVATE* HF Space, or locally if you require full privacy.
 
 ## Deployment
 
