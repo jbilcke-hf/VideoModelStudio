@@ -164,12 +164,11 @@ class TrainingService:
         
         if not self.status_file.exists():
             return default_status
-            
+                
         try:
             with open(self.status_file, 'r') as f:
                 status = json.load(f)
-                #print("status found in the json:", status)
-                
+                    
             # Check if process is actually running
             if self.pid_file.exists():
                 with open(self.pid_file, 'r') as f:
@@ -177,14 +176,20 @@ class TrainingService:
                 if not psutil.pid_exists(pid):
                     # Process died unexpectedly
                     if status['status'] == 'training':
+                        # Only log this once by checking if we've already updated the status
+                        if not hasattr(self, '_process_terminated_logged') or not self._process_terminated_logged:
+                            self.append_log("Training process terminated unexpectedly")
+                            self._process_terminated_logged = True
                         status['status'] = 'error'
                         status['message'] = 'Training process terminated unexpectedly'
-                        self.append_log("Training process terminated unexpectedly")
+                        # Update the status file to avoid repeated logging
+                        with open(self.status_file, 'w') as f:
+                            json.dump(status, f, indent=2)
                     else:
                         status['status'] = 'stopped'
                         status['message'] = 'Training process not found'
             return status
-            
+                
         except (json.JSONDecodeError, ValueError):
             return default_status
 

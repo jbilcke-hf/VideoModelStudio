@@ -77,12 +77,68 @@ class VideoTrainerUI:
             # UI will be in ready-to-start mode
             
 
+    def initialize_app_state(self):
+        """Initialize all app state in one function to ensure correct output count"""
+        # Get dataset info
+        video_list, training_dataset = self.refresh_dataset()
+        
+        # Get button states
+        button_states = self.get_initial_button_states()
+        start_btn = button_states[0]
+        stop_btn = button_states[1]
+        pause_resume_btn = button_states[2]
+        
+        # Get UI form values
+        ui_state = self.load_ui_values()
+        training_preset = ui_state.get("training_preset", list(TRAINING_PRESETS.keys())[0])
+        model_type_val = ui_state.get("model_type", list(MODEL_TYPES.keys())[0])
+        lora_rank_val = ui_state.get("lora_rank", "128")
+        lora_alpha_val = ui_state.get("lora_alpha", "128")
+        num_epochs_val = int(ui_state.get("num_epochs", 70))
+        batch_size_val = int(ui_state.get("batch_size", 1))
+        learning_rate_val = float(ui_state.get("learning_rate", 3e-5))
+        save_iterations_val = int(ui_state.get("save_iterations", 500))
+        
+        # Return all values in the exact order expected by outputs
+        return (
+            video_list, 
+            training_dataset,
+            start_btn, 
+            stop_btn, 
+            pause_resume_btn,
+            training_preset, 
+            model_type_val, 
+            lora_rank_val, 
+            lora_alpha_val,
+            num_epochs_val, 
+            batch_size_val, 
+            learning_rate_val, 
+            save_iterations_val
+        )
+
+    def initialize_ui_from_state(self):
+        """Initialize UI components from saved state"""
+        ui_state = self.load_ui_values()
+        
+        # Return values in order matching the outputs in app.load
+        return (
+            ui_state.get("training_preset", list(TRAINING_PRESETS.keys())[0]),
+            ui_state.get("model_type", list(MODEL_TYPES.keys())[0]),
+            ui_state.get("lora_rank", "128"),
+            ui_state.get("lora_alpha", "128"),
+            ui_state.get("num_epochs", 70),
+            ui_state.get("batch_size", 1),
+            ui_state.get("learning_rate", 3e-5),
+            ui_state.get("save_iterations", 500)
+        )
+
     def update_ui_state(self, **kwargs):
         """Update UI state with new values"""
         current_state = self.trainer.load_ui_state()
         current_state.update(kwargs)
         self.trainer.save_ui_state(current_state)
-        return current_state
+        # Don't return anything to avoid Gradio warnings
+        return None
 
     def load_ui_values(self):
         """Load UI state values for initializing form fields"""
@@ -128,6 +184,19 @@ class VideoTrainerUI:
                 interactive=True,
                 variant="primary",
             )
+        )
+
+    # Add this new method to get initial button states:
+    def get_initial_button_states(self):
+        """Get the initial states for training buttons based on recovery status"""
+        recovery_result = self.trainer.recover_interrupted_training()
+        ui_updates = recovery_result.get("ui_updates", {})
+        
+        # Return button states in the correct order
+        return (
+            gr.Button(**ui_updates.get("start_btn", {"interactive": True, "variant": "primary"})),
+            gr.Button(**ui_updates.get("stop_btn", {"interactive": False, "variant": "secondary"})),
+            gr.Button(**ui_updates.get("pause_resume_btn", {"interactive": False, "variant": "secondary"}))
         )
 
     def show_refreshing_status(self) -> List[List[str]]:
@@ -1421,52 +1490,18 @@ class VideoTrainerUI:
                 ]
             )
 
-            # Add this new method to get initial button states:
-            def get_initial_button_states(self):
-                """Get the initial states for training buttons based on recovery status"""
-                recovery_result = self.trainer.recover_interrupted_training()
-                ui_updates = recovery_result.get("ui_updates", {})
-                
-                # Return button states in the correct order
-                return (
-                    gr.Button(**ui_updates.get("start_btn", {"interactive": True, "variant": "primary"})),
-                    gr.Button(**ui_updates.get("stop_btn", {"interactive": False, "variant": "secondary"})),
-                    gr.Button(**ui_updates.get("pause_resume_btn", {"interactive": False, "variant": "secondary"}))
-                )
 
-            def initialize_ui_from_state(self):
-                """Initialize UI components from saved state"""
-                ui_state = self.load_ui_values()
-                
-                # Return values in order matching the outputs in app.load
-                return (
-                    ui_state.get("training_preset", list(TRAINING_PRESETS.keys())[0]),
-                    ui_state.get("model_type", list(MODEL_TYPES.keys())[0]),
-                    ui_state.get("lora_rank", "128"),
-                    ui_state.get("lora_alpha", "128"),
-                    ui_state.get("num_epochs", 70),
-                    ui_state.get("batch_size", 1),
-                    ui_state.get("learning_rate", 3e-5),
-                    ui_state.get("save_iterations", 500)
-                )
-
-            # Auto-refresh timers
             app.load(
-                fn=lambda: (
-                    self.refresh_dataset(),
-                    *self.get_initial_button_states(),
-                    # Load saved UI state values
-                    *self.initialize_ui_from_state()
-                ),
+                fn=self.initialize_app_state,
                 outputs=[
                     video_list, training_dataset,
                     start_btn, stop_btn, pause_resume_btn,
-                    # Add outputs for UI fields
                     training_preset, model_type, lora_rank, lora_alpha,
                     num_epochs, batch_size, learning_rate, save_iterations
                 ]
             )
             
+            # Auto-refresh timers
             timer = gr.Timer(value=1)
             timer.tick(
                 fn=lambda: (
