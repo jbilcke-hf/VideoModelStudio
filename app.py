@@ -77,6 +77,19 @@ class VideoTrainerUI:
             # UI will be in ready-to-start mode
             
 
+    async def _process_caption_generator(self, captioning_bot_instructions, prompt_prefix):
+        """Process the caption generator's results in the background"""
+        try:
+            async for _ in self.captioner.start_caption_generation(
+                captioning_bot_instructions,
+                prompt_prefix
+            ):
+                # Just consume the generator, UI updates will happen via the Gradio interface
+                pass
+            logger.info("Background captioning completed")
+        except Exception as e:
+            logger.error(f"Error in background captioning: {str(e)}")
+        
     def initialize_app_state(self):
         """Initialize all app state in one function to ensure correct output count"""
         # Get dataset info
@@ -389,6 +402,37 @@ class VideoTrainerUI:
             traceback.print_exc()
             raise gr.Error(f"Error copying assets to training dir: {str(e)}")
 
+    async def on_import_success(self, enable_splitting, enable_automatic_content_captioning, prompt_prefix):
+        """Handle successful import of files"""
+        videos = self.list_unprocessed_videos()
+        
+        # If scene detection isn't already running and there are videos to process,
+        # and auto-splitting is enabled, start the detection
+        if videos and not self.splitter.is_processing() and enable_splitting:
+            await self.start_scene_detection(enable_splitting)
+            msg = "Starting automatic scene detection..."
+        else:
+            # Just copy files without splitting if auto-split disabled
+            for video_file in VIDEOS_TO_SPLIT_PATH.glob("*.mp4"):
+                await self.splitter.process_video(video_file, enable_splitting=False)
+            msg = "Copying videos without splitting..."
+        
+        copy_files_to_training_dir(prompt_prefix)
+
+        # Start auto-captioning if enabled, and handle async generator properly
+        if enable_automatic_content_captioning:
+            # Create a background task for captioning
+            asyncio.create_task(self._process_caption_generator(
+                DEFAULT_CAPTIONING_BOT_INSTRUCTIONS,
+                prompt_prefix
+            ))
+        
+        return {
+            "tabs": gr.Tabs(selected="split_tab"),
+            "video_list": videos,
+            "detect_status": msg
+        }
+
     async def start_caption_generation(self, captioning_bot_instructions: str, prompt_prefix: str) -> AsyncGenerator[gr.update, None]:
         """Run auto-captioning process"""
         try:
@@ -678,6 +722,17 @@ class VideoTrainerUI:
         except Exception as e:
             return gr.update(value=f"Error saving caption: {str(e)}")
 
+    async def update_titles_after_import(self, enable_splitting, enable_automatic_content_captioning, prompt_prefix):
+        """Handle post-import updates including titles"""
+        import_result = await self.on_import_success(enable_splitting, enable_automatic_content_captioning, prompt_prefix)
+        titles = self.update_titles()
+        return (
+            import_result["tabs"],
+            import_result["video_list"],
+            import_result["detect_status"],
+            *titles
+        )
+    
     def get_model_info(self, model_type: str) -> str:
         """Get information about the selected model type"""
         if model_type == "hunyuan_video":
@@ -1287,47 +1342,12 @@ class VideoTrainerUI:
                 outputs=[]
             )
 
-            async def on_import_success(enable_splitting, enable_automatic_content_captioning, prompt_prefix):
-                videos = self.list_unprocessed_videos()
-                # If scene detection isn't already running and there are videos to process,
-                # and auto-splitting is enabled, start the detection
-                if videos and not self.splitter.is_processing() and enable_splitting:
-                    await self.start_scene_detection(enable_splitting)
-                    msg = "Starting automatic scene detection..."
-                else:
-                    # Just copy files without splitting if auto-split disabled
-                    for video_file in VIDEOS_TO_SPLIT_PATH.glob("*.mp4"):
-                        await self.splitter.process_video(video_file, enable_splitting=False)
-                    msg = "Copying videos without splitting..."
-                
-                copy_files_to_training_dir(prompt_prefix)
-
-                # Start auto-captioning if enabled
-                if enable_automatic_content_captioning:
-                    await self.start_caption_generation(
-                        DEFAULT_CAPTIONING_BOT_INSTRUCTIONS,
-                        prompt_prefix
-                    )
-                
-                return {
-                    tabs: gr.Tabs(selected="split_tab"),
-                    video_list: videos,
-                    detect_status: msg
-                }
-
-
-            async def update_titles_after_import(enable_splitting, enable_automatic_content_captioning, prompt_prefix):
-                """Handle post-import updates including titles"""
-                import_result = await on_import_success(enable_splitting, enable_automatic_content_captioning, prompt_prefix)
-                titles = self.update_titles()
-                return (*import_result, *titles)
-
             files.upload(
                 fn=lambda x: self.importer.process_uploaded_files(x),
                 inputs=[files],
                 outputs=[import_status]
             ).success(
-                fn=update_titles_after_import,
+                fn=self.update_titles_after_import,
                 inputs=[enable_automatic_video_split, enable_automatic_content_captioning, custom_prompt_prefix],
                 outputs=[
                     tabs, video_list, detect_status,
@@ -1340,7 +1360,7 @@ class VideoTrainerUI:
                 inputs=[youtube_url],
                 outputs=[import_status]
             ).success(
-                fn=on_import_success,
+                fn=self.on_import_success,
                 inputs=[enable_automatic_video_split, enable_automatic_content_captioning, custom_prompt_prefix],
                 outputs=[tabs, video_list, detect_status]
             )
