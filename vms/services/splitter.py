@@ -12,11 +12,8 @@ import gradio as gr
 from scenedetect import detect, ContentDetector, SceneManager, open_video
 from scenedetect.video_splitter import split_video_ffmpeg
 
-from .config import TRAINING_PATH, STORAGE_PATH, TRAINING_VIDEOS_PATH, VIDEOS_TO_SPLIT_PATH, STAGING_PATH, DEFAULT_PROMPT_PREFIX
-
-from .image_preprocessing import detect_black_bars
-from .video_preprocessing import remove_black_bars
-from .utils import extract_scene_info, is_video_file, is_image_file, add_prefix_to_caption
+from ..config import TRAINING_PATH, STORAGE_PATH, TRAINING_VIDEOS_PATH, VIDEOS_TO_SPLIT_PATH, STAGING_PATH, DEFAULT_PROMPT_PREFIX
+from ..utils import remove_black_bars, extract_scene_info, is_video_file, is_image_file, add_prefix_to_caption
 
 logger = logging.getLogger(__name__)
 

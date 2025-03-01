@@ -5,7 +5,7 @@ from PIL import Image
 import pillow_avif
 import logging
 
-from .config import NORMALIZE_IMAGES_TO, JPEG_QUALITY
+from ..config import NORMALIZE_IMAGES_TO, JPEG_QUALITY
 
 logger = logging.getLogger(__name__)
 

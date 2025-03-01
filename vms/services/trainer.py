@@ -20,9 +20,8 @@ from typing import Any, Optional, Dict, List, Union, Tuple
 
 from huggingface_hub import upload_folder, create_repo
 
-from .config import TrainingConfig, TRAINING_PRESETS,  LOG_FILE_PATH, TRAINING_VIDEOS_PATH, STORAGE_PATH, TRAINING_PATH, MODEL_PATH, OUTPUT_PATH, HF_API_TOKEN, MODEL_TYPES
-from .utils import make_archive, parse_training_log, is_image_file, is_video_file
-from .finetrainers_utils import prepare_finetrainers_dataset, copy_files_to_training_dir
+from ..config import TrainingConfig, TRAINING_PRESETS,  LOG_FILE_PATH, TRAINING_VIDEOS_PATH, STORAGE_PATH, TRAINING_PATH, MODEL_PATH, OUTPUT_PATH, HF_API_TOKEN, MODEL_TYPES
+from ..utils import make_archive, parse_training_log, is_image_file, is_video_file, prepare_finetrainers_dataset, copy_files_to_training_dir
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +35,7 @@ class TrainingService:
 
         self.file_handler = None
         self.setup_logging()
+        self.ensure_valid_ui_state_file()
 
         logger.info("Training service initialized")
 
@@ -122,11 +122,23 @@ class TrainingService:
         }
         
         if not ui_state_file.exists():
+            logger.info("UI state file does not exist, using default values")
             return default_state
                 
         try:
+            # First check if the file is empty
+            file_size = ui_state_file.stat().st_size
+            if file_size == 0:
+                logger.warning("UI state file exists but is empty, using default values")
+                return default_state
+                
             with open(ui_state_file, 'r') as f:
-                saved_state = json.load(f)
+                file_content = f.read().strip()
+                if not file_content:
+                    logger.warning("UI state file is empty or contains only whitespace, using default values")
+                    return default_state
+                    
+                saved_state = json.loads(file_content)
                 
                 # Convert numeric values to appropriate types
                 if "num_epochs" in saved_state:
@@ -141,11 +153,66 @@ class TrainingService:
                 # Make sure we have all keys (in case structure changed)
                 merged_state = default_state.copy()
                 merged_state.update(saved_state)
+                logger.info(f"Successfully loaded UI state from {ui_state_file}")
                 return merged_state
+        except json.JSONDecodeError as e:
+            logger.error(f"Error parsing UI state JSON: {str(e)}")
+            return default_state
         except Exception as e:
             logger.error(f"Error loading UI state: {str(e)}")
             return default_state
 
+    def ensure_valid_ui_state_file(self):
+        """Ensure UI state file exists and is valid JSON"""
+        ui_state_file = OUTPUT_PATH / "ui_state.json"
+        
+        if not ui_state_file.exists():
+            # Create a new file with default values
+            logger.info("Creating new UI state file with default values")
+            default_state = {
+                "model_type": list(MODEL_TYPES.keys())[0],
+                "lora_rank": "128",
+                "lora_alpha": "128", 
+                "num_epochs": 50,
+                "batch_size": 1,
+                "learning_rate": 3e-5,
+                "save_iterations": 200,
+                "training_preset": list(TRAINING_PRESETS.keys())[0]
+            }
+            self.save_ui_state(default_state)
+            return
+        
+        # Check if file is valid JSON
+        try:
+            with open(ui_state_file, 'r') as f:
+                file_content = f.read().strip()
+                if not file_content:
+                    raise ValueError("Empty file")
+                json.loads(file_content)
+            logger.debug("UI state file validation successful")
+        except Exception as e:
+            logger.warning(f"Invalid UI state file detected: {str(e)}. Creating new one with defaults.")
+            # Backup the invalid file
+            backup_file = ui_state_file.with_suffix('.json.bak')
+            try:
+                shutil.copy2(ui_state_file, backup_file)
+                logger.info(f"Backed up invalid UI state file to {backup_file}")
+            except Exception as backup_error:
+                logger.error(f"Failed to backup invalid UI state file: {str(backup_error)}")
+            
+            # Create a new file with default values
+            default_state = {
+                "model_type": list(MODEL_TYPES.keys())[0],
+                "lora_rank": "128",
+                "lora_alpha": "128", 
+                "num_epochs": 50,
+                "batch_size": 1,
+                "learning_rate": 3e-5,
+                "save_iterations": 200,
+                "training_preset": list(TRAINING_PRESETS.keys())[0]
+            }
+            self.save_ui_state(default_state)
+            
     # Modify save_session to also store the UI state at training start
     def save_session(self, params: Dict) -> None:
         """Save training session parameters"""

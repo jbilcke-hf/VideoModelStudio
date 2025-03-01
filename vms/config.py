@@ -3,7 +3,16 @@ from dataclasses import dataclass, field
 from typing import Dict, Any, Optional, List, Tuple
 from pathlib import Path
 
-from .utils import parse_bool_env
+def parse_bool_env(env_value: Optional[str]) -> bool:
+    """Parse environment variable string to boolean
+    
+    Handles various true/false string representations:
+    - True: "true", "True", "TRUE", "1", etc
+    - False: "false", "False", "FALSE", "0", "", None
+    """
+    if not env_value:
+        return False
+    return str(env_value).lower() in ('true', '1', 't', 'y', 'yes')
 
 HF_API_TOKEN = os.getenv("HF_API_TOKEN")
 ASK_USER_TO_DUPLICATE_SPACE = parse_bool_env(os.getenv("ASK_USER_TO_DUPLICATE_SPACE"))
