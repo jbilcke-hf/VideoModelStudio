@@ -36,7 +36,7 @@ class VideoTrainerUI:
         
         # Initialize log parser
         self.log_parser = TrainingLogParser()
-        
+
         # Shared state for tabs
         self.state = {
             "recovery_result": recovery_result
@@ -45,6 +45,9 @@ class VideoTrainerUI:
         # Initialize tabs dictionary (will be populated in create_ui)
         self.tabs = {}
         self.tabs_component = None
+
+        # Log recovery status
+        logger.info(f"Initialization complete. Recovery status: {self.recovery_status}")
         
     def create_ui(self):
         """Create the main Gradio UI"""
@@ -104,7 +107,7 @@ class VideoTrainerUI:
                 self.tabs["train_tab"].components["log_box"],
                 self.tabs["train_tab"].components["start_btn"],
                 self.tabs["train_tab"].components["stop_btn"],
-                self.tabs["train_tab"].components["pause_resume_btn"]
+                self.tabs["train_tab"].components["delete_checkpoints_btn"]  # Replace pause_resume_btn
             ]
         )
         
@@ -135,14 +138,33 @@ class VideoTrainerUI:
         video_list = self.tabs["split_tab"].list_unprocessed_videos()
         training_dataset = self.tabs["caption_tab"].list_training_files_to_caption()
         
-        # Get button states
+        # Get button states based on recovery status
         button_states = self.get_initial_button_states()
         start_btn = button_states[0]
         stop_btn = button_states[1]
-        pause_resume_btn = button_states[2]
+        delete_checkpoints_btn = button_states[2]  # This replaces pause_resume_btn in the response tuple
         
-        # Get UI form values
+        # Get UI form values - possibly from the recovery
+        if self.recovery_status in ["recovered", "ready_to_recover", "running"] and "ui_updates" in self.state["recovery_result"]:
+            recovery_ui = self.state["recovery_result"]["ui_updates"]
+            
+            # If we recovered training parameters from the original session
+            ui_state = {}
+            for param in ["model_type", "lora_rank", "lora_alpha", "num_epochs", 
+                          "batch_size", "learning_rate", "save_iterations", "training_preset"]:
+                if param in recovery_ui:
+                    ui_state[param] = recovery_ui[param]
+            
+            # Merge with existing UI state if needed
+            if ui_state:
+                current_state = self.load_ui_values()
+                current_state.update(ui_state)
+                self.trainer.save_ui_state(current_state)
+                logger.info(f"Updated UI state from recovery: {ui_state}")
+        
+        # Load values (potentially with recovery updates applied)
         ui_state = self.load_ui_values()
+        
         training_preset = ui_state.get("training_preset", list(TRAINING_PRESETS.keys())[0])
         model_type_val = ui_state.get("model_type", list(MODEL_TYPES.keys())[0])
         lora_rank_val = ui_state.get("lora_rank", "128")
@@ -158,7 +180,7 @@ class VideoTrainerUI:
             training_dataset,
             start_btn, 
             stop_btn, 
-            pause_resume_btn,
+            delete_checkpoints_btn,  # Replaces pause_resume_btn
             training_preset, 
             model_type_val, 
             lora_rank_val, 
@@ -210,16 +232,39 @@ class VideoTrainerUI:
     # Add this new method to get initial button states:
     def get_initial_button_states(self):
         """Get the initial states for training buttons based on recovery status"""
-        recovery_result = self.trainer.recover_interrupted_training()
+        recovery_result = self.state.get("recovery_result") or self.trainer.recover_interrupted_training()
         ui_updates = recovery_result.get("ui_updates", {})
+        
+        # Check for checkpoints to determine start button text
+        has_checkpoints = len(list(OUTPUT_PATH.glob("checkpoint-*"))) > 0
+        
+        # Default button states if recovery didn't provide any
+        if not ui_updates or not ui_updates.get("start_btn"):
+            is_training = self.trainer.is_training_running()
+            
+            if is_training:
+                # Active training detected
+                start_btn_props = {"interactive": False, "variant": "secondary", "value": "Continue Training" if has_checkpoints else "Start Training"}
+                stop_btn_props = {"interactive": True, "variant": "primary", "value": "Stop at Last Checkpoint"}
+                delete_btn_props = {"interactive": False, "variant": "stop", "value": "Delete All Checkpoints"}
+            else:
+                # No active training
+                start_btn_props = {"interactive": True, "variant": "primary", "value": "Continue Training" if has_checkpoints else "Start Training"}
+                stop_btn_props = {"interactive": False, "variant": "secondary", "value": "Stop at Last Checkpoint"}
+                delete_btn_props = {"interactive": has_checkpoints, "variant": "stop", "value": "Delete All Checkpoints"}
+        else:
+            # Use button states from recovery
+            start_btn_props = ui_updates.get("start_btn", {"interactive": True, "variant": "primary", "value": "Start Training"})
+            stop_btn_props = ui_updates.get("stop_btn", {"interactive": False, "variant": "secondary", "value": "Stop at Last Checkpoint"})
+            delete_btn_props = ui_updates.get("delete_checkpoints_btn", {"interactive": has_checkpoints, "variant": "stop", "value": "Delete All Checkpoints"})
         
         # Return button states in the correct order
         return (
-            gr.Button(**ui_updates.get("start_btn", {"interactive": True, "variant": "primary"})),
-            gr.Button(**ui_updates.get("stop_btn", {"interactive": False, "variant": "secondary"})),
-            gr.Button(**ui_updates.get("pause_resume_btn", {"interactive": False, "variant": "secondary"}))
+            gr.Button(**start_btn_props),
+            gr.Button(**stop_btn_props),
+            gr.Button(**delete_btn_props)
         )
-
+      
     def update_titles(self) -> Tuple[Any]:
         """Update all dynamic titles with current counts
         
