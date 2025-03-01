@@ -43,14 +43,39 @@ class SplitTab(BaseTab):
         """Connect event handlers to UI components"""
         # Scene detection button event
         self.components["detect_btn"].click(
-            fn=self.app.start_scene_detection,
+            fn=self.start_scene_detection,
             inputs=[self.app.tabs["import_tab"].components["enable_automatic_video_split"]],
             outputs=[self.components["detect_status"]]
         )
         
     def refresh(self) -> Dict[str, Any]:
         """Refresh the video list with current data"""
-        videos = self.app.splitter.list_unprocessed_videos()
+        videos = self.list_unprocessed_videos()
         return {
             "video_list": videos
         }
+    
+    def list_unprocessed_videos(self) -> gr.Dataframe:
+        """Update list of unprocessed videos"""
+        videos = self.app.splitter.list_unprocessed_videos()
+        # videos is already in [[name, status]] format from splitting_service
+        return gr.Dataframe(
+            headers=["name", "status"],
+            value=videos,
+            interactive=False
+        )
+
+    async def start_scene_detection(self, enable_splitting: bool) -> str:
+        """Start background scene detection process
+        
+        Args:
+            enable_splitting: Whether to split videos into scenes
+        """
+        if self.app.splitter.is_processing():
+            return "Scene detection already running"
+            
+        try:
+            await self.app.splitter.start_processing(enable_splitting)
+            return "Scene detection completed"
+        except Exception as e:
+            return f"Error during scene detection: {str(e)}"

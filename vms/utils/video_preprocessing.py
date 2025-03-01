@@ -2,8 +2,10 @@ import cv2
 import numpy as np
 from pathlib import Path
 import subprocess
+from typing import Any, Optional, Dict, List, Union, Tuple
 
-def detect_black_bars(video_path: Path) -> tuple[int, int, int, int]:
+
+def detect_black_bars(video_path: Path) -> Tuple[int, int, int, int]:
     """Detect black bars in video by analyzing first few frames
     
     Args:

@@ -4,6 +4,7 @@ from pathlib import Path
 from PIL import Image
 import pillow_avif
 import logging
+from typing import Any, Optional, Dict, List, Union, Tuple
 
 from ..config import NORMALIZE_IMAGES_TO, JPEG_QUALITY
 
@@ -55,7 +56,7 @@ def normalize_image(input_path: Path, output_path: Path) -> bool:
         logger.error(f"Error converting image {input_path}: {str(e)}")
         return False
 
-def detect_black_bars(img: np.ndarray) -> tuple[int, int, int, int]:
+def detect_black_bars(img: np.ndarray) -> Tuple[int, int, int, int]:
     """Detect black bars in image
     
     Args:

@@ -179,7 +179,7 @@ class CaptioningService:
         )
         self.model.eval()
     
-    def _load_video(self, video_path: Path, max_frames_num: int = 64, fps: int = 1, force_sample: bool = True) -> tuple[np.ndarray, str, float]:
+    def _load_video(self, video_path: Path, max_frames_num: int = 64, fps: int = 1, force_sample: bool = True) -> Tuple[np.ndarray, str, float]:
         """Load and preprocess video frames with strict limits
         
         Args:
@@ -224,7 +224,7 @@ class CaptioningService:
             logger.error(f"Error loading video frames: {str(e)}")
             raise
 
-    async def process_video(self, video_path: Path, prompt: str, prompt_prefix: str = "") -> AsyncGenerator[tuple[CaptioningProgress, Optional[str]], None]:
+    async def process_video(self, video_path: Path, prompt: str, prompt_prefix: str = "") -> AsyncGenerator[Tuple[CaptioningProgress, Optional[str]], None]:
         try:
             video_name = video_path.name
             logger.info(f"Starting processing of video: {video_name}")
@@ -373,7 +373,7 @@ class CaptioningService:
             yield progress, None
             raise
 
-    async def process_image(self, image_path: Path, prompt: str, prompt_prefix: str = "") -> AsyncGenerator[tuple[CaptioningProgress, Optional[str]], None]:
+    async def process_image(self, image_path: Path, prompt: str, prompt_prefix: str = "") -> AsyncGenerator[Tuple[CaptioningProgress, Optional[str]], None]:
         """Process a single image for captioning"""
         try:
             image_name = image_path.name
