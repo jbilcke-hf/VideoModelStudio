@@ -15,6 +15,9 @@ from torchvision import transforms
 from torchvision.transforms import InterpolationMode
 from torchvision.transforms.functional import resize
 
+import gc
+import time
+import resource
 
 # Must import after torch because this can sometimes lead to a nasty segmentation fault, or stack smashing error
 # Very few bug reports but it happens. Look in decord Github issues for more relevant information.
@@ -29,6 +32,22 @@ from .constants import (  # noqa
     PRECOMPUTED_LATENTS_DIR_NAME,
 )
 
+
+# Decord is causing us some issues!
+# Let's try to increase file descriptor limits to avoid this error:
+#
+#     decord._ffi.base.DECORDError: Resource temporarily unavailable
+try:
+    soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+    logger.info(f"Current file descriptor limits: soft={soft}, hard={hard}")
+    
+    # Try to increase to hard limit if possible
+    if soft < hard:
+        resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))
+        new_soft, new_hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+        logger.info(f"Updated file descriptor limits: soft={new_soft}, hard={new_hard}")
+except Exception as e:
+    logger.warning(f"Could not check or update file descriptor limits: {e}")
 
 logger = get_logger(__name__)
 
@@ -229,20 +248,48 @@ class ImageOrVideoDataset(Dataset):
         return image
 
     def _preprocess_video(self, path: Path) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
-        r"""
+        """
         Loads a single video, or latent and prompt embedding, based on initialization parameters.
-
         Returns a [F, C, H, W] video tensor.
         """
-        video_reader = decord.VideoReader(uri=path.as_posix())
-        video_num_frames = len(video_reader)
+        max_retries = 3
+        retry_delay = 1.0  # seconds
+        
+        for attempt in range(max_retries):
+            try:
+                # Create video reader
+                video_reader = decord.VideoReader(uri=path.as_posix())
+                video_num_frames = len(video_reader)
 
-        indices = list(range(0, video_num_frames, video_num_frames // self.max_num_frames))
-        frames = video_reader.get_batch(indices)
-        frames = frames[: self.max_num_frames].float()
-        frames = frames.permute(0, 3, 1, 2).contiguous()
-        frames = torch.stack([self.video_transforms(frame) for frame in frames], dim=0)
-        return frames
+                # Process frames
+                indices = list(range(0, video_num_frames, video_num_frames // self.max_num_frames))
+                frames = video_reader.get_batch(indices)
+                frames = frames[: self.max_num_frames].float()
+                frames = frames.permute(0, 3, 1, 2).contiguous()
+                frames = torch.stack([self.video_transforms(frame) for frame in frames], dim=0)
+                
+                # Explicitly clean up resources
+                del video_reader
+                
+                # Force garbage collection occasionally
+                if random.random() < 0.05:  # 5% chance
+                    gc.collect()
+                    
+                return frames
+                
+            except decord._ffi.base.DECORDError as e:
+                # Log the error
+                error_msg = str(e)
+                if "Resource temporarily unavailable" in error_msg and attempt < max_retries - 1:
+                    logger.warning(f"Retry {attempt+1}/{max_retries} loading video {path}: {error_msg}")
+                    
+                    # Clean up and wait before retrying
+                    gc.collect()
+                    time.sleep(retry_delay * (attempt + 1))  # Increasing backoff
+                else:
+                    # Either not a resource error or we've run out of retries
+                    logger.error(f"Failed to load video {path} after {attempt+1} attempts: {error_msg}")
+                    raise RuntimeError(f"Failed to load video after {max_retries} attempts: {error_msg}")
 
 
 class ImageOrVideoDatasetWithResizing(ImageOrVideoDataset):
@@ -264,35 +311,60 @@ class ImageOrVideoDatasetWithResizing(ImageOrVideoDataset):
         return image
 
     def _preprocess_video(self, path: Path) -> torch.Tensor:
-        video_reader = decord.VideoReader(uri=path.as_posix())
-        video_num_frames = len(video_reader)
-        #print(f"ImageOrVideoDatasetWithResizing: self.resolution_buckets = ", self.resolution_buckets)
-        #print(f"ImageOrVideoDatasetWithResizing: self.max_num_frames = ", self.max_num_frames)
-        #print(f"ImageOrVideoDatasetWithResizing: video_num_frames = ", video_num_frames)
+        max_retries = 3
+        retry_delay = 1.0  # seconds
         
-        video_buckets = [bucket for bucket in self.resolution_buckets if bucket[0] <= video_num_frames]
-        
-        if not video_buckets:
-            _, h, w = self.resolution_buckets[0]
-            video_buckets = [(1, h, w)]
+        for attempt in range(max_retries):
+            try:
+                # Create video reader
+                video_reader = decord.VideoReader(uri=path.as_posix())
+                video_num_frames = len(video_reader)
+                
+                # Find appropriate bucket for the video
+                video_buckets = [bucket for bucket in self.resolution_buckets if bucket[0] <= video_num_frames]
+                
+                if not video_buckets:
+                    _, h, w = self.resolution_buckets[0]
+                    video_buckets = [(1, h, w)]
 
-        nearest_frame_bucket = min(
-            video_buckets,
-            key=lambda x: abs(x[0] - min(video_num_frames, self.max_num_frames)),
-            default=video_buckets[0],
-        )[0]
+                nearest_frame_bucket = min(
+                    video_buckets,
+                    key=lambda x: abs(x[0] - min(video_num_frames, self.max_num_frames)),
+                    default=video_buckets[0],
+                )[0]
 
-        frame_indices = list(range(0, video_num_frames, video_num_frames // nearest_frame_bucket))
+                # Extract and process frames
+                frame_indices = list(range(0, video_num_frames, video_num_frames // nearest_frame_bucket))
+                frames = video_reader.get_batch(frame_indices)
+                frames = frames[:nearest_frame_bucket].float()
+                frames = frames.permute(0, 3, 1, 2).contiguous()
 
-        frames = video_reader.get_batch(frame_indices)
-        frames = frames[:nearest_frame_bucket].float()
-        frames = frames.permute(0, 3, 1, 2).contiguous()
-
-        nearest_res = self._find_nearest_resolution(frames.shape[2], frames.shape[3])
-        frames_resized = torch.stack([resize(frame, nearest_res) for frame in frames], dim=0)
-        frames = torch.stack([self.video_transforms(frame) for frame in frames_resized], dim=0)
-
-        return frames
+                nearest_res = self._find_nearest_resolution(frames.shape[2], frames.shape[3])
+                frames_resized = torch.stack([resize(frame, nearest_res) for frame in frames], dim=0)
+                frames = torch.stack([self.video_transforms(frame) for frame in frames_resized], dim=0)
+                
+                # Explicitly clean up resources
+                del video_reader
+                
+                # Force garbage collection occasionally
+                if random.random() < 0.05:  # 5% chance
+                    gc.collect()
+                    
+                return frames
+                
+            except decord._ffi.base.DECORDError as e:
+                # Log the error
+                error_msg = str(e)
+                if "Resource temporarily unavailable" in error_msg and attempt < max_retries - 1:
+                    logger.warning(f"Retry {attempt+1}/{max_retries} loading video {path}: {error_msg}")
+                    
+                    # Clean up and wait before retrying
+                    gc.collect()
+                    time.sleep(retry_delay * (attempt + 1))  # Increasing backoff
+                else:
+                    # Either not a resource error or we've run out of retries
+                    logger.error(f"Failed to load video {path} after {attempt+1} attempts: {error_msg}")
+                    raise RuntimeError(f"Failed to load video after {max_retries} attempts: {error_msg}")
 
     def _find_nearest_resolution(self, height, width):
         nearest_res = min(self.resolution_buckets, key=lambda x: abs(x[1] - height) + abs(x[2] - width))
@@ -338,35 +410,62 @@ class ImageOrVideoDatasetWithResizeAndRectangleCrop(ImageOrVideoDataset):
         return arr
 
     def _preprocess_video(self, path: Path) -> torch.Tensor:
-        video_reader = decord.VideoReader(uri=path.as_posix())
-        video_num_frames = len(video_reader)
-        print(f"ImageOrVideoDatasetWithResizeAndRectangleCrop: self.resolution_buckets = ", self.resolution_buckets)
-        print(f"ImageOrVideoDatasetWithResizeAndRectangleCrop: self.max_num_frames = ", self.max_num_frames)
-        print(f"ImageOrVideoDatasetWithResizeAndRectangleCrop: video_num_frames = ", video_num_frames)
+        max_retries = 3
+        retry_delay = 1.0  # seconds
         
-        video_buckets = [bucket for bucket in self.resolution_buckets if bucket[0] <= video_num_frames]
+        for attempt in range(max_retries):
+            try:
+                # Create video reader
+                video_reader = decord.VideoReader(uri=path.as_posix())
+                video_num_frames = len(video_reader)
+                
+                # Find appropriate bucket for the video
+                video_buckets = [bucket for bucket in self.resolution_buckets if bucket[0] <= video_num_frames]
+                
+                if not video_buckets:
+                    _, h, w = self.resolution_buckets[0]
+                    video_buckets = [(1, h, w)]
+
+                nearest_frame_bucket = min(
+                    video_buckets,
+                    key=lambda x: abs(x[0] - min(video_num_frames, self.max_num_frames)),
+                    default=video_buckets[0],
+                )[0]
+
+                # Extract and process frames
+                frame_indices = list(range(0, video_num_frames, video_num_frames // nearest_frame_bucket))
+                frames = video_reader.get_batch(frame_indices)
+                frames = frames[:nearest_frame_bucket].float()
+                frames = frames.permute(0, 3, 1, 2).contiguous()
+
+                # Fix: Change self.resolutions to self.resolution_buckets to match the class attribute
+                nearest_res = self._find_nearest_resolution(frames.shape[2], frames.shape[3])
+                frames_resized = self._resize_for_rectangle_crop(frames, nearest_res)
+                frames = torch.stack([self.video_transforms(frame) for frame in frames_resized], dim=0)
+                
+                # Explicitly clean up resources
+                del video_reader
+                
+                # Force garbage collection occasionally
+                if random.random() < 0.05:  # 5% chance
+                    gc.collect()
+                    
+                return frames
+                
+            except decord._ffi.base.DECORDError as e:
+                # Log the error
+                error_msg = str(e)
+                if "Resource temporarily unavailable" in error_msg and attempt < max_retries - 1:
+                    logger.warning(f"Retry {attempt+1}/{max_retries} loading video {path}: {error_msg}")
+                    
+                    # Clean up and wait before retrying
+                    gc.collect()
+                    time.sleep(retry_delay * (attempt + 1))  # Increasing backoff
+                else:
+                    # Either not a resource error or we've run out of retries
+                    logger.error(f"Failed to load video {path} after {attempt+1} attempts: {error_msg}")
+                    raise RuntimeError(f"Failed to load video after {max_retries} attempts: {error_msg}")
         
-        if not video_buckets:
-            _, h, w = self.resolution_buckets[0]
-            video_buckets = [(1, h, w)]
-
-        nearest_frame_bucket = min(
-            video_buckets,
-            key=lambda x: abs(x[0] - min(video_num_frames, self.max_num_frames)),
-            default=video_buckets[0],
-        )[0]
-
-        frame_indices = list(range(0, video_num_frames, video_num_frames // nearest_frame_bucket))
-
-        frames = video_reader.get_batch(frame_indices)
-        frames = frames[:nearest_frame_bucket].float()
-        frames = frames.permute(0, 3, 1, 2).contiguous()
-
-        nearest_res = self._find_nearest_resolution(frames.shape[2], frames.shape[3])
-        frames_resized = self._resize_for_rectangle_crop(frames, nearest_res)
-        frames = torch.stack([self.video_transforms(frame) for frame in frames_resized], dim=0)
-        return frames
-
     def _find_nearest_resolution(self, height, width):
         nearest_res = min(self.resolutions, key=lambda x: abs(x[1] - height) + abs(x[2] - width))
         return nearest_res[1], nearest_res[2]

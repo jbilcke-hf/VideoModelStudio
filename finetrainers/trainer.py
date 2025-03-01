@@ -2,6 +2,7 @@ import json
 import logging
 import math
 import os
+import gc
 import random
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -549,6 +550,20 @@ class Trainer:
     def train(self) -> None:
         logger.info("Starting training")
 
+
+        # Add these lines at the beginning
+        if hasattr(resource, 'RLIMIT_NOFILE'):
+            try:
+                soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+                logger.info(f"Current file descriptor limits in trainer: soft={soft}, hard={hard}")
+                # Try to increase to hard limit if possible
+                if soft < hard:
+                    resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))
+                    new_soft, new_hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+                    logger.info(f"Updated file descriptor limits: soft={new_soft}, hard={new_hard}")
+            except Exception as e:
+                logger.warning(f"Could not check or update file descriptor limits: {e}")
+        
         memory_statistics = get_memory_statistics()
         logger.info(f"Memory before training start: {json.dumps(memory_statistics, indent=4)}")
 
@@ -816,8 +831,14 @@ class Trainer:
                 progress_bar.set_postfix(logs)
                 accelerator.log(logs, step=global_step)
 
+                if global_step % 100 == 0:  # Every 100 steps
+                    # Force garbage collection to clean up any lingering resources
+                    gc.collect()
+
                 if global_step >= self.state.train_steps:
                     break
+
+                
 
             if num_loss_updates > 0:
                 epoch_loss /= num_loss_updates
@@ -832,6 +853,13 @@ class Trainer:
             )
             if should_run_validation:
                 self.validate(global_step)
+
+            if epoch % 3 == 0:  # Every 3 epochs
+                logger.info("Performing periodic resource cleanup")
+                free_memory()
+                gc.collect()
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize(accelerator.device)
 
         accelerator.wait_for_everyone()
         if accelerator.is_main_process:

@@ -57,7 +57,7 @@ class VideoDataset(Dataset):
         self.random_flip = random_flip
         self.image_to_video = image_to_video
 
-        self.resolutions = [
+        self.resolution_buckets = [
             (f, h, w) for h in self.height_buckets for w in self.width_buckets for f in self.frame_buckets
         ]
 
@@ -295,7 +295,7 @@ class VideoDatasetWithResizing(VideoDataset):
             return image, frames, None
 
     def _find_nearest_resolution(self, height, width):
-        nearest_res = min(self.resolutions, key=lambda x: abs(x[1] - height) + abs(x[2] - width))
+        nearest_res = min(self.resolution_buckets, key=lambda x: abs(x[1] - height) + abs(x[2] - width))
         return nearest_res[1], nearest_res[2]
 
 
