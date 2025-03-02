@@ -637,149 +637,151 @@ class TrainingService:
             return False
 
     def recover_interrupted_training(self) -> Dict[str, Any]:
-        """Attempt to recover interrupted training
+    """Attempt to recover interrupted training
+    
+    Returns:
+        Dict with recovery status and UI updates
+    """
+    status = self.get_status()
+    ui_updates = {}
+    
+    # Check for any checkpoints, even if status doesn't indicate training
+    checkpoints = list(OUTPUT_PATH.glob("checkpoint-*"))
+    has_checkpoints = len(checkpoints) > 0
+    
+    # If status indicates training but process isn't running, or if we have checkpoints
+    # and no active training process, try to recover
+    if (status.get('status') in ['training', 'paused'] and not self.is_training_running()) or \
+       (has_checkpoints and not self.is_training_running()):
         
-        Returns:
-            Dict with recovery status and UI updates
-        """
-        status = self.get_status()
-        ui_updates = {}
+        logger.info("Detected interrupted training session or existing checkpoints, attempting to recover...")
         
-        # Check for any checkpoints, even if status doesn't indicate training
-        checkpoints = list(OUTPUT_PATH.glob("checkpoint-*"))
-        has_checkpoints = len(checkpoints) > 0
+        # Get the latest checkpoint
+        last_session = self.load_session()
         
-        # If status indicates training but process isn't running, or if we have checkpoints
-        # and no active training process, try to recover
-        if (status.get('status') in ['training', 'paused'] and not self.is_training_running()) or \
-        (has_checkpoints and not self.is_training_running()):
-            
-            logger.info("Detected interrupted training session or existing checkpoints, attempting to recover...")
-            
-            # Get the latest checkpoint
-            last_session = self.load_session()
-            
-            if not last_session:
-                logger.warning("No session data found for recovery, but will check for checkpoints")
-                # Try to create a default session based on UI state if we have checkpoints
-                if has_checkpoints:
-                    ui_state = self.load_ui_state()
-                    # Create a default session using UI state values
-                    last_session = {
-                        "params": {
-                            "model_type": MODEL_TYPES.get(ui_state.get("model_type", list(MODEL_TYPES.keys())[0])),
-                            "lora_rank": ui_state.get("lora_rank", "128"),
-                            "lora_alpha": ui_state.get("lora_alpha", "128"),
-                            "num_epochs": ui_state.get("num_epochs", 70),
-                            "batch_size": ui_state.get("batch_size", 1),
-                            "learning_rate": ui_state.get("learning_rate", 3e-5),
-                            "save_iterations": ui_state.get("save_iterations", 500),
-                            "preset_name": ui_state.get("training_preset", list(TRAINING_PRESETS.keys())[0]),
-                            "repo_id": ""  # Default empty repo ID
-                        }
-                    }
-                    logger.info("Created default session from UI state for recovery")
-                else:
-                    # Set buttons for no active training
-                    ui_updates = {
-                        "start_btn": {"interactive": True, "variant": "primary", "value": "Start Training"},
-                        "stop_btn": {"interactive": False, "variant": "secondary", "value": "Stop at Last Checkpoint"},
-                        "pause_resume_btn": {"interactive": False, "variant": "secondary", "visible": False}
-                    }
-                    return {"status": "idle", "message": "No training in progress", "ui_updates": ui_updates}
-            
-            # Find the latest checkpoint if we have checkpoints
-            latest_checkpoint = None
-            checkpoint_step = 0
-            
+        if not last_session:
+            logger.warning("No session data found for recovery, but will check for checkpoints")
+            # Try to create a default session based on UI state if we have checkpoints
             if has_checkpoints:
-                latest_checkpoint = max(checkpoints, key=os.path.getmtime)
-                checkpoint_step = int(latest_checkpoint.name.split("-")[1])
-                logger.info(f"Found checkpoint at step {checkpoint_step}")
+                ui_state = self.load_ui_state()
+                # Create a default session using UI state values
+                last_session = {
+                    "params": {
+                        "model_type": MODEL_TYPES.get(ui_state.get("model_type", list(MODEL_TYPES.keys())[0])),
+                        "lora_rank": ui_state.get("lora_rank", "128"),
+                        "lora_alpha": ui_state.get("lora_alpha", "128"),
+                        "num_epochs": ui_state.get("num_epochs", 70),
+                        "batch_size": ui_state.get("batch_size", 1),
+                        "learning_rate": ui_state.get("learning_rate", 3e-5),
+                        "save_iterations": ui_state.get("save_iterations", 500),
+                        "preset_name": ui_state.get("training_preset", list(TRAINING_PRESETS.keys())[0]),
+                        "repo_id": ""  # Default empty repo ID
+                    }
+                }
+                logger.info("Created default session from UI state for recovery")
             else:
-                logger.warning("No checkpoints found for recovery")
                 # Set buttons for no active training
                 ui_updates = {
                     "start_btn": {"interactive": True, "variant": "primary", "value": "Start Training"},
                     "stop_btn": {"interactive": False, "variant": "secondary", "value": "Stop at Last Checkpoint"},
+                    "delete_checkpoints_btn": {"interactive": False, "variant": "stop", "value": "Delete All Checkpoints"},
                     "pause_resume_btn": {"interactive": False, "variant": "secondary", "visible": False}
                 }
-                return {"status": "error", "message": "No checkpoints found", "ui_updates": ui_updates}
-            
-            # Extract parameters from the saved session (not current UI state)
-            # This ensures we use the original training parameters
-            params = last_session.get('params', {})
-            
-            # Add UI updates to restore the training parameters in the UI
-            # This shows the user what values are being used for the resumed training
-            ui_updates.update({
-                "model_type": params.get('model_type', list(MODEL_TYPES.keys())[0]),
-                "lora_rank": params.get('lora_rank', "128"),
-                "lora_alpha": params.get('lora_alpha', "128"),
-                "num_epochs": params.get('num_epochs', 70),
-                "batch_size": params.get('batch_size', 1),
-                "learning_rate": params.get('learning_rate', 3e-5),
-                "save_iterations": params.get('save_iterations', 500),
-                "training_preset": params.get('preset_name', list(TRAINING_PRESETS.keys())[0])
-            })
-            
-            # Check if we should auto-recover (immediate restart)
-            auto_recover = True  # Always auto-recover on startup
-            
-            if auto_recover:
-                # Attempt to resume training using the ORIGINAL parameters
-                try:
-                    # Extract required parameters from the session
-                    model_type = params.get('model_type')
-                    lora_rank = params.get('lora_rank')
-                    lora_alpha = params.get('lora_alpha')
-                    num_epochs = params.get('num_epochs')
-                    batch_size = params.get('batch_size')
-                    learning_rate = params.get('learning_rate')
-                    save_iterations = params.get('save_iterations')
-                    repo_id = params.get('repo_id', '')
-                    preset_name = params.get('preset_name', list(TRAINING_PRESETS.keys())[0])
-                    
-                    # Log the recovery attempt
-                    self.append_log(f"Auto-recovering training from checkpoint {checkpoint_step}")
-                    gr.Info(f"Automatically resuming training from checkpoint {checkpoint_step}")
-                    
-                    # Attempt to resume training
-                    result = self.start_training(
-                        model_type=model_type,
-                        lora_rank=lora_rank,
-                        lora_alpha=lora_alpha,
-                        num_epochs=num_epochs,
-                        batch_size=batch_size,
-                        learning_rate=learning_rate,
-                        save_iterations=save_iterations,
-                        repo_id=repo_id,
-                        preset_name=preset_name,
-                        resume_from_checkpoint=str(latest_checkpoint)
-                    )
-                    
-                    # Set buttons for active training
-                    ui_updates.update({
-                        "start_btn": {"interactive": False, "variant": "secondary", "value": "Continue Training"},
-                        "stop_btn": {"interactive": True, "variant": "primary", "value": "Stop at Last Checkpoint"},
-                        "pause_resume_btn": {"interactive": False, "variant": "secondary", "visible": False}
-                    })
-                    
-                    return {
-                        "status": "recovered", 
-                        "message": f"Training resumed from checkpoint {checkpoint_step}",
-                        "result": result,
-                        "ui_updates": ui_updates
-                    }
-                except Exception as e:
-                    logger.error(f"Failed to auto-resume training: {str(e)}")
-                    # Set buttons for manual recovery
-                    ui_updates.update({
-                        "start_btn": {"interactive": True, "variant": "primary", "value": "Continue Training"},
-                        "stop_btn": {"interactive": False, "variant": "secondary", "value": "Stop at Last Checkpoint"},
-                        "pause_resume_btn": {"interactive": False, "variant": "secondary", "visible": False}
-                    })
-                    return {"status": "error", "message": f"Failed to auto-resume: {str(e)}", "ui_updates": ui_updates}
+                return {"status": "idle", "message": "No training in progress", "ui_updates": ui_updates}
+        
+        # Find the latest checkpoint if we have checkpoints
+        latest_checkpoint = None
+        checkpoint_step = 0
+        
+        if has_checkpoints:
+            latest_checkpoint = max(checkpoints, key=os.path.getmtime)
+            checkpoint_step = int(latest_checkpoint.name.split("-")[1])
+            logger.info(f"Found checkpoint at step {checkpoint_step}")
+        else:
+            logger.warning("No checkpoints found for recovery")
+            # Set buttons for no active training
+            ui_updates = {
+                "start_btn": {"interactive": True, "variant": "primary", "value": "Start Training"},
+                "stop_btn": {"interactive": False, "variant": "secondary", "value": "Stop at Last Checkpoint"},
+                "delete_checkpoints_btn": {"interactive": False, "variant": "stop", "value": "Delete All Checkpoints"},
+                "pause_resume_btn": {"interactive": False, "variant": "secondary", "visible": False}
+            }
+            return {"status": "error", "message": "No checkpoints found", "ui_updates": ui_updates}
+        
+        # Extract parameters from the saved session (not current UI state)
+        # This ensures we use the original training parameters
+        params = last_session.get('params', {})
+        
+        # Map internal model type back to display name for UI
+        # This is the key fix for the "ltx_video" vs "LTX-Video (LoRA)" mismatch
+        model_type_internal = params.get('model_type')
+        model_type_display = model_type_internal
+        
+        # Find the display name that maps to our internal model type
+        for display_name, internal_name in MODEL_TYPES.items():
+            if internal_name == model_type_internal:
+                model_type_display = display_name
+                logger.info(f"Mapped internal model type '{model_type_internal}' to display name '{model_type_display}'")
+                break
+        
+        # Add UI updates to restore the training parameters in the UI
+        # This shows the user what values are being used for the resumed training
+        ui_updates.update({
+            "model_type": model_type_display,  # Use the display name for the UI dropdown
+            "lora_rank": params.get('lora_rank', "128"),
+            "lora_alpha": params.get('lora_alpha', "128"),
+            "num_epochs": params.get('num_epochs', 70),
+            "batch_size": params.get('batch_size', 1),
+            "learning_rate": params.get('learning_rate', 3e-5),
+            "save_iterations": params.get('save_iterations', 500),
+            "training_preset": params.get('preset_name', list(TRAINING_PRESETS.keys())[0])
+        })
+        
+        # Check if we should auto-recover (immediate restart)
+        auto_recover = True  # Always auto-recover on startup
+        
+        if auto_recover:
+            # Rest of the auto-recovery code remains unchanged
+            try:
+                # Use the internal model_type for the actual training
+                # But keep model_type_display for the UI
+                result = self.start_training(
+                    model_type=model_type_internal,
+                    lora_rank=params.get('lora_rank', "128"),
+                    lora_alpha=params.get('lora_alpha', "128"),
+                    num_epochs=params.get('num_epochs', 70),
+                    batch_size=params.get('batch_size', 1),
+                    learning_rate=params.get('learning_rate', 3e-5),
+                    save_iterations=params.get('save_iterations', 500),
+                    repo_id=params.get('repo_id', ''),
+                    preset_name=params.get('preset_name', list(TRAINING_PRESETS.keys())[0]),
+                    resume_from_checkpoint=str(latest_checkpoint)
+                )
+                
+                # Set buttons for active training
+                ui_updates.update({
+                    "start_btn": {"interactive": False, "variant": "secondary", "value": "Continue Training"},
+                    "stop_btn": {"interactive": True, "variant": "primary", "value": "Stop at Last Checkpoint"},
+                    "delete_checkpoints_btn": {"interactive": False, "variant": "stop", "value": "Delete All Checkpoints"},
+                    "pause_resume_btn": {"interactive": False, "variant": "secondary", "visible": False}
+                })
+                
+                return {
+                    "status": "recovered", 
+                    "message": f"Training resumed from checkpoint {checkpoint_step}",
+                    "result": result,
+                    "ui_updates": ui_updates
+                }
+            except Exception as e:
+                logger.error(f"Failed to auto-resume training: {str(e)}")
+                # Set buttons for manual recovery
+                ui_updates.update({
+                    "start_btn": {"interactive": True, "variant": "primary", "value": "Continue Training"},
+                    "stop_btn": {"interactive": False, "variant": "secondary", "value": "Stop at Last Checkpoint"},
+                    "delete_checkpoints_btn": {"interactive": True, "variant": "stop", "value": "Delete All Checkpoints"},
+                    "pause_resume_btn": {"interactive": False, "variant": "secondary", "visible": False}
+                })
+                return {"status": "error", "message": f"Failed to auto-resume: {str(e)}", "ui_updates": ui_updates}
             else:
                 # Set up UI for manual recovery
                 ui_updates.update({

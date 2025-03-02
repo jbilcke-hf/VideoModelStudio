@@ -8,7 +8,7 @@ from typing import Dict, Any, List, Optional, Tuple
 from pathlib import Path
 
 from .base_tab import BaseTab
-from ..config import TRAINING_PRESETS, MODEL_TYPES, ASK_USER_TO_DUPLICATE_SPACE, SMALL_TRAINING_BUCKETS
+from ..config import TRAINING_PRESETS, OUTPUT_PATH, MODEL_TYPES, ASK_USER_TO_DUPLICATE_SPACE, SMALL_TRAINING_BUCKETS
 from ..utils import TrainingLogParser
 
 logger = logging.getLogger(__name__)
@@ -279,7 +279,7 @@ class TrainTab(BaseTab):
         )
         
     def handle_training_start(self, preset, model_type, *args):
-        """Handle training start with proper log parser reset"""
+        """Handle training start with proper log parser reset and checkpoint detection"""
         # Safely reset log parser if it exists
         if hasattr(self.app, 'log_parser') and self.app.log_parser is not None:
             self.app.log_parser.reset()
@@ -288,12 +288,35 @@ class TrainTab(BaseTab):
             from ..utils import TrainingLogParser
             self.app.log_parser = TrainingLogParser()
         
-        # Start training
-        return self.app.trainer.start_training(
-            MODEL_TYPES[model_type],
-            *args,
-            preset_name=preset
-        )
+        # Check for latest checkpoint
+        checkpoints = list(OUTPUT_PATH.glob("checkpoint-*"))
+        resume_from = None
+        
+        if checkpoints:
+            # Find the latest checkpoint
+            latest_checkpoint = max(checkpoints, key=os.path.getmtime)
+            resume_from = str(latest_checkpoint)
+            logger.info(f"Found checkpoint at {resume_from}, will resume training")
+        
+        # Convert model_type display name to internal name
+        model_internal_type = MODEL_TYPES.get(model_type)
+        
+        if not model_internal_type:
+            logger.error(f"Invalid model type: {model_type}")
+            return f"Error: Invalid model type '{model_type}'", "Model type not recognized"
+        
+        # Start training (it will automatically use the checkpoint if provided)
+        try:
+            return self.app.trainer.start_training(
+                model_internal_type,  # Use internal model type
+                *args,
+                preset_name=preset,
+                resume_from_checkpoint=resume_from
+            )
+        except Exception as e:
+            logger.exception("Error starting training")
+            return f"Error starting training: {str(e)}", f"Exception: {str(e)}\n\nCheck the logs for more details."
+
     
     def get_model_info(self, model_type: str) -> str:
         """Get information about the selected model type"""
@@ -455,6 +478,23 @@ class TrainTab(BaseTab):
         state = self.app.trainer.get_status()
         logs = self.app.trainer.get_logs()
 
+        # Check if training process died unexpectedly
+        training_died = False
+        
+        if state["status"] == "training" and not self.app.trainer.is_training_running():
+            state["status"] = "error"
+            state["message"] = "Training process terminated unexpectedly."
+            training_died = True
+            
+            # Look for error in logs
+            error_lines = []
+            for line in logs.splitlines():
+                if "Error:" in line or "Exception:" in line or "Traceback" in line:
+                    error_lines.append(line)
+            
+            if error_lines:
+                state["message"] += f"\n\nPossible error: {error_lines[-1]}"
+
         # Ensure log parser is initialized
         if not hasattr(self.app, 'log_parser') or self.app.log_parser is None:
             from ..utils import TrainingLogParser
@@ -462,7 +502,7 @@ class TrainTab(BaseTab):
             logger.info("Initialized missing log parser")
 
         # Parse new log lines
-        if logs:
+        if logs and not training_died:
             last_state = None
             for line in logs.splitlines():
                 try:
@@ -480,6 +520,12 @@ class TrainTab(BaseTab):
         # Parse status for training state
         if "completed" in state["message"].lower():
             state["status"] = "completed"
+        elif "error" in state["message"].lower():
+            state["status"] = "error"
+        elif "failed" in state["message"].lower():
+            state["status"] = "error"
+        elif "stopped" in state["message"].lower():
+            state["status"] = "stopped"
 
         return (state["status"], state["message"], logs)
 

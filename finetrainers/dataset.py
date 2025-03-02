@@ -32,6 +32,7 @@ from .constants import (  # noqa
     PRECOMPUTED_LATENTS_DIR_NAME,
 )
 
+logger = get_logger(__name__)
 
 # Decord is causing us some issues!
 # Let's try to increase file descriptor limits to avoid this error:
@@ -49,7 +50,6 @@ try:
 except Exception as e:
     logger.warning(f"Could not check or update file descriptor limits: {e}")
 
-logger = get_logger(__name__)
 
 
 # TODO(aryan): This needs a refactor with separation of concerns.

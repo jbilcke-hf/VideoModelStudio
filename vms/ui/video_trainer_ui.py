@@ -7,7 +7,7 @@ from typing import Any, Optional, Dict, List, Union, Tuple
 
 from ..services import TrainingService, CaptioningService, SplittingService, ImportService
 from ..config import (
-    STORAGE_PATH, VIDEOS_TO_SPLIT_PATH, STAGING_PATH,
+    STORAGE_PATH, VIDEOS_TO_SPLIT_PATH, STAGING_PATH, OUTPUT_PATH,
     TRAINING_PATH, LOG_FILE_PATH, TRAINING_PRESETS, TRAINING_VIDEOS_PATH, MODEL_PATH, OUTPUT_PATH,
     MODEL_TYPES, SMALL_TRAINING_BUCKETS
 )
@@ -160,7 +160,24 @@ class VideoTrainerUI:
             
             # If we recovered training parameters from the original session
             ui_state = {}
-            for param in ["model_type", "lora_rank", "lora_alpha", "num_epochs", 
+            
+            # Handle model_type specifically - could be internal or display name
+            if "model_type" in recovery_ui:
+                model_type_value = recovery_ui["model_type"]
+                
+                # If it's an internal name, convert to display name
+                if model_type_value not in MODEL_TYPES:
+                    # Find the display name for this internal model type
+                    for display_name, internal_name in MODEL_TYPES.items():
+                        if internal_name == model_type_value:
+                            model_type_value = display_name
+                            logger.info(f"Converted internal model type '{recovery_ui['model_type']}' to display name '{model_type_value}'")
+                            break
+                
+                ui_state["model_type"] = model_type_value
+            
+            # Copy other parameters
+            for param in ["lora_rank", "lora_alpha", "num_epochs", 
                           "batch_size", "learning_rate", "save_iterations", "training_preset"]:
                 if param in recovery_ui:
                     ui_state[param] = recovery_ui[param]
@@ -175,8 +192,16 @@ class VideoTrainerUI:
         # Load values (potentially with recovery updates applied)
         ui_state = self.load_ui_values()
         
-        training_preset = ui_state.get("training_preset", list(TRAINING_PRESETS.keys())[0])
+        # Ensure model_type is a display name, not internal name
         model_type_val = ui_state.get("model_type", list(MODEL_TYPES.keys())[0])
+        if model_type_val not in MODEL_TYPES:
+            # Convert from internal to display name
+            for display_name, internal_name in MODEL_TYPES.items():
+                if internal_name == model_type_val:
+                    model_type_val = display_name
+                    break
+        
+        training_preset = ui_state.get("training_preset", list(TRAINING_PRESETS.keys())[0])
         lora_rank_val = ui_state.get("lora_rank", "128")
         lora_alpha_val = ui_state.get("lora_alpha", "128")
         num_epochs_val = int(ui_state.get("num_epochs", 70))
@@ -190,9 +215,9 @@ class VideoTrainerUI:
             training_dataset,
             start_btn, 
             stop_btn, 
-            delete_checkpoints_btn,  # Replaces pause_resume_btn
+            delete_checkpoints_btn,
             training_preset, 
-            model_type_val, 
+            model_type_val,
             lora_rank_val, 
             lora_alpha_val,
             num_epochs_val, 
