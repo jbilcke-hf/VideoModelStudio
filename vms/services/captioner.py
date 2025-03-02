@@ -508,15 +508,15 @@ class CaptioningService:
                     break
 
                 try:
-                    print(f"we are in file_path {str(file_path)}")
+                    #print(f"we are in file_path {str(file_path)}")
                     # Choose appropriate processing method based on file type
                     if is_video_file(file_path):
                         process_gen = self.process_video(file_path, prompt, prompt_prefix)
                     else:
                         process_gen = self.process_image(file_path, prompt, prompt_prefix)
-                    print("got process_gen = ", process_gen)
+                    #print("got process_gen = ", process_gen)
                     async for progress, caption in process_gen:
-                        print(f"process_gen contains this caption = {caption}")
+                        #print(f"process_gen contains this caption = {caption}")
                         if caption and prompt_prefix and not caption.startswith(prompt_prefix):
                             caption = f"{prompt_prefix}{caption}"
                             
@@ -525,7 +525,7 @@ class CaptioningService:
                             txt_path = file_path.with_suffix('.txt')
                             txt_path.write_text(caption)
                             
-                        logger.debug(f"Progress update: {progress.status}")
+                        #logger.debug(f"Progress update: {progress.status}")
                         
                         # Store progress info
                         status_update[file_path.name] = {

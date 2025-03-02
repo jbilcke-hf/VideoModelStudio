@@ -56,12 +56,12 @@ class ManageTab(BaseTab):
                                 gr.Markdown("## Storage management")
                                 with gr.Row():
                                     self.components["download_dataset_btn"] = gr.DownloadButton(
-                                        "Download dataset",
+                                        "Download dataset (click again if DL doesn't start)",
                                         variant="secondary",
                                         size="lg"
                                     )
                                     self.components["download_model_btn"] = gr.DownloadButton(
-                                        "Download model",
+                                        "Download model (click again if DL doesn't start)",
                                         variant="secondary",
                                         size="lg"
                                     )
