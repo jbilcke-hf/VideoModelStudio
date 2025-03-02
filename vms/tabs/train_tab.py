@@ -91,20 +91,35 @@ class TrainTab(BaseTab):
                 
                 with gr.Column():
                     with gr.Row():
+                        # Check for existing checkpoints to determine button text
+                        has_checkpoints = len(list(OUTPUT_PATH.glob("checkpoint-*"))) > 0
+                        start_text = "Continue Training" if has_checkpoints else "Start Training"
+                        
                         self.components["start_btn"] = gr.Button(
-                            "Start Training",
+                            start_text,
                             variant="primary",
                             interactive=not ASK_USER_TO_DUPLICATE_SPACE
                         )
+                        
+                        # Just use stop and pause buttons for now to ensure compatibility
+                        self.components["stop_btn"] = gr.Button(
+                            "Stop at Last Checkpoint",
+                            variant="primary",
+                            interactive=False
+                        )
+                        
                         self.components["pause_resume_btn"] = gr.Button(
                             "Resume Training",
                             variant="secondary",
-                            interactive=False
+                            interactive=False,
+                            visible=False
                         )
-                        self.components["stop_btn"] = gr.Button(
-                            "Stop Training",
+                        
+                        # Add delete checkpoints button - THIS IS THE KEY FIX
+                        self.components["delete_checkpoints_btn"] = gr.Button(
+                            "Delete All Checkpoints",
                             variant="stop",
-                            interactive=False
+                            interactive=True
                         )
 
                     with gr.Row():
@@ -468,31 +483,56 @@ class TrainTab(BaseTab):
 
         return (state["status"], state["message"], logs)
 
-    def get_latest_status_message_logs_and_button_labels(self) -> Tuple[str, str, Any, Any, Any]:
+    def get_latest_status_message_logs_and_button_labels(self) -> Tuple:
+        """Get latest status message, logs and button states"""
         status, message, logs = self.get_latest_status_message_and_logs()
-        return (
-            message,
-            logs,
-            *self.update_training_buttons(status).values()
-        )
-
-    def update_training_buttons(self, status: str) -> Dict:
+        
+        # Add checkpoints detection
+        has_checkpoints = len(list(OUTPUT_PATH.glob("checkpoint-*"))) > 0
+        
+        button_updates = self.update_training_buttons(status, has_checkpoints).values()
+        
+        # Return in order expected by timer
+        return (message, logs, *button_updates)
+    
+    def update_training_buttons(self, status: str, has_checkpoints: bool = None) -> Dict:
         """Update training control buttons based on state"""
+        if has_checkpoints is None:
+            has_checkpoints = len(list(OUTPUT_PATH.glob("checkpoint-*"))) > 0
+            
         is_training = status in ["training", "initializing"]
-        is_paused = status == "paused"
         is_completed = status in ["completed", "error", "stopped"]
-        return {
+        
+        start_text = "Continue Training" if has_checkpoints else "Start Training"
+        
+        # Only include buttons that we know exist in components
+        result = {
             "start_btn": gr.Button(
-                interactive=not is_training and not is_paused,
+                value=start_text,
+                interactive=not is_training,
                 variant="primary" if not is_training else "secondary",
             ),
             "stop_btn": gr.Button(
-                interactive=is_training or is_paused,
-                variant="stop",
-            ),
-            "pause_resume_btn": gr.Button(
-                value="Resume Training" if is_paused else "Pause Training",
-                interactive=(is_training or is_paused) and not is_completed,
-                variant="secondary",
+                value="Stop at Last Checkpoint",
+                interactive=is_training,
+                variant="primary" if is_training else "secondary",
             )
         }
+        
+        # Add delete_checkpoints_btn only if it exists in components
+        if "delete_checkpoints_btn" in self.components:
+            result["delete_checkpoints_btn"] = gr.Button(
+                value="Delete All Checkpoints",
+                interactive=has_checkpoints and not is_training,
+                variant="stop",
+            )
+        else:
+            # Add pause_resume_btn as fallback
+            result["pause_resume_btn"] = gr.Button(
+                value="Resume Training" if status == "paused" else "Pause Training",
+                interactive=(is_training or status == "paused") and not is_completed,
+                variant="secondary",
+                visible=False
+            )
+        
+        return result

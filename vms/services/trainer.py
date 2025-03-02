@@ -353,7 +353,7 @@ class TrainingService:
         resume_from_checkpoint: Optional[str] = None,
     ) -> Tuple[str, str]:
         """Start training with finetrainers"""
-            
+        
         self.clear_logs()
 
         if not model_type:
@@ -365,22 +365,31 @@ class TrainingService:
         is_resuming = resume_from_checkpoint is not None
         log_prefix = "Resuming" if is_resuming else "Initializing"
         logger.info(f"{log_prefix} training with model_type={model_type}")
-        self.append_log(f"{log_prefix} training with model_type={model_type}")
-        
-        if is_resuming:
-            self.append_log(f"Resuming from checkpoint: {resume_from_checkpoint}")
         
         try:
-            # Get absolute paths
-            current_dir = Path(__file__).parent.absolute()
-            train_script = current_dir.parent / "train.py"
-
+            # Get absolute paths - FIXED to look in project root instead of within vms directory
+            current_dir = Path(__file__).parent.parent.parent.absolute()  # Go up to project root
+            train_script = current_dir / "train.py"
             
             if not train_script.exists():
-                error_msg = f"Training script not found at {train_script}"
-                logger.error(error_msg)
-                return error_msg, "Training script not found"
+                # Try alternative locations
+                alt_locations = [
+                    current_dir.parent / "train.py",  # One level up from project root
+                    Path("/home/user/app/train.py"),  # Absolute path
+                    Path("train.py")  # Current working directory
+                ]
                 
+                for alt_path in alt_locations:
+                    if alt_path.exists():
+                        train_script = alt_path
+                        logger.info(f"Found train.py at alternative location: {train_script}")
+                        break
+                
+                if not train_script.exists():
+                    error_msg = f"Training script not found at {train_script} or any alternative locations"
+                    logger.error(error_msg)
+                    return error_msg, "Training script not found"
+                    
             # Log paths for debugging
             logger.info("Current working directory: %s", current_dir)
             logger.info("Training script path: %s", train_script)

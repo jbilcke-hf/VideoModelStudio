@@ -100,15 +100,25 @@ class VideoTrainerUI:
         """Add auto-refresh timers to the UI"""
         # Status update timer (every 1 second)
         status_timer = gr.Timer(value=1)
+        
+        # Use a safer approach - check if the component exists before using it
+        outputs = [
+            self.tabs["train_tab"].components["status_box"],
+            self.tabs["train_tab"].components["log_box"],
+            self.tabs["train_tab"].components["start_btn"],
+            self.tabs["train_tab"].components["stop_btn"]
+        ]
+        
+        # Add delete_checkpoints_btn only if it exists
+        if "delete_checkpoints_btn" in self.tabs["train_tab"].components:
+            outputs.append(self.tabs["train_tab"].components["delete_checkpoints_btn"])
+        else:
+            # Add pause_resume_btn as fallback
+            outputs.append(self.tabs["train_tab"].components["pause_resume_btn"])
+        
         status_timer.tick(
             fn=self.tabs["train_tab"].get_latest_status_message_logs_and_button_labels,
-            outputs=[
-                self.tabs["train_tab"].components["status_box"],
-                self.tabs["train_tab"].components["log_box"],
-                self.tabs["train_tab"].components["start_btn"],
-                self.tabs["train_tab"].components["stop_btn"],
-                self.tabs["train_tab"].components["delete_checkpoints_btn"]  # Replace pause_resume_btn
-            ]
+            outputs=outputs
         )
         
         # Dataset refresh timer (every 5 seconds)
