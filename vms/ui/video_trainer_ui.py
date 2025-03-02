@@ -31,6 +31,10 @@ class VideoTrainerUI:
         
         # Recovery status from any interrupted training
         recovery_result = self.trainer.recover_interrupted_training()
+        # Add null check for recovery_result
+        if recovery_result is None:
+            recovery_result = {"status": "unknown", "ui_updates": {}}
+        
         self.recovery_status = recovery_result.get("status", "unknown")
         self.ui_updates = recovery_result.get("ui_updates", {})
         

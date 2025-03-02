@@ -32,25 +32,23 @@ from .constants import (  # noqa
     PRECOMPUTED_LATENTS_DIR_NAME,
 )
 
-logger = get_logger(__name__)
-
 # Decord is causing us some issues!
 # Let's try to increase file descriptor limits to avoid this error:
 #
 #     decord._ffi.base.DECORDError: Resource temporarily unavailable
 try:
     soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
-    logger.info(f"Current file descriptor limits: soft={soft}, hard={hard}")
+    print(f"Current file descriptor limits: soft={soft}, hard={hard}")
     
     # Try to increase to hard limit if possible
     if soft < hard:
         resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))
         new_soft, new_hard = resource.getrlimit(resource.RLIMIT_NOFILE)
-        logger.info(f"Updated file descriptor limits: soft={new_soft}, hard={new_hard}")
+        print(f"Updated file descriptor limits: soft={new_soft}, hard={new_hard}")
 except Exception as e:
-    logger.warning(f"Could not check or update file descriptor limits: {e}")
+    print(f"Could not check or update file descriptor limits: {e}")
 
-
+logger = get_logger(__name__)
 
 # TODO(aryan): This needs a refactor with separation of concerns.
 # Images should be handled separately. Videos should be handled separately.
