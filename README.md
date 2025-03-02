@@ -26,7 +26,7 @@ You can deploy it to a private space, and start long-running training jobs in th
 I wasn't aware of its existence when I started my project, but there is also this open-source initiative: https://github.com/alisson-anjos/diffusion-pipe-ui
 
 ## News
-
+- 🔥 **2025-03-02**: Made some fixes to improve Finetrainer reliability when working with big datasets
 - 🔥 **2025-02-18**: I am working to add better recovery in case of a failed run (this is still in beta)
 - 🔥 **2025-02-18**: I have added persistence of UI settings. So if you reload Gradio, you won't lose your settings!
 
