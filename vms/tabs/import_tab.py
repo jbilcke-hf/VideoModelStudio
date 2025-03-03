@@ -1,5 +1,5 @@
 """
-Import tab for Video Model Studio UI
+Import tab for Video Model Studio UI with WebDataset support
 """
 
 import gradio as gr
@@ -38,7 +38,7 @@ class ImportTab(BaseTab):
                 )
                 self.components["enable_automatic_content_captioning"] = gr.Checkbox(
                     label="Automatically caption photos and videos",
-                    info="Note: this uses LlaVA and takes some extra time to load and process",
+                    info="Note: this uses LLaVA and takes some extra time to load and process",
                     value=False,
                     visible=True,
                 )
@@ -132,14 +132,15 @@ class ImportTab(BaseTab):
             await self.app.tabs["split_tab"].start_scene_detection(enable_splitting)
             msg = "Starting automatic scene detection..."
         else:
-            # Just copy files without splitting if auto-split disabled
-            for video_file in VIDEOS_TO_SPLIT_PATH.glob("*.mp4"):
-                await self.app.splitter.process_video(video_file, enable_splitting=False)
-            msg = "Copying videos without splitting..."
+            # Process videos without splitting if auto-split disabled
+            if not enable_splitting:
+                # Export processed videos to staging directory
+                self.app.tabs["split_tab"].export_processed_videos()
+                msg = "Copying videos without splitting..."
+            else:
+                msg = "Videos queued for processing..."
         
-        self.app.tabs["caption_tab"].copy_files_to_training_dir(prompt_prefix)
-
-        # Start auto-captioning if enabled, and handle async generator properly
+        # Start auto-captioning if enabled
         if enable_automatic_content_captioning:
             # Create a background task for captioning
             asyncio.create_task(self.app.tabs["caption_tab"]._process_caption_generator(

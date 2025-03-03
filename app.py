@@ -1,5 +1,5 @@
 """
-Main application entry point for Video Model Studio
+Main application entry point for Video Model Studio with WebDataset support
 """
 
 import gradio as gr
@@ -25,7 +25,7 @@ def create_app():
     # If space needs to be duplicated
     if ASK_USER_TO_DUPLICATE_SPACE:
         with gr.Blocks() as app:
-            gr.Markdown("""# Finetrainers UI
+            gr.Markdown("""# Video Model Studio
 
 This Hugging Face space needs to be duplicated to your own billing account to work.
 
@@ -35,6 +35,16 @@ It is recommended to use a Nvidia L40S and a persistent storage space.
 To avoid overpaying for your space, you can configure the auto-sleep settings to fit your personal budget.""")
         return app
 
+    # Create directories needed for WebDataset
+    # Base directories
+    STORAGE_PATH.mkdir(parents=True, exist_ok=True)
+    VIDEOS_TO_SPLIT_PATH.mkdir(parents=True, exist_ok=True)
+    STAGING_PATH.mkdir(parents=True, exist_ok=True)
+    TRAINING_PATH.mkdir(parents=True, exist_ok=True)
+    TRAINING_VIDEOS_PATH.mkdir(parents=True, exist_ok=True)
+    MODEL_PATH.mkdir(parents=True, exist_ok=True)
+    OUTPUT_PATH.mkdir(parents=True, exist_ok=True)
+    
     # Create the main application UI
     ui = VideoTrainerUI()
     return ui.create_ui()

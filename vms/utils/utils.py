@@ -100,17 +100,6 @@ def is_video_file(file_path: Path) -> bool:
     video_extensions = {'.mp4', '.webm'}
     return file_path.suffix.lower() in video_extensions
 
-def parse_bool_env(env_value: Optional[str]) -> bool:
-    """Parse environment variable string to boolean
-    
-    Handles various true/false string representations:
-    - True: "true", "True", "TRUE", "1", etc
-    - False: "false", "False", "FALSE", "0", "", None
-    """
-    if not env_value:
-        return False
-    return str(env_value).lower() in ('true', '1', 't', 'y', 'yes')
-
 def validate_model_repo(repo_id: str) -> Dict[str, str]:
     """Validate HuggingFace model repository name
     

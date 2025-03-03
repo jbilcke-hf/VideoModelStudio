@@ -5,7 +5,11 @@ import logging
 import asyncio
 from typing import Any, Optional, Dict, List, Union, Tuple
 
-from ..services import TrainingService, CaptioningService, SplittingService, ImportService
+from ..services import TrainingService, CaptioningService, SplittingService
+from ..webdataset import (
+    WebDatasetImportService, WebDatasetManager, WebDatasetProcessingService, 
+    WebDatasetCaptioningService
+)
 from ..config import (
     STORAGE_PATH, VIDEOS_TO_SPLIT_PATH, STAGING_PATH, OUTPUT_PATH,
     TRAINING_PATH, LOG_FILE_PATH, TRAINING_PRESETS, TRAINING_VIDEOS_PATH, MODEL_PATH, OUTPUT_PATH,
@@ -25,9 +29,12 @@ class VideoTrainerUI:
         """Initialize services and tabs"""
         # Initialize core services
         self.trainer = TrainingService()
-        self.splitter = SplittingService()
-        self.importer = ImportService()
-        self.captioner = CaptioningService()
+        
+        # Initialize WebDataset services
+        self.wds_manager = WebDatasetManager(STORAGE_PATH)
+        self.importer = WebDatasetImportService()  # Use WebDataset import service
+        self.splitter = WebDatasetProcessingService()  # Use WebDataset processing service
+        self.captioner = WebDatasetCaptioningService()  # Use WebDataset captioning service
         
         # Recovery status from any interrupted training
         recovery_result = self.trainer.recover_interrupted_training()
@@ -312,18 +319,38 @@ class VideoTrainerUI:
         """
         # Count files for splitting
         split_videos, _, split_size = count_media_files(VIDEOS_TO_SPLIT_PATH)
+        
+        # Get stats from WebDataset manager for raw shards
+        raw_stats = self.wds_manager.get_dataset_stats("raw")
+        split_videos += raw_stats.get("video_count", 0)
+        split_size += raw_stats.get("total_size_bytes", 0)
+        
         split_title = format_media_title(
             "split", split_videos, 0, split_size
         )
         
-        # Count files for captioning
+        # Count files for captioning from both staging and processed shards
         caption_videos, caption_images, caption_size = count_media_files(STAGING_PATH)
+        
+        # Add stats from processed shards
+        processed_stats = self.wds_manager.get_dataset_stats("processed")
+        caption_videos += processed_stats.get("video_count", 0) - processed_stats.get("has_captions", 0)
+        caption_images += processed_stats.get("image_count", 0) - processed_stats.get("has_captions", 0)
+        caption_size += processed_stats.get("total_size_bytes", 0)
+        
         caption_title = format_media_title(
             "caption", caption_videos, caption_images, caption_size
         )
         
         # Count files for training
         train_videos, train_images, train_size = count_media_files(TRAINING_VIDEOS_PATH)
+        
+        # Add stats from training shards
+        training_stats = self.wds_manager.get_dataset_stats("training")
+        train_videos += training_stats.get("video_count", 0)
+        train_images += training_stats.get("image_count", 0)
+        train_size += training_stats.get("total_size_bytes", 0)
+        
         train_title = format_media_title(
             "train", train_videos, train_images, train_size
         )

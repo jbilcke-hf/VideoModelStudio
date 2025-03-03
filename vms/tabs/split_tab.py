@@ -1,12 +1,14 @@
 """
-Split tab for Video Model Studio UI
+Split tab for Video Model Studio UI with WebDataset support
 """
 
 import gradio as gr
 import logging
 from typing import Dict, Any, List, Optional
+from pathlib import Path
 
 from .base_tab import BaseTab
+from ..config import STAGING_PATH
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +78,32 @@ class SplitTab(BaseTab):
             
         try:
             await self.app.splitter.start_processing(enable_splitting)
+            # Export processed videos to staging for captioning
+            self.export_processed_videos()
             return "Scene detection completed"
         except Exception as e:
             return f"Error during scene detection: {str(e)}"
+    
+    def export_processed_videos(self) -> str:
+        """Export processed videos from WebDataset shards to staging directory
+        
+        Returns:
+            Status message
+        """
+        try:
+            # Use WebDataset processing service to export videos 
+            videos, images = self.app.splitter.export_to_staging(STAGING_PATH)
+            
+            if videos > 0 or images > 0:
+                media_types = []
+                if videos > 0:
+                    media_types.append(f"{videos} video{'s' if videos != 1 else ''}")
+                if images > 0:
+                    media_types.append(f"{images} image{'s' if images != 1 else ''}")
+                
+                return f"Exported {' and '.join(media_types)} to staging directory"
+            else:
+                return "No media to export"
+        except Exception as e:
+            logger.error(f"Error exporting processed videos: {e}")
+            return f"Error exporting videos: {str(e)}"
