@@ -47,16 +47,17 @@ class ImportTab(BaseTab):
                 with gr.Column(scale=3):
                     with gr.Row():
                         with gr.Column():
-                            gr.Markdown("## Import video files")
+                            gr.Markdown("## Import files")
                             gr.Markdown("You can upload either:")
                             gr.Markdown("- A single MP4 video file")
-                            gr.Markdown("- A ZIP archive containing multiple videos and optional caption files")
-                            gr.Markdown("For ZIP files: Create a folder containing videos (name is not important) and optional caption files with the same name (eg. `some_video.txt` for `some_video.mp4`)")
+                            gr.Markdown("- A ZIP archive containing multiple videos/images and optional caption files")
+                            gr.Markdown("- A WebDataset shard (.tar file)")
+                            gr.Markdown("- A ZIP archive containing WebDataset shards (.tar files)")
                                 
                     with gr.Row():
                         self.components["files"] = gr.Files(
-                            label="Upload Images, Videos or ZIP",
-                            file_types=[".jpg", ".jpeg", ".png", ".webp", ".webp", ".avif", ".heic", ".mp4", ".zip"],
+                            label="Upload Images, Videos, ZIP or WebDataset",
+                            file_types=[".jpg", ".jpeg", ".png", ".webp", ".webp", ".avif", ".heic", ".mp4", ".zip", ".tar"],
                             type="filepath"
                         )
        

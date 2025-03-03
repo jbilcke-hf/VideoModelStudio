@@ -1,6 +1,7 @@
 import os
 import shutil
 import zipfile
+import tarfile
 import tempfile
 import gradio as gr
 from pathlib import Path
@@ -8,17 +9,18 @@ from typing import List, Dict, Optional, Tuple
 from pytubefix import YouTube
 import logging
 
-from ..config import NORMALIZE_IMAGES_TO, TRAINING_VIDEOS_PATH, VIDEOS_TO_SPLIT_PATH, TRAINING_PATH, DEFAULT_PROMPT_PREFIX
+from ..config import NORMALIZE_IMAGES_TO, TRAINING_VIDEOS_PATH, VIDEOS_TO_SPLIT_PATH, STAGING_PATH, DEFAULT_PROMPT_PREFIX
 from ..utils import normalize_image, is_image_file, is_video_file, add_prefix_to_caption
+from ..webdataset import webdataset_handler
 
 logger = logging.getLogger(__name__)
 
 class ImportService:
     def process_uploaded_files(self, file_paths: List[str]) -> str:
-        """Process uploaded file (ZIP, MP4, or image)
+        """Process uploaded file (ZIP, TAR, MP4, or image)
         
         Args:
-            file_paths: File paths to the ploaded files from Gradio
+            file_paths: File paths to the uploaded files from Gradio
                 
         Returns:
             Status message string
@@ -34,6 +36,8 @@ class ImportService:
 
                 if file_ext == '.zip':
                     return self.process_zip_file(file_path)
+                elif file_ext == '.tar':
+                    return self.process_tar_file(file_path)
                 elif file_ext == '.mp4' or file_ext == '.webm':
                     return self.process_mp4_file(file_path, original_name)
                 elif is_image_file(file_path):
@@ -86,7 +90,7 @@ class ImportService:
             raise gr.Error(f"Error processing image file: {str(e)}")
 
     def process_zip_file(self, file_path: Path) -> str:
-        """Process uploaded ZIP file containing media files
+        """Process uploaded ZIP file containing media files or WebDataset tar files
         
         Args:
             file_path: Path to the uploaded ZIP file
@@ -97,6 +101,7 @@ class ImportService:
         try:
             video_count = 0
             image_count = 0
+            tar_count = 0
             
             # Create temporary directory
             with tempfile.TemporaryDirectory() as temp_dir:
@@ -115,7 +120,16 @@ class ImportService:
                         file_path = Path(root) / file
                         
                         try:
-                            if is_video_file(file_path):
+                            # Check if it's a WebDataset tar file
+                            if file.lower().endswith('.tar'):
+                                # Process WebDataset shard
+                                vid_count, img_count = webdataset_handler.process_webdataset_shard(
+                                    file_path, VIDEOS_TO_SPLIT_PATH, STAGING_PATH
+                                )
+                                video_count += vid_count
+                                image_count += img_count
+                                tar_count += 1
+                            elif is_video_file(file_path):
                                 # Copy video to videos_to_split
                                 target_path = VIDEOS_TO_SPLIT_PATH / file_path.name
                                 counter = 1
@@ -137,11 +151,13 @@ class ImportService:
                                 
                             # Copy associated caption file if it exists
                             txt_path = file_path.with_suffix('.txt')
-                            if txt_path.exists():
+                            if txt_path.exists() and not file.lower().endswith('.tar'):
                                 if is_video_file(file_path):
                                     shutil.copy2(txt_path, target_path.with_suffix('.txt'))
                                 elif is_image_file(file_path):
-                                    shutil.copy2(txt_path, target_path.with_suffix('.txt'))
+                                    caption = txt_path.read_text()
+                                    caption = add_prefix_to_caption(caption, DEFAULT_PROMPT_PREFIX)
+                                    target_path.with_suffix('.txt').write_text(caption)
                                     
                         except Exception as e:
                             logger.error(f"Error processing {file_path.name}: {str(e)}")
@@ -149,20 +165,53 @@ class ImportService:
 
             # Generate status message
             parts = []
+            if tar_count > 0:
+                parts.append(f"{tar_count} WebDataset shard{'s' if tar_count != 1 else ''}")
             if video_count > 0:
-                parts.append(f"{video_count} videos")
+                parts.append(f"{video_count} video{'s' if video_count != 1 else ''}")
             if image_count > 0:
-                parts.append(f"{image_count} images")
+                parts.append(f"{image_count} image{'s' if image_count != 1 else ''}")
                 
             if not parts:
                 return "No supported media files found in ZIP"
                 
-            status = f"Successfully stored {' and '.join(parts)}"
+            status = f"Successfully stored {', '.join(parts)}"
             gr.Info(status)
             return status
             
         except Exception as e:
             raise gr.Error(f"Error processing ZIP: {str(e)}")
+
+    def process_tar_file(self, file_path: Path) -> str:
+        """Process a WebDataset tar file
+        
+        Args:
+            file_path: Path to the uploaded tar file
+                
+        Returns:
+            Status message string
+        """
+        try:
+            video_count, image_count = webdataset_handler.process_webdataset_shard(
+                file_path, VIDEOS_TO_SPLIT_PATH, STAGING_PATH
+            )
+            
+            # Generate status message
+            parts = []
+            if video_count > 0:
+                parts.append(f"{video_count} video{'s' if video_count != 1 else ''}")
+            if image_count > 0:
+                parts.append(f"{image_count} image{'s' if image_count != 1 else ''}")
+                
+            if not parts:
+                return "No supported media files found in WebDataset"
+                
+            status = f"Successfully extracted {' and '.join(parts)} from WebDataset"
+            gr.Info(status)
+            return status
+            
+        except Exception as e:
+            raise gr.Error(f"Error processing WebDataset tar file: {str(e)}")
 
     def process_mp4_file(self, file_path: Path, original_name: str) -> str:
         """Process a single video file
