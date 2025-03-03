@@ -6,6 +6,8 @@ from .image_preprocessing import normalize_image
 from .video_preprocessing import remove_black_bars
 from .finetrainers_utils import prepare_finetrainers_dataset, copy_files_to_training_dir
 
+from . import webdataset_handler
+
 __all__ = [
     'validate_model_repo',
     'make_archive',
@@ -30,4 +32,6 @@ __all__ = [
 
     'prepare_finetrainers_dataset',
     'copy_files_to_training_dir',
+
+    'webdataset_handler'n
 ]
