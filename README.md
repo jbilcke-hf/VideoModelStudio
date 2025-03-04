@@ -31,6 +31,9 @@ I wasn't aware of its existence when I started my project, but there is also thi
 - 🔥 **2025-02-18**: I have added persistence of UI settings. So if you reload Gradio, you won't lose your settings!
 
 
+## TODO
+- Add `Aya-Vision-8B` for frame analysis (currently we use `Qwen2-VL-7B`)
+
 ## Features
 
 ### Run Finetrainers in the background
