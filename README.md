@@ -21,18 +21,29 @@ VMS is a Gradio app that wraps around Finetrainers, to provide a simple UI to tr
 
 You can deploy it to a private space, and start long-running training jobs in the background.
 
-### Similar projects
+## Funding
 
-I wasn't aware of its existence when I started my project, but there is also this open-source initiative: https://github.com/alisson-anjos/diffusion-pipe-ui
+VideoModelStudio is 100% open-source project, I develop and maintain it during both my pro and personal time. If you like it, you can tip! If not, have a good day 🫶
+
+<a href="https://www.buymeacoffee.com/flngr" target="_blank"><img src="https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png" alt="Buy Me A Coffee" style="height: 41px !important;width: 174px !important;box-shadow: 0px 3px 2px 0px rgba(190, 190, 190, 0.5) !important;-webkit-box-shadow: 0px 3px 2px 0px rgba(190, 190, 190, 0.5) !important;" ></a>
 
 ## News
 - 🔥 **2025-03-02**: Made some fixes to improve Finetrainer reliability when working with big datasets
 - 🔥 **2025-02-18**: I am working to add better recovery in case of a failed run (this is still in beta)
 - 🔥 **2025-02-18**: I have added persistence of UI settings. So if you reload Gradio, you won't lose your settings!
 
-
 ## TODO
 - Add `Aya-Vision-8B` for frame analysis (currently we use `Qwen2-VL-7B`)
+
+### See also
+
+#### Internally used project: Finetrainers
+
+VMS uses Finetrainers under the hood: https://github.com/a-r-r-o-w/finetrainers
+
+#### Similar project: diffusion-pipe-ui
+
+I wasn't aware of its existence when I started my project, but there is also this open-source initiative (which is similar in terms of dataset management etc): https://github.com/alisson-anjos/diffusion-pipe-ui
 
 ## Features
 
