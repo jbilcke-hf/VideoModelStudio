@@ -9,7 +9,12 @@ from ..services import TrainingService, CaptioningService, SplittingService, Imp
 from ..config import (
     STORAGE_PATH, VIDEOS_TO_SPLIT_PATH, STAGING_PATH, OUTPUT_PATH,
     TRAINING_PATH, LOG_FILE_PATH, TRAINING_PRESETS, TRAINING_VIDEOS_PATH, MODEL_PATH, OUTPUT_PATH,
-    MODEL_TYPES, SMALL_TRAINING_BUCKETS, TRAINING_TYPES
+    MODEL_TYPES, SMALL_TRAINING_BUCKETS, TRAINING_TYPES,
+    DEFAULT_NB_TRAINING_STEPS, DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
+    DEFAULT_BATCH_SIZE, DEFAULT_CAPTION_DROPOUT_P,
+    DEFAULT_LEARNING_RATE,
+    DEFAULT_LORA_RANK, DEFAULT_LORA_ALPHA,
+    DEFAULT_LORA_RANK_STR, DEFAULT_LORA_ALPHA_STR
 )
 from ..utils import count_media_files, format_media_title, TrainingLogParser
 from ..tabs import ImportTab, SplitTab, CaptionTab, TrainTab, ManageTab
@@ -92,7 +97,7 @@ class VideoTrainerUI:
                     self.tabs["train_tab"].components["training_type"],
                     self.tabs["train_tab"].components["lora_rank"],
                     self.tabs["train_tab"].components["lora_alpha"],
-                    self.tabs["train_tab"].components["num_epochs"],
+                    self.tabs["train_tab"].components["train_steps"],
                     self.tabs["train_tab"].components["batch_size"],
                     self.tabs["train_tab"].components["learning_rate"],
                     self.tabs["train_tab"].components["save_iterations"],
@@ -104,31 +109,33 @@ class VideoTrainerUI:
     
     def _add_timers(self):
         """Add auto-refresh timers to the UI"""
-        # Status update timer (every 1 second)
+        # Status update timer for text components (every 1 second)
         status_timer = gr.Timer(value=1)
+        status_timer.tick(
+            fn=self.tabs["train_tab"].get_status_updates,  # Use a new function that returns appropriate updates
+            outputs=[
+                self.tabs["train_tab"].components["status_box"],
+                self.tabs["train_tab"].components["log_box"],
+                self.tabs["train_tab"].components["current_task_box"] if "current_task_box" in self.tabs["train_tab"].components else None
+            ]
+        )
         
-        # Use a safer approach - check if the component exists before using it
-        outputs = [
-            self.tabs["train_tab"].components["status_box"],
-            self.tabs["train_tab"].components["log_box"],
+        # Button update timer for button components (every 1 second)
+        button_timer = gr.Timer(value=1)
+        button_outputs = [
             self.tabs["train_tab"].components["start_btn"],
             self.tabs["train_tab"].components["stop_btn"]
         ]
         
-        # Add current_task_box component
-        if "current_task_box" in self.tabs["train_tab"].components:
-            outputs.append(self.tabs["train_tab"].components["current_task_box"])
-        
-        # Add delete_checkpoints_btn only if it exists
+        # Add delete_checkpoints_btn or pause_resume_btn as the third button
         if "delete_checkpoints_btn" in self.tabs["train_tab"].components:
-            outputs.append(self.tabs["train_tab"].components["delete_checkpoints_btn"])
-        else:
-            # Add pause_resume_btn as fallback
-            outputs.append(self.tabs["train_tab"].components["pause_resume_btn"])
+            button_outputs.append(self.tabs["train_tab"].components["delete_checkpoints_btn"])
+        elif "pause_resume_btn" in self.tabs["train_tab"].components:
+            button_outputs.append(self.tabs["train_tab"].components["pause_resume_btn"])
         
-        status_timer.tick(
-            fn=self.tabs["train_tab"].get_latest_status_message_logs_and_button_labels,
-            outputs=outputs
+        button_timer.tick(
+            fn=self.tabs["train_tab"].get_button_updates,  # Use a new function for button-specific updates
+            outputs=button_outputs
         )
         
         # Dataset refresh timer (every 5 seconds)
@@ -175,6 +182,11 @@ class VideoTrainerUI:
             if "model_type" in recovery_ui:
                 model_type_value = recovery_ui["model_type"]
                 
+                # Remove " (LoRA)" suffix if present
+                if " (LoRA)" in model_type_value:
+                    model_type_value = model_type_value.replace(" (LoRA)", "")
+                    logger.info(f"Removed (LoRA) suffix from model type: {model_type_value}")
+                
                 # If it's an internal name, convert to display name
                 if model_type_value not in MODEL_TYPES:
                     # Find the display name for this internal model type
@@ -201,7 +213,7 @@ class VideoTrainerUI:
                 ui_state["training_type"] = training_type_value
             
             # Copy other parameters
-            for param in ["lora_rank", "lora_alpha", "num_epochs", 
+            for param in ["lora_rank", "lora_alpha", "train_steps", 
                         "batch_size", "learning_rate", "save_iterations", "training_preset"]:
                 if param in recovery_ui:
                     ui_state[param] = recovery_ui[param]
@@ -216,31 +228,55 @@ class VideoTrainerUI:
         # Load values (potentially with recovery updates applied)
         ui_state = self.load_ui_values()
         
-        # Ensure model_type is a display name, not internal name
+        # Ensure model_type is a valid display name
         model_type_val = ui_state.get("model_type", list(MODEL_TYPES.keys())[0])
+        # Remove " (LoRA)" suffix if present
+        if " (LoRA)" in model_type_val:
+            model_type_val = model_type_val.replace(" (LoRA)", "")
+            logger.info(f"Removed (LoRA) suffix from model type: {model_type_val}")
+        
+        # Ensure it's a valid model type in the dropdown
         if model_type_val not in MODEL_TYPES:
-            # Convert from internal to display name
+            # Convert from internal to display name or use default
+            model_type_found = False
             for display_name, internal_name in MODEL_TYPES.items():
                 if internal_name == model_type_val:
                     model_type_val = display_name
+                    model_type_found = True
                     break
+            # If still not found, use the first model type
+            if not model_type_found:
+                model_type_val = list(MODEL_TYPES.keys())[0]
+                logger.warning(f"Invalid model type '{model_type_val}', using default: {model_type_val}")
         
-        # Ensure training_type is a display name, not internal name
+        # Ensure training_type is a valid display name
         training_type_val = ui_state.get("training_type", list(TRAINING_TYPES.keys())[0])
         if training_type_val not in TRAINING_TYPES:
-            # Convert from internal to display name
+            # Convert from internal to display name or use default
+            training_type_found = False
             for display_name, internal_name in TRAINING_TYPES.items():
                 if internal_name == training_type_val:
                     training_type_val = display_name
+                    training_type_found = True
                     break
+            # If still not found, use the first training type
+            if not training_type_found:
+                training_type_val = list(TRAINING_TYPES.keys())[0]
+                logger.warning(f"Invalid training type '{training_type_val}', using default: {training_type_val}")
         
+        # Validate training preset
         training_preset = ui_state.get("training_preset", list(TRAINING_PRESETS.keys())[0])
-        lora_rank_val = ui_state.get("lora_rank", "128")
-        lora_alpha_val = ui_state.get("lora_alpha", "128")
-        num_epochs_val = int(ui_state.get("num_epochs", 70))
-        batch_size_val = int(ui_state.get("batch_size", 1))
-        learning_rate_val = float(ui_state.get("learning_rate", 3e-5))
-        save_iterations_val = int(ui_state.get("save_iterations", 500))
+        if training_preset not in TRAINING_PRESETS:
+            training_preset = list(TRAINING_PRESETS.keys())[0]
+            logger.warning(f"Invalid training preset '{training_preset}', using default: {training_preset}")
+        
+        # Rest of the function remains unchanged
+        lora_rank_val = ui_state.get("lora_rank", DEFAULT_LORA_RANK_STR)
+        lora_alpha_val = ui_state.get("lora_alpha", DEFAULT_LORA_ALPHA_STR)
+        train_steps_val = int(ui_state.get("train_steps", DEFAULT_NB_TRAINING_STEPS))
+        batch_size_val = int(ui_state.get("batch_size", DEFAULT_BATCH_SIZE))
+        learning_rate_val = float(ui_state.get("learning_rate", DEFAULT_LEARNING_RATE))
+        save_iterations_val = int(ui_state.get("save_iterations", DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS))
         
         # Initial current task value
         current_task_val = ""
@@ -259,7 +295,7 @@ class VideoTrainerUI:
             training_type_val,
             lora_rank_val, 
             lora_alpha_val,
-            num_epochs_val, 
+            train_steps_val, 
             batch_size_val, 
             learning_rate_val, 
             save_iterations_val,
@@ -275,12 +311,12 @@ class VideoTrainerUI:
             ui_state.get("training_preset", list(TRAINING_PRESETS.keys())[0]),
             ui_state.get("model_type", list(MODEL_TYPES.keys())[0]),
             ui_state.get("training_type", list(TRAINING_TYPES.keys())[0]),
-            ui_state.get("lora_rank", "128"),
-            ui_state.get("lora_alpha", "128"),
-            ui_state.get("num_epochs", 70),
-            ui_state.get("batch_size", 1),
-            ui_state.get("learning_rate", 3e-5),
-            ui_state.get("save_iterations", 500)
+            ui_state.get("lora_rank", DEFAULT_LORA_RANK_STR),
+            ui_state.get("lora_alpha", DEFAULT_LORA_ALPHA_STR),
+            ui_state.get("train_steps", DEFAULT_NB_TRAINING_STEPS),
+            ui_state.get("batch_size", DEFAULT_BATCH_SIZE),
+            ui_state.get("learning_rate", DEFAULT_LEARNING_RATE),
+            ui_state.get("save_iterations", DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS)
         )
 
     def update_ui_state(self, **kwargs):
@@ -296,12 +332,12 @@ class VideoTrainerUI:
         ui_state = self.trainer.load_ui_state()
         
         # Ensure proper type conversion for numeric values
-        ui_state["lora_rank"] = ui_state.get("lora_rank", "128")
-        ui_state["lora_alpha"] = ui_state.get("lora_alpha", "128")
-        ui_state["num_epochs"] = int(ui_state.get("num_epochs", 70))
-        ui_state["batch_size"] = int(ui_state.get("batch_size", 1))
-        ui_state["learning_rate"] = float(ui_state.get("learning_rate", 3e-5))
-        ui_state["save_iterations"] = int(ui_state.get("save_iterations", 500))
+        ui_state["lora_rank"] = ui_state.get("lora_rank", DEFAULT_LORA_RANK_STR)
+        ui_state["lora_alpha"] = ui_state.get("lora_alpha", DEFAULT_LORA_ALPHA_STR)
+        ui_state["train_steps"] = int(ui_state.get("train_steps", DEFAULT_NB_TRAINING_STEPS))
+        ui_state["batch_size"] = int(ui_state.get("batch_size", DEFAULT_BATCH_SIZE))
+        ui_state["learning_rate"] = float(ui_state.get("learning_rate", DEFAULT_LEARNING_RATE))
+        ui_state["save_iterations"] = int(ui_state.get("save_iterations", DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS))
         
         return ui_state
     

@@ -9,7 +9,14 @@ from typing import Dict, Any, List, Optional, Tuple
 from pathlib import Path
 
 from .base_tab import BaseTab
-from ..config import TRAINING_PRESETS, OUTPUT_PATH, MODEL_TYPES, ASK_USER_TO_DUPLICATE_SPACE, SMALL_TRAINING_BUCKETS, TRAINING_TYPES
+from ..config import (
+    TRAINING_PRESETS, OUTPUT_PATH, MODEL_TYPES, ASK_USER_TO_DUPLICATE_SPACE, SMALL_TRAINING_BUCKETS, TRAINING_TYPES,
+    DEFAULT_NB_TRAINING_STEPS, DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
+    DEFAULT_BATCH_SIZE, DEFAULT_CAPTION_DROPOUT_P,
+    DEFAULT_LEARNING_RATE,
+    DEFAULT_LORA_RANK, DEFAULT_LORA_ALPHA,
+    DEFAULT_LORA_RANK_STR, DEFAULT_LORA_ALPHA_STR
+)
 
 logger = logging.getLogger(__name__)
 
@@ -63,20 +70,20 @@ class TrainTab(BaseTab):
                         self.components["lora_rank"] = gr.Dropdown(
                             label="LoRA Rank",
                             choices=["16", "32", "64", "128", "256", "512", "1024"],
-                            value="128",
+                            value=DEFAULT_LORA_RANK_STR,
                             type="value"
                         )
                         self.components["lora_alpha"] = gr.Dropdown(
                             label="LoRA Alpha",
                             choices=["16", "32", "64", "128", "256", "512", "1024"],
-                            value="128",
+                            value=DEFAULT_LORA_ALPHA_STR,
                             type="value"
                         )
                     
                     with gr.Row():
-                        self.components["num_epochs"] = gr.Number(
-                            label="Number of Epochs",
-                            value=70,
+                        self.components["train_steps"] = gr.Number(
+                            label="Number of Training Steps",
+                            value=DEFAULT_NB_TRAINING_STEPS,
                             minimum=1,
                             precision=0
                         )
@@ -89,13 +96,13 @@ class TrainTab(BaseTab):
                     with gr.Row():
                         self.components["learning_rate"] = gr.Number(
                             label="Learning Rate",
-                            value=2e-5,
-                            minimum=1e-7
+                            value=DEFAULT_LEARNING_RATE,
+                            minimum=1e-8
                         )
                         self.components["save_iterations"] = gr.Number(
                             label="Save checkpoint every N iterations",
-                            value=500,
-                            minimum=50,
+                            value=DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
+                            minimum=1,
                             precision=0,
                             info="Model will be saved periodically after these many steps"
                         )
@@ -170,7 +177,7 @@ class TrainTab(BaseTab):
             
             return {
                 self.components["model_info"]: info,
-                self.components["num_epochs"]: params["num_epochs"],
+                self.components["train_steps"]: params["train_steps"],
                 self.components["batch_size"]: params["batch_size"],
                 self.components["learning_rate"]: params["learning_rate"],
                 self.components["save_iterations"]: params["save_iterations"],
@@ -186,7 +193,7 @@ class TrainTab(BaseTab):
             inputs=[self.components["model_type"], self.components["training_type"]],
             outputs=[
                 self.components["model_info"],
-                self.components["num_epochs"],
+                self.components["train_steps"],
                 self.components["batch_size"],
                 self.components["learning_rate"],
                 self.components["save_iterations"],
@@ -204,7 +211,7 @@ class TrainTab(BaseTab):
             inputs=[self.components["model_type"], self.components["training_type"]],
             outputs=[
                 self.components["model_info"],
-                self.components["num_epochs"],
+                self.components["train_steps"],
                 self.components["batch_size"],
                 self.components["learning_rate"],
                 self.components["save_iterations"],
@@ -225,9 +232,9 @@ class TrainTab(BaseTab):
             outputs=[]
         )
 
-        self.components["num_epochs"].change(
-            fn=lambda v: self.app.update_ui_state(num_epochs=v),
-            inputs=[self.components["num_epochs"]],
+        self.components["train_steps"].change(
+            fn=lambda v: self.app.update_ui_state(train_steps=v),
+            inputs=[self.components["train_steps"]],
             outputs=[]
         )
 
@@ -262,7 +269,7 @@ class TrainTab(BaseTab):
                 self.components["training_type"],
                 self.components["lora_rank"],
                 self.components["lora_alpha"],
-                self.components["num_epochs"],
+                self.components["train_steps"],
                 self.components["batch_size"],
                 self.components["learning_rate"],
                 self.components["save_iterations"],
@@ -280,7 +287,7 @@ class TrainTab(BaseTab):
                 self.components["training_type"],
                 self.components["lora_rank"],
                 self.components["lora_alpha"],
-                self.components["num_epochs"],
+                self.components["train_steps"],
                 self.components["batch_size"],
                 self.components["learning_rate"],
                 self.components["save_iterations"],
@@ -290,27 +297,20 @@ class TrainTab(BaseTab):
                 self.components["status_box"],
                 self.components["log_box"]
             ]
-        ).success(
-            fn=self.get_latest_status_message_logs_and_button_labels,
-            outputs=[
-                self.components["status_box"],
-                self.components["log_box"],
-                self.components["start_btn"],
-                self.components["stop_btn"],
-                self.components["pause_resume_btn"],
-                self.components["current_task_box"]  # Include new component
-            ]
         )
 
+        # Use simplified event handlers for pause/resume and stop
+        third_btn = self.components["delete_checkpoints_btn"] if "delete_checkpoints_btn" in self.components else self.components["pause_resume_btn"]
+        
         self.components["pause_resume_btn"].click(
             fn=self.handle_pause_resume,
             outputs=[
                 self.components["status_box"],
                 self.components["log_box"],
+                self.components["current_task_box"],
                 self.components["start_btn"],
                 self.components["stop_btn"],
-                self.components["pause_resume_btn"],
-                self.components["current_task_box"]  # Include new component
+                third_btn
             ]
         )
 
@@ -319,10 +319,10 @@ class TrainTab(BaseTab):
             outputs=[
                 self.components["status_box"],
                 self.components["log_box"],
+                self.components["current_task_box"],
                 self.components["start_btn"],
                 self.components["stop_btn"],
-                self.components["pause_resume_btn"],
-                self.components["current_task_box"]  # Include new component
+                third_btn
             ]
         )
 
@@ -330,16 +330,6 @@ class TrainTab(BaseTab):
         self.components["delete_checkpoints_btn"].click(
             fn=lambda: self.app.trainer.delete_all_checkpoints(),
             outputs=[self.components["status_box"]]
-        ).then(
-            fn=self.get_latest_status_message_logs_and_button_labels,
-            outputs=[
-                self.components["status_box"],
-                self.components["log_box"],
-                self.components["start_btn"],
-                self.components["stop_btn"],
-                self.components["delete_checkpoints_btn"],
-                self.components["current_task_box"]  # Include new component
-            ]
         )
         
     def handle_training_start(self, preset, model_type, training_type, *args):
@@ -391,7 +381,7 @@ class TrainTab(BaseTab):
     
     def get_model_info(self, model_type: str, training_type: str) -> str:
         """Get information about the selected model type and training method"""
-        if model_type == "HunyuanVideo (LoRA)":
+        if model_type == "HunyuanVideo":
             base_info = """### HunyuanVideo
     - Required VRAM: ~48GB minimum
     - Recommended batch size: 1-2
@@ -403,7 +393,7 @@ class TrainTab(BaseTab):
             else:
                 return base_info + "\n- Required VRAM: ~48GB minimum\n- **Full finetune not recommended due to VRAM requirements**"
                 
-        elif model_type == "LTX-Video (LoRA)":
+        elif model_type == "LTX-Video":
             base_info = """### LTX-Video
     - Recommended batch size: 1-4
     - Typical training time: 1-3 hours
@@ -414,14 +404,14 @@ class TrainTab(BaseTab):
             else:
                 return base_info + "\n- Required VRAM: ~21GB minimum\n- Full model size: ~8GB"
                 
-        elif model_type == "Wan-2.1-T2V (LoRA)":
+        elif model_type == "Wan-2.1-T2V":
             base_info = """### Wan-2.1-T2V
-    - Recommended batch size: 1-2
-    - Typical training time: 1-3 hours
+    - Recommended batch size: ?
+    - Typical training time: ? hours
     - Default resolution: 49x512x768"""
             
             if training_type == "LoRA Finetune":
-                return base_info + "\n- Required VRAM: ~16GB minimum\n- Default LoRA rank: 32 (~120 MB)"
+                return base_info + "\n- Required VRAM: ?GB minimum\n- Default LoRA rank: 32 (~120 MB)"
             else:
                 return base_info + "\n- **Full finetune not recommended due to VRAM requirements**"
         
@@ -440,51 +430,51 @@ class TrainTab(BaseTab):
             # Use the first matching preset
             preset = matching_presets[0]
             return {
-                "num_epochs": preset.get("num_epochs", 70),
-                "batch_size": preset.get("batch_size", 1),
-                "learning_rate": preset.get("learning_rate", 3e-5),
-                "save_iterations": preset.get("save_iterations", 500),
-                "lora_rank": preset.get("lora_rank", "128"),
-                "lora_alpha": preset.get("lora_alpha", "128")
+                "train_steps": preset.get("train_steps", DEFAULT_NB_TRAINING_STEPS),
+                "batch_size": preset.get("batch_size", DEFAULT_BATCH_SIZE),
+                "learning_rate": preset.get("learning_rate", DEFAULT_LEARNING_RATE),
+                "save_iterations": preset.get("save_iterations", DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS),
+                "lora_rank": preset.get("lora_rank", DEFAULT_LORA_RANK_STR),
+                "lora_alpha": preset.get("lora_alpha", DEFAULT_LORA_ALPHA_STR)
             }
         
         # Default fallbacks
         if model_type == "hunyuan_video":
             return {
-                "num_epochs": 70,
-                "batch_size": 1,
+                "train_steps": DEFAULT_NB_TRAINING_STEPS,
+                "batch_size": DEFAULT_BATCH_SIZE,
                 "learning_rate": 2e-5,
-                "save_iterations": 500,
-                "lora_rank": "128",
-                "lora_alpha": "128"
+                "save_iterations": DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
+                "lora_rank": DEFAULT_LORA_RANK_STR,
+                "lora_alpha": DEFAULT_LORA_ALPHA_STR
             }
         elif model_type == "ltx_video":
             return {
-                "num_epochs": 70,
-                "batch_size": 1,
-                "learning_rate": 3e-5,
-                "save_iterations": 500,
-                "lora_rank": "128",
-                "lora_alpha": "128"
+                "train_steps": DEFAULT_NB_TRAINING_STEPS,
+                "batch_size": DEFAULT_BATCH_SIZE,
+                "learning_rate": DEFAULT_LEARNING_RATE,
+                "save_iterations": DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
+                "lora_rank": DEFAULT_LORA_RANK_STR,
+                "lora_alpha": DEFAULT_LORA_ALPHA_STR
             }
         elif model_type == "wan":
             return {
-                "num_epochs": 70,
-                "batch_size": 1,
+                "train_steps": DEFAULT_NB_TRAINING_STEPS,
+                "batch_size": DEFAULT_BATCH_SIZE,
                 "learning_rate": 5e-5,
-                "save_iterations": 500,
+                "save_iterations": DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
                 "lora_rank": "32",
                 "lora_alpha": "32"
             }
         else:
             # Generic defaults
             return {
-                "num_epochs": 70,
-                "batch_size": 1,
-                "learning_rate": 3e-5,
-                "save_iterations": 500,
-                "lora_rank": "128",
-                "lora_alpha": "128"
+                "train_steps": DEFAULT_NB_TRAINING_STEPS,
+                "batch_size": DEFAULT_BATCH_SIZE,
+                "learning_rate": DEFAULT_LEARNING_RATE,
+                "save_iterations": DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
+                "lora_rank": DEFAULT_LORA_RANK_STR,
+                "lora_alpha": DEFAULT_LORA_ALPHA_STR
             }
             
     def update_training_params(self, preset_name: str) -> Tuple:
@@ -522,12 +512,12 @@ class TrainTab(BaseTab):
         show_lora_params = preset["training_type"] == "lora"
         
         # Use preset defaults but preserve user-modified values if they exist
-        lora_rank_val = current_state.get("lora_rank") if current_state.get("lora_rank") != preset.get("lora_rank", "128") else preset.get("lora_rank", "128")
-        lora_alpha_val = current_state.get("lora_alpha") if current_state.get("lora_alpha") != preset.get("lora_alpha", "128") else preset.get("lora_alpha", "128")
-        num_epochs_val = current_state.get("num_epochs") if current_state.get("num_epochs") != preset.get("num_epochs", 70) else preset.get("num_epochs", 70)
-        batch_size_val = current_state.get("batch_size") if current_state.get("batch_size") != preset.get("batch_size", 1) else preset.get("batch_size", 1)
-        learning_rate_val = current_state.get("learning_rate") if current_state.get("learning_rate") != preset.get("learning_rate", 3e-5) else preset.get("learning_rate", 3e-5)
-        save_iterations_val = current_state.get("save_iterations") if current_state.get("save_iterations") != preset.get("save_iterations", 500) else preset.get("save_iterations", 500)
+        lora_rank_val = current_state.get("lora_rank") if current_state.get("lora_rank") != preset.get("lora_rank", DEFAULT_LORA_RANK_STR) else preset.get("lora_rank", DEFAULT_LORA_RANK_STR)
+        lora_alpha_val = current_state.get("lora_alpha") if current_state.get("lora_alpha") != preset.get("lora_alpha", DEFAULT_LORA_ALPHA_STR) else preset.get("lora_alpha", DEFAULT_LORA_ALPHA_STR)
+        train_steps_val = current_state.get("train_steps") if current_state.get("train_steps") != preset.get("train_steps", DEFAULT_NB_TRAINING_STEPS) else preset.get("train_steps", DEFAULT_NB_TRAINING_STEPS)
+        batch_size_val = current_state.get("batch_size") if current_state.get("batch_size") != preset.get("batch_size", DEFAULT_BATCH_SIZE) else preset.get("batch_size", DEFAULT_BATCH_SIZE)
+        learning_rate_val = current_state.get("learning_rate") if current_state.get("learning_rate") != preset.get("learning_rate", DEFAULT_LEARNING_RATE) else preset.get("learning_rate", DEFAULT_LEARNING_RATE)
+        save_iterations_val = current_state.get("save_iterations") if current_state.get("save_iterations") != preset.get("save_iterations", DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS) else preset.get("save_iterations", DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS)
         
         # Return values in the same order as the output components
         return (
@@ -535,73 +525,13 @@ class TrainTab(BaseTab):
             training_display_name,
             lora_rank_val,
             lora_alpha_val,
-            num_epochs_val,
+            train_steps_val,
             batch_size_val,
             learning_rate_val,
             save_iterations_val,
             info_text,
             gr.Row(visible=show_lora_params)
         )
-    
-    def update_training_ui(self, training_state: Dict[str, Any]):
-        """Update UI components based on training state"""
-        updates = {}
-        
-        # Update status box with high-level information
-        status_text = []
-        if training_state["status"] != "idle":
-            status_text.extend([
-                f"Status: {training_state['status']}",
-                f"Progress: {training_state['progress']}",
-                f"Step: {training_state['current_step']}/{training_state['total_steps']}",
-                f"Time elapsed: {training_state['elapsed']}",
-                f"Estimated remaining: {training_state['remaining']}",
-                "",
-                f"Current loss: {training_state['step_loss']}",
-                f"Learning rate: {training_state['learning_rate']}",
-                f"Gradient norm: {training_state['grad_norm']}",
-                f"Memory usage: {training_state['memory']}"
-            ])
-            
-            if training_state["error_message"]:
-                status_text.append(f"\nError: {training_state['error_message']}")
-                
-        updates["status_box"] = "\n".join(status_text)
-        
-        # Add current task information to the dedicated box
-        if training_state.get("current_task"):
-            updates["current_task_box"] = training_state["current_task"]
-        else:
-            updates["current_task_box"] = "No active task" if training_state["status"] != "training" else "Waiting for task information..."
-        
-        # Update button states
-        updates["start_btn"] = gr.Button(
-            "Start training",
-            interactive=(training_state["status"] in ["idle", "completed", "error", "stopped"]),
-            variant="primary" if training_state["status"] == "idle" else "secondary"
-        )
-        
-        updates["stop_btn"] = gr.Button(
-            "Stop training",
-            interactive=(training_state["status"] in ["training", "initializing"]),
-            variant="stop"
-        )
-        
-        return updates
-        
-    def handle_pause_resume(self):
-        status, _, _ = self.get_latest_status_message_and_logs()
-
-        if status == "paused":
-            self.app.trainer.resume_training()
-        else:
-            self.app.trainer.pause_training()
-
-        return self.get_latest_status_message_logs_and_button_labels()
-
-    def handle_stop(self):
-        self.app.trainer.stop_training()
-        return self.get_latest_status_message_logs_and_button_labels()
     
     def get_latest_status_message_and_logs(self) -> Tuple[str, str, str]:
         """Get latest status message, log content, and status code in a safer way"""
@@ -663,61 +593,107 @@ class TrainTab(BaseTab):
 
         return (state["status"], state["message"], logs)
 
-    def get_latest_status_message_logs_and_button_labels(self) -> Tuple:
-        """Get latest status message, logs and button states"""
+    def get_status_updates(self):
+        """Get status updates for text components (no variant property)"""
         status, message, logs = self.get_latest_status_message_and_logs()
-        
-        # Add checkpoints detection
-        has_checkpoints = len(list(OUTPUT_PATH.glob("checkpoint-*"))) > 0
-        
-        button_updates = self.update_training_buttons(status, has_checkpoints).values()
         
         # Get current task if available
         current_task = ""
         if hasattr(self.app, 'log_parser') and self.app.log_parser is not None:
             current_task = self.app.log_parser.get_current_task_display()
         
-        # Return in order expected by timer (added current_task)
-        return (message, logs, *button_updates, current_task)
-    
-    def update_training_buttons(self, status: str, has_checkpoints: bool = None) -> Dict:
-        """Update training control buttons based on state"""
-        if has_checkpoints is None:
-            has_checkpoints = len(list(OUTPUT_PATH.glob("checkpoint-*"))) > 0
-            
+        return message, logs, current_task
+
+    def get_button_updates(self):
+        """Get button updates (with variant property)"""
+        status, _, _ = self.get_latest_status_message_and_logs()
+        
+        # Add checkpoints detection
+        has_checkpoints = len(list(OUTPUT_PATH.glob("checkpoint-*"))) > 0
+        
         is_training = status in ["training", "initializing"]
         is_completed = status in ["completed", "error", "stopped"]
         
         start_text = "Continue Training" if has_checkpoints else "Start Training"
         
-        # Only include buttons that we know exist in components
-        result = {
-            "start_btn": gr.Button(
-                value=start_text,
-                interactive=not is_training,
-                variant="primary" if not is_training else "secondary",
-            ),
-            "stop_btn": gr.Button(
-                value="Stop at Last Checkpoint",
-                interactive=is_training,
-                variant="primary" if is_training else "secondary",
-            )
-        }
+        # Create button updates
+        start_btn = gr.Button(
+            value=start_text,
+            interactive=not is_training,
+            variant="primary" if not is_training else "secondary"
+        )
         
-        # Add delete_checkpoints_btn only if it exists in components
+        stop_btn = gr.Button(
+            value="Stop at Last Checkpoint",
+            interactive=is_training,
+            variant="primary" if is_training else "secondary"
+        )
+        
+        # Add delete_checkpoints_btn or pause_resume_btn
         if "delete_checkpoints_btn" in self.components:
-            result["delete_checkpoints_btn"] = gr.Button(
-                value="Delete All Checkpoints",
+            third_btn = gr.Button(
+                "Delete All Checkpoints",
                 interactive=has_checkpoints and not is_training,
-                variant="stop",
+                variant="stop"
             )
         else:
-            # Add pause_resume_btn as fallback
-            result["pause_resume_btn"] = gr.Button(
-                value="Resume Training" if status == "paused" else "Pause Training",
+            third_btn = gr.Button(
+                "Resume Training" if status == "paused" else "Pause Training",
                 interactive=(is_training or status == "paused") and not is_completed,
                 variant="secondary",
                 visible=False
             )
         
-        return result
+        return start_btn, stop_btn, third_btn
+        
+    def update_training_ui(self, training_state: Dict[str, Any]):
+        """Update UI components based on training state"""
+        updates = {}
+        
+        # Update status box with high-level information
+        status_text = []
+        if training_state["status"] != "idle":
+            status_text.extend([
+                f"Status: {training_state['status']}",
+                f"Progress: {training_state['progress']}",
+                f"Step: {training_state['current_step']}/{training_state['total_steps']}",
+                f"Time elapsed: {training_state['elapsed']}",
+                f"Estimated remaining: {training_state['remaining']}",
+                "",
+                f"Current loss: {training_state['step_loss']}",
+                f"Learning rate: {training_state['learning_rate']}",
+                f"Gradient norm: {training_state['grad_norm']}",
+                f"Memory usage: {training_state['memory']}"
+            ])
+            
+            if training_state["error_message"]:
+                status_text.append(f"\nError: {training_state['error_message']}")
+                
+        updates["status_box"] = "\n".join(status_text)
+        
+        # Add current task information to the dedicated box
+        if training_state.get("current_task"):
+            updates["current_task_box"] = training_state["current_task"]
+        else:
+            updates["current_task_box"] = "No active task" if training_state["status"] != "training" else "Waiting for task information..."
+        
+        return updates
+        
+    def handle_pause_resume(self):
+        """Handle pause/resume button click"""
+        status, _, _ = self.get_latest_status_message_and_logs()
+        
+        if status == "paused":
+            self.app.trainer.resume_training()
+        else:
+            self.app.trainer.pause_training()
+            
+        # Return the updates separately for text and buttons
+        return (*self.get_status_updates(), *self.get_button_updates())
+
+    def handle_stop(self):
+        """Handle stop button click"""
+        self.app.trainer.stop_training()
+        
+        # Return the updates separately for text and buttons
+        return (*self.get_status_updates(), *self.get_button_updates())
