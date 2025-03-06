@@ -9,7 +9,7 @@ from ..services import TrainingService, CaptioningService, SplittingService, Imp
 from ..config import (
     STORAGE_PATH, VIDEOS_TO_SPLIT_PATH, STAGING_PATH, OUTPUT_PATH,
     TRAINING_PATH, LOG_FILE_PATH, TRAINING_PRESETS, TRAINING_VIDEOS_PATH, MODEL_PATH, OUTPUT_PATH,
-    MODEL_TYPES, SMALL_TRAINING_BUCKETS
+    MODEL_TYPES, SMALL_TRAINING_BUCKETS, TRAINING_TYPES
 )
 from ..utils import count_media_files, format_media_title, TrainingLogParser
 from ..tabs import ImportTab, SplitTab, CaptionTab, TrainTab, ManageTab
