@@ -8,6 +8,8 @@ from .finetrainers_utils import prepare_finetrainers_dataset, copy_files_to_trai
 
 from . import webdataset_handler
 
+from .gpu_detector import get_available_gpu_count, get_gpu_info, get_recommended_precomputation_items
+
 __all__ = [
     'validate_model_repo',
     'make_archive',
@@ -33,5 +35,9 @@ __all__ = [
     'prepare_finetrainers_dataset',
     'copy_files_to_training_dir',
 
-    'webdataset_handler'
+    'webdataset_handler',
+
+    'get_available_gpu_count',
+    'get_gpu_info',
+    'get_recommended_precomputation_items'
 ]

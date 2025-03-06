@@ -14,9 +14,20 @@ from ..config import (
     DEFAULT_BATCH_SIZE, DEFAULT_CAPTION_DROPOUT_P,
     DEFAULT_LEARNING_RATE,
     DEFAULT_LORA_RANK, DEFAULT_LORA_ALPHA,
-    DEFAULT_LORA_RANK_STR, DEFAULT_LORA_ALPHA_STR
+    DEFAULT_LORA_RANK_STR, DEFAULT_LORA_ALPHA_STR,
+    DEFAULT_SEED,
+    DEFAULT_NUM_GPUS,
+    DEFAULT_MAX_GPUS,
+    DEFAULT_PRECOMPUTATION_ITEMS,
+    DEFAULT_NB_TRAINING_STEPS,
+    DEFAULT_NB_LR_WARMUP_STEPS
 )
-from ..utils import count_media_files, format_media_title, TrainingLogParser
+from ..utils import (
+    get_recommended_precomputation_items,
+    count_media_files,
+    format_media_title,
+    TrainingLogParser
+)
 from ..tabs import ImportTab, SplitTab, CaptionTab, TrainTab, ManageTab
 
 logger = logging.getLogger(__name__)
@@ -101,7 +112,10 @@ class VideoTrainerUI:
                     self.tabs["train_tab"].components["batch_size"],
                     self.tabs["train_tab"].components["learning_rate"],
                     self.tabs["train_tab"].components["save_iterations"],
-                    self.tabs["train_tab"].components["current_task_box"]  # Add new component
+                    self.tabs["train_tab"].components["current_task_box"],
+                    self.tabs["train_tab"].components["num_gpus"],
+                    self.tabs["train_tab"].components["precomputation_items"],
+                    self.tabs["train_tab"].components["lr_warmup_steps"]
                 ]
             )
             
@@ -273,10 +287,25 @@ class VideoTrainerUI:
         # Rest of the function remains unchanged
         lora_rank_val = ui_state.get("lora_rank", DEFAULT_LORA_RANK_STR)
         lora_alpha_val = ui_state.get("lora_alpha", DEFAULT_LORA_ALPHA_STR)
-        train_steps_val = int(ui_state.get("train_steps", DEFAULT_NB_TRAINING_STEPS))
         batch_size_val = int(ui_state.get("batch_size", DEFAULT_BATCH_SIZE))
         learning_rate_val = float(ui_state.get("learning_rate", DEFAULT_LEARNING_RATE))
         save_iterations_val = int(ui_state.get("save_iterations", DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS))
+        
+        # Update for new UI components
+        num_gpus_val = int(ui_state.get("num_gpus", DEFAULT_NUM_GPUS))
+        
+        # Calculate recommended precomputation items based on video count
+        video_count = len(list(TRAINING_VIDEOS_PATH.glob('*.mp4')))
+        recommended_precomputation = get_recommended_precomputation_items(video_count, num_gpus_val)
+        precomputation_items_val = int(ui_state.get("precomputation_items", recommended_precomputation))
+        
+        # Ensure warmup steps are not more than training steps
+        train_steps_val = int(ui_state.get("train_steps", DEFAULT_NB_TRAINING_STEPS))
+        default_warmup = min(DEFAULT_NB_LR_WARMUP_STEPS, int(train_steps_val * 0.2))
+        lr_warmup_steps_val = int(ui_state.get("lr_warmup_steps", default_warmup))
+        
+        # Ensure warmup steps <= training steps
+        lr_warmup_steps_val = min(lr_warmup_steps_val, train_steps_val)
         
         # Initial current task value
         current_task_val = ""
@@ -299,7 +328,10 @@ class VideoTrainerUI:
             batch_size_val, 
             learning_rate_val, 
             save_iterations_val,
-            current_task_val  # Add current task value
+            current_task_val,
+            num_gpus_val,
+            precomputation_items_val,
+            lr_warmup_steps_val
         )
 
     def initialize_ui_from_state(self):

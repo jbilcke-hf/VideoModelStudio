@@ -4,15 +4,22 @@ import logging
 import shutil
 from typing import Any, Optional, Dict, List, Union, Tuple
 
-from ..config import STORAGE_PATH, TRAINING_PATH, STAGING_PATH, TRAINING_VIDEOS_PATH, MODEL_PATH, OUTPUT_PATH, HF_API_TOKEN, MODEL_TYPES
+from ..config import (
+    STORAGE_PATH, TRAINING_PATH, STAGING_PATH, TRAINING_VIDEOS_PATH, MODEL_PATH, OUTPUT_PATH, HF_API_TOKEN, MODEL_TYPES,
+    DEFAULT_VALIDATION_NB_STEPS,
+    DEFAULT_VALIDATION_HEIGHT,
+    DEFAULT_VALIDATION_WIDTH,
+    DEFAULT_VALIDATION_NB_FRAMES,
+    DEFAULT_VALIDATION_FRAMERATE
+)
 from .utils import get_video_fps, extract_scene_info, make_archive, is_image_file, is_video_file
 
 logger = logging.getLogger(__name__)
 
 def prepare_finetrainers_dataset() -> Tuple[Path, Path]:
-    """make sure we have a Finetrainers-compatible dataset structure
+    """Prepare a Finetrainers-compatible dataset structure
     
-    Checks that we have:
+    Creates:
         training/
         ├── prompt.txt       # All captions, one per line
         ├── videos.txt       # All video paths, one per line
@@ -30,14 +37,15 @@ def prepare_finetrainers_dataset() -> Tuple[Path, Path]:
     # Clear existing training lists
     for f in TRAINING_PATH.glob("*"):
         if f.is_file():
-            if f.name in ["videos.txt", "prompts.txt"]:
+            if f.name in ["videos.txt", "prompts.txt", "prompt.txt"]:
                 f.unlink()
     
     videos_file = TRAINING_PATH / "videos.txt"
-    prompts_file = TRAINING_PATH / "prompts.txt"  # Note: Changed from prompt.txt to prompts.txt to match our config
+    prompts_file = TRAINING_PATH / "prompts.txt"  # Finetrainers can use either prompts.txt or prompt.txt
     
     media_files = []
     captions = []
+    
     # Process all video files from the videos subdirectory
     for idx, file in enumerate(sorted(TRAINING_VIDEOS_PATH.glob("*.mp4"))):
         caption_file = file.with_suffix('.txt')
@@ -50,19 +58,16 @@ def prepare_finetrainers_dataset() -> Tuple[Path, Path]:
             relative_path = f"videos/{file.name}"
             media_files.append(relative_path)
             captions.append(caption)
-            
-            # Clean up the caption file since it's now in prompts.txt
-            # EDIT well you know what, let's keep it, otherwise running the function
-            # twice might cause some errors
-            # caption_file.unlink()
 
     # Write files if we have content
     if media_files and captions:
         videos_file.write_text('\n'.join(media_files))
         prompts_file.write_text('\n'.join(captions))
-  
+        logger.info(f"Created dataset with {len(media_files)} video/caption pairs")
     else:
-        raise ValueError("No valid video/caption pairs found in training directory")
+        logger.warning("No valid video/caption pairs found in training directory")
+        return None, None
+        
     # Verify file contents
     with open(videos_file) as vf:
         video_lines = [l.strip() for l in vf.readlines() if l.strip()]
@@ -70,7 +75,8 @@ def prepare_finetrainers_dataset() -> Tuple[Path, Path]:
         prompt_lines = [l.strip() for l in pf.readlines() if l.strip()]
         
     if len(video_lines) != len(prompt_lines):
-        raise ValueError(f"Mismatch in generated files: {len(video_lines)} videos vs {len(prompt_lines)} prompts")
+        logger.error(f"Mismatch in generated files: {len(video_lines)} videos vs {len(prompt_lines)} prompts")
+        return None, None
         
     return videos_file, prompts_file
 
@@ -137,3 +143,67 @@ def copy_files_to_training_dir(prompt_prefix: str) -> int:
     gr.Info(f"Successfully generated the training dataset ({nb_copied_pairs} pairs)")
 
     return nb_copied_pairs
+
+# Add this function to finetrainers_utils.py or a suitable place
+
+def create_validation_config() -> Optional[Path]:
+    """Create a validation configuration JSON file for Finetrainers
+    
+    Creates a validation dataset file with a subset of the training data
+    
+    Returns:
+        Path to the validation JSON file, or None if no training files exist
+    """
+    # Ensure training dataset exists
+    if not TRAINING_VIDEOS_PATH.exists() or not any(TRAINING_VIDEOS_PATH.glob("*.mp4")):
+        logger.warning("No training videos found for validation")
+        return None
+    
+    # Get a subset of the training videos (up to 4) for validation
+    training_videos = list(TRAINING_VIDEOS_PATH.glob("*.mp4"))
+    validation_videos = training_videos[:min(4, len(training_videos))]
+    
+    if not validation_videos:
+        logger.warning("No validation videos selected")
+        return None
+    
+    # Create validation data entries
+    validation_data = {"data": []}
+    
+    for video_path in validation_videos:
+        # Get caption from matching text file
+        caption_path = video_path.with_suffix('.txt')
+        if not caption_path.exists():
+            logger.warning(f"Missing caption for {video_path}, skipping for validation")
+            continue
+            
+        caption = caption_path.read_text().strip()
+        
+        # Get video dimensions and properties
+        try:
+            # Use the most common default resolution and settings
+            data_entry = {
+                "caption": caption,
+                "image_path": "",  # No input image for text-to-video
+                "video_path": str(video_path),
+                "num_inference_steps": DEFAULT_VALIDATION_NB_STEPS,
+                "height": DEFAULT_VALIDATION_HEIGHT,
+                "width": DEFAULT_VALIDATION_WIDTH,
+                "num_frames": DEFAULT_VALIDATION_NB_FRAMES,
+                "frame_rate": DEFAULT_VALIDATION_FRAMERATE
+            }
+            validation_data["data"].append(data_entry)
+        except Exception as e:
+            logger.warning(f"Error adding validation entry for {video_path}: {e}")
+    
+    if not validation_data["data"]:
+        logger.warning("No valid validation entries created")
+        return None
+    
+    # Write validation config to file
+    validation_file = OUTPUT_PATH / "validation_config.json"
+    with open(validation_file, 'w') as f:
+        json.dump(validation_data, f, indent=2)
+    
+    logger.info(f"Created validation config with {len(validation_data['data'])} entries")
+    return validation_file
