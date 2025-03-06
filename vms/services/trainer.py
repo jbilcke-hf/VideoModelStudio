@@ -304,30 +304,38 @@ class TrainingService:
         
         try:
             # Basic validation
-            if not config.data_root or not Path(config.data_root).exists():
-                return f"Invalid data root path: {config.data_root}"
-                
             if not config.output_dir:
                 return "Output directory not specified"
                 
-            # Check for required files
-            videos_file = Path(config.data_root) / "videos.txt"
-            prompts_file = Path(config.data_root) / "prompts.txt"
+            # For the dataset_config validation, we now expect it to be a JSON file
+            dataset_config_path = Path(config.data_root)
+            if not dataset_config_path.exists():
+                return f"Dataset config file does not exist: {dataset_config_path}"
             
-            if not videos_file.exists():
-                return f"Missing videos list file: {videos_file}"
-            if not prompts_file.exists():
-                return f"Missing prompts list file: {prompts_file}"
+            # Check the JSON file is valid
+            try:
+                with open(dataset_config_path, 'r') as f:
+                    dataset_json = json.load(f)
                 
-            # Validate file counts match
-            video_lines = [l.strip() for l in open(videos_file) if l.strip()]
-            prompt_lines = [l.strip() for l in open(prompts_file) if l.strip()]
+                # Basic validation of the JSON structure
+                if "datasets" not in dataset_json or not isinstance(dataset_json["datasets"], list) or len(dataset_json["datasets"]) == 0:
+                    return "Invalid dataset config JSON: missing or empty 'datasets' array"
+                    
+            except json.JSONDecodeError:
+                return f"Invalid JSON in dataset config file: {dataset_config_path}"
+            except Exception as e:
+                return f"Error reading dataset config file: {str(e)}"
+                    
+            # Check training videos directory exists
+            if not TRAINING_VIDEOS_PATH.exists():
+                return f"Training videos directory does not exist: {TRAINING_VIDEOS_PATH}"
+                
+            # Validate file counts
+            video_count = len(list(TRAINING_VIDEOS_PATH.glob('*.mp4')))
             
-            if not video_lines:
+            if video_count == 0:
                 return "No training files found"
-            if len(video_lines) != len(prompt_lines):
-                return f"Mismatch between video count ({len(video_lines)}) and prompt count ({len(prompt_lines)})"
-                
+                    
             # Model-specific validation
             if model_type == "hunyuan_video":
                 if config.batch_size > 2:
@@ -341,13 +349,13 @@ class TrainingService:
                 if config.batch_size > 4:
                     return "Wan model recommended batch size is 1-4"
                     
-            logger.info(f"Config validation passed with {len(video_lines)} training files")
+            logger.info(f"Config validation passed with {video_count} training files")
             return None
             
         except Exception as e:
             logger.error(f"Error during config validation: {str(e)}")
             return f"Configuration validation failed: {str(e)}"
-    
+        
     def start_training(
         self,
         model_type: str,
@@ -427,6 +435,36 @@ class TrainingService:
             flow_weighting_scheme = preset.get("flow_weighting_scheme", "none")
             preset_training_type = preset.get("training_type", "lora")
 
+            # Create a proper dataset configuration JSON file
+            dataset_config_file = OUTPUT_PATH / "dataset_config.json"
+
+            # Determine appropriate ID token based on model type
+            id_token = None
+            if model_type == "hunyuan_video":
+                id_token = "afkx"
+            elif model_type == "ltx_video":
+                id_token = "BW_STYLE"
+            # Wan doesn't use an ID token by default, so leave it as None
+
+            dataset_config = {
+                "datasets": [
+                    {
+                        "data_root": str(TRAINING_PATH),
+                        "dataset_type": "video",
+                        "id_token": id_token,
+                        "video_resolution_buckets": [[f, h, w] for f, h, w in training_buckets],
+                        "reshape_mode": "bicubic",
+                        "remove_common_llm_caption_prefixes": True
+                    }
+                ]
+            }
+
+            # Write the dataset config to file
+            with open(dataset_config_file, 'w') as f:
+                json.dump(dataset_config, f, indent=2)
+
+            logger.info(f"Created dataset configuration file at {dataset_config_file}")
+
             # Get config for selected model type with preset buckets
             if model_type == "hunyuan_video":
                 if training_type == "lora":
@@ -477,6 +515,9 @@ class TrainingService:
             config.training_type = training_type
             config.flow_weighting_scheme = flow_weighting_scheme
             
+            # CRITICAL FIX: Update the dataset_config to point to the JSON file, not the directory
+            config.data_root = str(dataset_config_file)
+            
             # Update LoRA parameters if using LoRA training type
             if training_type == "lora":
                 config.lora_rank = int(lora_rank)
@@ -501,26 +542,58 @@ class TrainingService:
                 logger.error(error_msg)
                 return "Error: Invalid configuration", error_msg
 
-            # Configure accelerate parameters
-            accelerate_args = [
-                "accelerate", "launch",
-                "--mixed_precision=bf16",
-                "--num_processes=1",
-                "--num_machines=1",
-                "--dynamo_backend=no"
-            ]
-            
-            accelerate_args.append(str(train_script))
-            
-            # Convert config to command line arguments
+            # Convert config to command line arguments for all launcher types
             config_args = config.to_args_list()
-            
             logger.debug("Generated args list: %s", config_args)
-
-            # Log the full command for debugging
-            command_str = ' '.join(accelerate_args + config_args)
-            self.append_log(f"Command: {command_str}")
-            logger.info(f"Executing command: {command_str}")
+            
+            # Use different launch commands based on model type
+            # For Wan models, use torchrun instead of accelerate launch
+            if model_type == "wan":
+                # Configure torchrun parameters
+                torchrun_args = [
+                    "torchrun",
+                    "--standalone",
+                    "--nproc_per_node=1",
+                    "--nnodes=1",
+                    "--rdzv_backend=c10d",
+                    "--rdzv_endpoint=localhost:0",
+                    str(train_script)
+                ]
+                
+                # Additional args needed for torchrun
+                config_args.extend([
+                    "--parallel_backend", "ptd",
+                    "--pp_degree", "1", 
+                    "--dp_degree", "1", 
+                    "--dp_shards", "1", 
+                    "--cp_degree", "1", 
+                    "--tp_degree", "1"
+                ])
+                
+                # Log the full command for debugging
+                command_str = ' '.join(torchrun_args + config_args)
+                self.append_log(f"Command: {command_str}")
+                logger.info(f"Executing command: {command_str}")
+                
+                launch_args = torchrun_args
+            else:
+                # For other models, use accelerate launch as before
+                # Configure accelerate parameters
+                accelerate_args = [
+                    "accelerate", "launch",
+                    "--mixed_precision=bf16",
+                    "--num_processes=1",
+                    "--num_machines=1",
+                    "--dynamo_backend=no",
+                    str(train_script)
+                ]
+                
+                # Log the full command for debugging
+                command_str = ' '.join(accelerate_args + config_args)
+                self.append_log(f"Command: {command_str}")
+                logger.info(f"Executing command: {command_str}")
+                
+                launch_args = accelerate_args
             
             # Set environment variables
             env = os.environ.copy()
@@ -532,7 +605,7 @@ class TrainingService:
             
             # Start the training process
             process = subprocess.Popen(
-                accelerate_args + config_args,
+                launch_args + config_args,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 start_new_session=True,
