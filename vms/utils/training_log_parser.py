@@ -1,7 +1,7 @@
 import re
 import logging
 from dataclasses import dataclass
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
@@ -25,6 +25,22 @@ class TrainingState:
     error_message: Optional[str] = None
     initialization_stage: str = ""
     download_progress: float = 0.0
+    
+    # New fields for current task tracking
+    current_task: str = ""
+    current_task_progress: str = ""
+    task_progress_percentage: float = 0.0
+    task_items_processed: int = 0
+    task_total_items: int = 0
+    task_time_remaining: str = ""
+    task_speed: str = ""
+    
+    # Store recent progress lines for task display
+    recent_progress_lines: List[str] = None
+
+    def __post_init__(self):
+        if self.recent_progress_lines is None:
+            self.recent_progress_lines = []
 
     def calculate_progress(self) -> float:
         """Calculate overall progress as percentage"""
@@ -44,7 +60,7 @@ class TrainingState:
         # Use precomputed remaining time from logs if available
         remaining = str(self.estimated_remaining) if self.estimated_remaining else "calculating..."
         
-        return {
+        result = {
             "status": self.status,
             "progress": f"{self.calculate_progress():.1f}%",
             "current_step": self.current_step,
@@ -61,6 +77,96 @@ class TrainingState:
             "error_message": self.error_message,
             "download_progress": self.download_progress
         }
+        
+        # Add current task information
+        result["current_task"] = self.get_task_display()
+        
+        return result
+    
+    def get_task_display(self) -> str:
+        """Generate a formatted display of the current task"""
+        if not self.recent_progress_lines:
+            if self.status == "training":
+                return "Training in progress..."
+            return ""
+        
+        # Get the most recent progress line
+        latest_line = self.recent_progress_lines[-1]
+        
+        # For downloading shards or loading checkpoint shards
+        if "Downloading shards" in latest_line or "Loading checkpoint shards" in latest_line:
+            # Extract just the progress bar part
+            match = re.search(r'(\d+%\|[▏▎▍▌▋▊▉█\s]+\|)', latest_line)
+            if match:
+                progress_bar = match.group(1)
+                
+                # Extract the remaining information
+                time_match = re.search(r'\[(\d+:\d+<\d+:\d+,\s+[\d.]+s/it)', latest_line)
+                time_info = time_match.group(1) if time_match else ""
+                
+                task_type = "Downloading shards" if "Downloading shards" in latest_line else "Loading checkpoint shards"
+                
+                return f"{task_type}:\n{progress_bar}\n{time_info}"
+        
+        # For "Rank 0" progress (typically training steps)
+        elif "Rank 0:" in latest_line:
+            match = re.search(r'Rank 0:\s+(\d+%\|[▏▎▍▌▋▊▉█\s]+\|)', latest_line)
+            if match:
+                progress_bar = match.group(1)
+                
+                # Extract step information
+                step_match = re.search(r'\|\s+(\d+/\d+)', latest_line)
+                step_info = step_match.group(1) if step_match else ""
+                
+                # Extract time information
+                time_match = re.search(r'\[(\d+:\d+<\d+:\d+,\s+[\d.]+s/it)', latest_line)
+                time_info = time_match.group(1) if time_match else ""
+                
+                return f"Training iteration:\n{progress_bar} {step_info}\n{time_info}"
+        
+        # For Filling buffer progress
+        elif "Filling buffer" in latest_line:
+            match = re.search(r'(\d+%\|[▏▎▍▌▋▊▉█\s]+\|)', latest_line)
+            if match:
+                progress_bar = match.group(1)
+                
+                # Extract step information
+                step_match = re.search(r'\|\s+(\d+/\d+)', latest_line)
+                step_info = step_match.group(1) if step_match else ""
+                
+                # Extract time information
+                time_match = re.search(r'\[(\d+:\d+<\d+:\d+,\s+[\d.]+s/it)', latest_line)
+                time_info = time_match.group(1) if time_match else ""
+                
+                return f"Filling buffer from data iterator:\n{progress_bar} {step_info}\n{time_info}"
+                
+        # For other progress lines
+        elif "%" in latest_line and "|" in latest_line:
+            # Generic progress bar pattern
+            match = re.search(r'(\d+%\|[▏▎▍▌▋▊▉█\s]+\|)', latest_line)
+            if match:
+                progress_bar = match.group(1)
+                
+                # Try to extract step information
+                step_match = re.search(r'\|\s+(\d+/\d+)', latest_line)
+                step_info = step_match.group(1) if step_match else ""
+                
+                # Try to extract time information
+                time_match = re.search(r'\[(\d+:\d+<\d+:\d+,\s+[\d.]+s/it)', latest_line)
+                time_info = time_match.group(1) if time_match else ""
+                
+                task_prefix = "Processing:"
+                
+                # Try to determine task type
+                if "Training" in latest_line:
+                    task_prefix = "Training:"
+                elif "Precomputing" in latest_line:
+                    task_prefix = "Precomputing:"
+                
+                return f"{task_prefix}\n{progress_bar} {step_info}\n{time_info}"
+        
+        # If we couldn't parse it properly, just return the line
+        return latest_line.strip()
 
 class TrainingLogParser:
     """Parser for training logs with state management"""
@@ -68,12 +174,30 @@ class TrainingLogParser:
     def __init__(self):
         self.state = TrainingState()
         self._last_update_time = None
+        # Maximum number of recent progress lines to store
+        self.max_recent_lines = 5
         
+    def reset(self):
+        """Reset parser state"""
+        self.state = TrainingState()
+        self._last_update_time = None
+    
+    def get_current_task_display(self) -> str:
+        """Get the formatted current task display"""
+        return self.state.get_task_display()
+    
     def parse_line(self, line: str) -> Optional[Dict[str, Any]]:
         """Parse a single log line and update state"""
         try:
-            # For debugging
-            #logger.info(f"Parsing line: {line[:100]}...")
+            # Check if this is a progress line
+            if any(pattern in line for pattern in ["Downloading shards:", "Loading checkpoint shards:", "Rank 0:", "Filling buffer", "|"]) and "%" in line:
+                # Add to recent progress lines, maintaining order and max length
+                self.state.recent_progress_lines.append(line)
+                if len(self.state.recent_progress_lines) > self.max_recent_lines:
+                    self.state.recent_progress_lines.pop(0)
+                
+                # Return updated state
+                return self.state.to_dict()
 
             # Training step progress line example:
             # Training steps:   1%|▏         | 1/70 [00:14<16:11, 14.08s/it, grad_norm=0.00789, step_loss=0.555, lr=3e-7]
@@ -157,16 +281,16 @@ class TrainingLogParser:
 
             # Completion states
             if "Training completed successfully" in line:
-                self.status = "completed"
+                self.state.status = "completed"
                 # Store final elapsed time
-                self.last_step_time = datetime.now()
+                self.state.last_step_time = datetime.now()
                 logger.info("Training completed")
                 return self.state.to_dict()
 
             if any(x in line for x in ["Training process stopped", "Training stopped"]):
-                self.status = "stopped"
+                self.state.status = "stopped"
                 # Store final elapsed time
-                self.last_step_time = datetime.now()
+                self.state.last_step_time = datetime.now()
                 logger.info("Training stopped")
                 return self.state.to_dict()
 
@@ -180,8 +304,3 @@ class TrainingLogParser:
             logger.error(f"Error parsing line: {str(e)}")
             
         return None
-
-    def reset(self):
-        """Reset parser state"""
-        self.state = TrainingState()
-        self._last_update_time = None

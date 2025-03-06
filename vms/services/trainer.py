@@ -834,7 +834,6 @@ class TrainingService:
             params = last_session.get('params', {})
             
             # Map internal model type back to display name for UI
-            # This is the key fix for the "ltx_video" vs "LTX-Video (LoRA)" mismatch
             model_type_internal = params.get('model_type')
             model_type_display = model_type_internal
             
