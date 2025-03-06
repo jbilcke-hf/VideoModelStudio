@@ -1,5 +1,5 @@
 """
-Train tab for Video Model Studio UI
+Train tab for Video Model Studio UI with improved task progress display
 """
 
 import gradio as gr
@@ -126,7 +126,7 @@ class TrainTab(BaseTab):
                             visible=False
                         )
                         
-                        # Add delete checkpoints button - THIS IS THE KEY FIX
+                        # Add delete checkpoints button
                         self.components["delete_checkpoints_btn"] = gr.Button(
                             "Delete All Checkpoints",
                             variant="stop",
@@ -140,6 +140,15 @@ class TrainTab(BaseTab):
                                 interactive=False,
                                 lines=4
                             )
+                            
+                            # Add new component for current task progress
+                            self.components["current_task_box"] = gr.Textbox(
+                                label="Current Task Progress",
+                                interactive=False,
+                                lines=3,
+                                elem_id="current_task_display"
+                            )
+                            
                             with gr.Accordion("See training logs"):
                                 self.components["log_box"] = gr.TextArea(
                                     label="Finetrainers output (see HF Space logs for more details)",
@@ -288,7 +297,8 @@ class TrainTab(BaseTab):
                 self.components["log_box"],
                 self.components["start_btn"],
                 self.components["stop_btn"],
-                self.components["pause_resume_btn"]
+                self.components["pause_resume_btn"],
+                self.components["current_task_box"]  # Include new component
             ]
         )
 
@@ -299,7 +309,8 @@ class TrainTab(BaseTab):
                 self.components["log_box"],
                 self.components["start_btn"],
                 self.components["stop_btn"],
-                self.components["pause_resume_btn"]
+                self.components["pause_resume_btn"],
+                self.components["current_task_box"]  # Include new component
             ]
         )
 
@@ -310,7 +321,8 @@ class TrainTab(BaseTab):
                 self.components["log_box"],
                 self.components["start_btn"],
                 self.components["stop_btn"],
-                self.components["pause_resume_btn"]
+                self.components["pause_resume_btn"],
+                self.components["current_task_box"]  # Include new component
             ]
         )
 
@@ -325,7 +337,8 @@ class TrainTab(BaseTab):
                 self.components["log_box"],
                 self.components["start_btn"],
                 self.components["stop_btn"],
-                self.components["delete_checkpoints_btn"]
+                self.components["delete_checkpoints_btn"],
+                self.components["current_task_box"]  # Include new component
             ]
         )
         
@@ -555,6 +568,12 @@ class TrainTab(BaseTab):
                 
         updates["status_box"] = "\n".join(status_text)
         
+        # Add current task information to the dedicated box
+        if training_state.get("current_task"):
+            updates["current_task_box"] = training_state["current_task"]
+        else:
+            updates["current_task_box"] = "No active task" if training_state["status"] != "training" else "Waiting for task information..."
+        
         # Update button states
         updates["start_btn"] = gr.Button(
             "Start training",
@@ -638,6 +657,10 @@ class TrainTab(BaseTab):
         elif "stopped" in state["message"].lower():
             state["status"] = "stopped"
 
+        # Add the current task info if available
+        if hasattr(self.app, 'log_parser') and self.app.log_parser is not None:
+            state["current_task"] = self.app.log_parser.get_current_task_display()
+
         return (state["status"], state["message"], logs)
 
     def get_latest_status_message_logs_and_button_labels(self) -> Tuple:
@@ -649,8 +672,13 @@ class TrainTab(BaseTab):
         
         button_updates = self.update_training_buttons(status, has_checkpoints).values()
         
-        # Return in order expected by timer
-        return (message, logs, *button_updates)
+        # Get current task if available
+        current_task = ""
+        if hasattr(self.app, 'log_parser') and self.app.log_parser is not None:
+            current_task = self.app.log_parser.get_current_task_display()
+        
+        # Return in order expected by timer (added current_task)
+        return (message, logs, *button_updates, current_task)
     
     def update_training_buttons(self, status: str, has_checkpoints: bool = None) -> Dict:
         """Update training control buttons based on state"""

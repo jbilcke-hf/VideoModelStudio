@@ -89,13 +89,14 @@ class VideoTrainerUI:
                     self.tabs["train_tab"].components["pause_resume_btn"],
                     self.tabs["train_tab"].components["training_preset"],
                     self.tabs["train_tab"].components["model_type"],
-                    self.tabs["train_tab"].components["training_type"],  # Add the new training_type component to outputs
+                    self.tabs["train_tab"].components["training_type"],
                     self.tabs["train_tab"].components["lora_rank"],
                     self.tabs["train_tab"].components["lora_alpha"],
                     self.tabs["train_tab"].components["num_epochs"],
                     self.tabs["train_tab"].components["batch_size"],
                     self.tabs["train_tab"].components["learning_rate"],
-                    self.tabs["train_tab"].components["save_iterations"]
+                    self.tabs["train_tab"].components["save_iterations"],
+                    self.tabs["train_tab"].components["current_task_box"]  # Add new component
                 ]
             )
             
@@ -113,6 +114,10 @@ class VideoTrainerUI:
             self.tabs["train_tab"].components["start_btn"],
             self.tabs["train_tab"].components["stop_btn"]
         ]
+        
+        # Add current_task_box component
+        if "current_task_box" in self.tabs["train_tab"].components:
+            outputs.append(self.tabs["train_tab"].components["current_task_box"])
         
         # Add delete_checkpoints_btn only if it exists
         if "delete_checkpoints_btn" in self.tabs["train_tab"].components:
@@ -237,6 +242,11 @@ class VideoTrainerUI:
         learning_rate_val = float(ui_state.get("learning_rate", 3e-5))
         save_iterations_val = int(ui_state.get("save_iterations", 500))
         
+        # Initial current task value
+        current_task_val = ""
+        if hasattr(self, 'log_parser') and self.log_parser:
+            current_task_val = self.log_parser.get_current_task_display()
+        
         # Return all values in the exact order expected by outputs
         return (
             video_list, 
@@ -252,7 +262,8 @@ class VideoTrainerUI:
             num_epochs_val, 
             batch_size_val, 
             learning_rate_val, 
-            save_iterations_val
+            save_iterations_val,
+            current_task_val  # Add current task value
         )
 
     def initialize_ui_from_state(self):
@@ -293,7 +304,7 @@ class VideoTrainerUI:
         ui_state["save_iterations"] = int(ui_state.get("save_iterations", 500))
         
         return ui_state
-
+    
     # Add this new method to get initial button states:
     def get_initial_button_states(self):
         """Get the initial states for training buttons based on recovery status"""
