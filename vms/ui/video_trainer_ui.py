@@ -75,7 +75,7 @@ class VideoTrainerUI:
             for tab_id, tab_obj in self.tabs.items():
                 tab_obj.connect_events()
             
-            # Add app-level timers for auto-refresh functionality
+            # app-level timers for auto-refresh functionality
             self._add_timers()
             
             # Initialize app state on load
@@ -89,6 +89,7 @@ class VideoTrainerUI:
                     self.tabs["train_tab"].components["pause_resume_btn"],
                     self.tabs["train_tab"].components["training_preset"],
                     self.tabs["train_tab"].components["model_type"],
+                    self.tabs["train_tab"].components["training_type"],  # Add the new training_type component to outputs
                     self.tabs["train_tab"].components["lora_rank"],
                     self.tabs["train_tab"].components["lora_alpha"],
                     self.tabs["train_tab"].components["num_epochs"],
@@ -180,9 +181,23 @@ class VideoTrainerUI:
                 
                 ui_state["model_type"] = model_type_value
             
+            # Handle training_type
+            if "training_type" in recovery_ui:
+                training_type_value = recovery_ui["training_type"]
+                
+                # If it's an internal name, convert to display name
+                if training_type_value not in TRAINING_TYPES:
+                    for display_name, internal_name in TRAINING_TYPES.items():
+                        if internal_name == training_type_value:
+                            training_type_value = display_name
+                            logger.info(f"Converted internal training type '{recovery_ui['training_type']}' to display name '{training_type_value}'")
+                            break
+                
+                ui_state["training_type"] = training_type_value
+            
             # Copy other parameters
             for param in ["lora_rank", "lora_alpha", "num_epochs", 
-                          "batch_size", "learning_rate", "save_iterations", "training_preset"]:
+                        "batch_size", "learning_rate", "save_iterations", "training_preset"]:
                 if param in recovery_ui:
                     ui_state[param] = recovery_ui[param]
             
@@ -205,6 +220,15 @@ class VideoTrainerUI:
                     model_type_val = display_name
                     break
         
+        # Ensure training_type is a display name, not internal name
+        training_type_val = ui_state.get("training_type", list(TRAINING_TYPES.keys())[0])
+        if training_type_val not in TRAINING_TYPES:
+            # Convert from internal to display name
+            for display_name, internal_name in TRAINING_TYPES.items():
+                if internal_name == training_type_val:
+                    training_type_val = display_name
+                    break
+        
         training_preset = ui_state.get("training_preset", list(TRAINING_PRESETS.keys())[0])
         lora_rank_val = ui_state.get("lora_rank", "128")
         lora_alpha_val = ui_state.get("lora_alpha", "128")
@@ -222,6 +246,7 @@ class VideoTrainerUI:
             delete_checkpoints_btn,
             training_preset, 
             model_type_val,
+            training_type_val,
             lora_rank_val, 
             lora_alpha_val,
             num_epochs_val, 
@@ -238,6 +263,7 @@ class VideoTrainerUI:
         return (
             ui_state.get("training_preset", list(TRAINING_PRESETS.keys())[0]),
             ui_state.get("model_type", list(MODEL_TYPES.keys())[0]),
+            ui_state.get("training_type", list(TRAINING_TYPES.keys())[0]),
             ui_state.get("lora_rank", "128"),
             ui_state.get("lora_alpha", "128"),
             ui_state.get("num_epochs", 70),

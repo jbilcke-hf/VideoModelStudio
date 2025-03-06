@@ -56,9 +56,17 @@ if NORMALIZE_IMAGES_TO not in ['png', 'jpg']:
     raise ValueError("NORMALIZE_IMAGES_TO must be either 'png' or 'jpg'")
 JPEG_QUALITY = int(os.environ.get('JPEG_QUALITY', '97'))
 
+# Expanded model types to include Wan-2.1-T2V
 MODEL_TYPES = {
     "HunyuanVideo (LoRA)": "hunyuan_video", 
-    "LTX-Video (LoRA)": "ltx_video"
+    "LTX-Video (LoRA)": "ltx_video",
+    "Wan-2.1-T2V (LoRA)": "wan"
+}
+
+# Training types
+TRAINING_TYPES = {
+    "LoRA Finetune": "lora",
+    "Full Finetune": "full-finetune"
 }
 
 
@@ -136,9 +144,11 @@ MEDIUM_19_9_RATIO_BUCKETS = [
     (NB_FRAMES_256, MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 256 + 1
 ]
 
+# Updated training presets to include Wan-2.1-T2V and support both LoRA and full-finetune
 TRAINING_PRESETS = {
     "HunyuanVideo (normal)": {
         "model_type": "hunyuan_video",
+        "training_type": "lora",
         "lora_rank": "128",
         "lora_alpha": "128",
         "num_epochs": 70,
@@ -146,9 +156,11 @@ TRAINING_PRESETS = {
         "learning_rate": 2e-5,
         "save_iterations": 500,
         "training_buckets": SMALL_TRAINING_BUCKETS,
+        "flow_weighting_scheme": "none"
     },
     "LTX-Video (normal)": {
         "model_type": "ltx_video", 
+        "training_type": "lora",
         "lora_rank": "128",
         "lora_alpha": "128",
         "num_epochs": 70,
@@ -156,9 +168,11 @@ TRAINING_PRESETS = {
         "learning_rate": 3e-5,
         "save_iterations": 500,
         "training_buckets": SMALL_TRAINING_BUCKETS,
+        "flow_weighting_scheme": "logit_normal"
     },
     "LTX-Video (16:9, HQ)": {
         "model_type": "ltx_video",
+        "training_type": "lora",
         "lora_rank": "256", 
         "lora_alpha": "128",
         "num_epochs": 50,
@@ -166,6 +180,41 @@ TRAINING_PRESETS = {
         "learning_rate": 3e-5,
         "save_iterations": 200,
         "training_buckets": MEDIUM_19_9_RATIO_BUCKETS,
+        "flow_weighting_scheme": "logit_normal"
+    },
+    "LTX-Video (Full Finetune)": {
+        "model_type": "ltx_video",
+        "training_type": "full-finetune",
+        "num_epochs": 30,
+        "batch_size": 1,
+        "learning_rate": 1e-5,
+        "save_iterations": 300,
+        "training_buckets": SMALL_TRAINING_BUCKETS,
+        "flow_weighting_scheme": "logit_normal"
+    },
+    "Wan-2.1-T2V (normal)": {
+        "model_type": "wan",
+        "training_type": "lora",
+        "lora_rank": "32",
+        "lora_alpha": "32",
+        "num_epochs": 70,
+        "batch_size": 1,
+        "learning_rate": 5e-5,
+        "save_iterations": 500,
+        "training_buckets": SMALL_TRAINING_BUCKETS,
+        "flow_weighting_scheme": "logit_normal"
+    },
+    "Wan-2.1-T2V (HQ)": {
+        "model_type": "wan",
+        "training_type": "lora",
+        "lora_rank": "64",
+        "lora_alpha": "64",
+        "num_epochs": 50,
+        "batch_size": 1,
+        "learning_rate": 3e-5,
+        "save_iterations": 200,
+        "training_buckets": MEDIUM_19_9_RATIO_BUCKETS,
+        "flow_weighting_scheme": "logit_normal"
     }
 }
 
@@ -260,7 +309,8 @@ class TrainingConfig:
             lora_alpha=128,
             video_resolution_buckets=buckets or SMALL_TRAINING_BUCKETS,
             caption_dropout_p=0.05,
-            flow_weighting_scheme="none"  # Hunyuan specific
+            flow_weighting_scheme="none",  # Hunyuan specific
+            training_type="lora"
         )
     
     @classmethod
@@ -281,7 +331,51 @@ class TrainingConfig:
             lora_alpha=128,
             video_resolution_buckets=buckets or SMALL_TRAINING_BUCKETS,
             caption_dropout_p=0.05,
-            flow_weighting_scheme="logit_normal"  # LTX specific
+            flow_weighting_scheme="logit_normal",  # LTX specific
+            training_type="lora"
+        )
+        
+    @classmethod
+    def ltx_video_full_finetune(cls, data_path: str, output_path: str, buckets=None) -> 'TrainingConfig':
+        """Configuration for LTX-Video full finetune training"""
+        return cls(
+            model_name="ltx_video",
+            pretrained_model_name_or_path="Lightricks/LTX-Video",
+            data_root=data_path,
+            output_dir=output_path,
+            batch_size=1,
+            train_epochs=30,
+            lr=1e-5,
+            gradient_checkpointing=True,
+            id_token="BW_STYLE",
+            gradient_accumulation_steps=1,
+            video_resolution_buckets=buckets or SMALL_TRAINING_BUCKETS,
+            caption_dropout_p=0.05,
+            flow_weighting_scheme="logit_normal",  # LTX specific
+            training_type="full-finetune"
+        )
+        
+    @classmethod
+    def wan_lora(cls, data_path: str, output_path: str, buckets=None) -> 'TrainingConfig':
+        """Configuration for Wan T2V LoRA training"""
+        return cls(
+            model_name="wan",
+            pretrained_model_name_or_path="Wan-AI/Wan2.1-T2V-1.3B-Diffusers",
+            data_root=data_path,
+            output_dir=output_path,
+            batch_size=1,
+            train_epochs=70,
+            lr=5e-5,
+            gradient_checkpointing=True,
+            id_token=None,  # Default is no ID token for Wan
+            gradient_accumulation_steps=1,
+            lora_rank=32,
+            lora_alpha=32,
+            target_modules=["blocks.*(to_q|to_k|to_v|to_out.0)"],  # Wan-specific target modules
+            video_resolution_buckets=buckets or SMALL_TRAINING_BUCKETS,
+            caption_dropout_p=0.05,
+            flow_weighting_scheme="logit_normal",  # Wan specific
+            training_type="lora"
         )
 
     def to_args_list(self) -> List[str]:
@@ -302,9 +396,9 @@ class TrainingConfig:
             args.extend(["--cache_dir", self.cache_dir])
 
         # Dataset arguments
-        args.extend(["--data_root", self.data_root])
-        args.extend(["--video_column", self.video_column])
-        args.extend(["--caption_column", self.caption_column])
+        args.extend(["--dataset_config", self.data_root])
+        
+        # Add ID token if specified
         if self.id_token:
             args.extend(["--id_token", self.id_token])
             
@@ -312,9 +406,6 @@ class TrainingConfig:
         if self.video_resolution_buckets:
             bucket_strs = [f"{f}x{h}x{w}" for f, h, w in self.video_resolution_buckets]
             args.extend(["--video_resolution_buckets"] + bucket_strs)
-            
-        if self.video_reshape_mode:
-            args.extend(["--video_reshape_mode", self.video_reshape_mode])
             
         args.extend(["--caption_dropout_p", str(self.caption_dropout_p)])
         args.extend(["--caption_dropout_technique", self.caption_dropout_technique])
@@ -333,14 +424,18 @@ class TrainingConfig:
         args.extend(["--training_type", self.training_type])
         args.extend(["--seed", str(self.seed)])
         
-        # we don't use this,  because mixed precision is handled by accelerate launch, not by the training script itself.
+        # We don't use this, because mixed precision is handled by accelerate launch, not by the training script itself.
         #args.extend(["--mixed_precision", self.mixed_precision])
         
         args.extend(["--batch_size", str(self.batch_size)])
-        args.extend(["--train_epochs", str(self.train_epochs)])
-        args.extend(["--rank", str(self.lora_rank)])
-        args.extend(["--lora_alpha", str(self.lora_alpha)])
-        args.extend(["--target_modules"] + self.target_modules)
+        args.extend(["--train_steps", str(self.train_epochs * 1000)])  # Convert epochs to steps for compatibility
+        
+        # LoRA specific arguments
+        if self.training_type == "lora":
+            args.extend(["--rank", str(self.lora_rank)])
+            args.extend(["--lora_alpha", str(self.lora_alpha)])
+            args.extend(["--target_modules"] + self.target_modules)
+            
         args.extend(["--gradient_accumulation_steps", str(self.gradient_accumulation_steps)])
         if self.gradient_checkpointing:
             args.append("--gradient_checkpointing")

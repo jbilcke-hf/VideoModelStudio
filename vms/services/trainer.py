@@ -20,7 +20,11 @@ from typing import Any, Optional, Dict, List, Union, Tuple
 
 from huggingface_hub import upload_folder, create_repo
 
-from ..config import TrainingConfig, TRAINING_PRESETS,  LOG_FILE_PATH, TRAINING_VIDEOS_PATH, STORAGE_PATH, TRAINING_PATH, MODEL_PATH, OUTPUT_PATH, HF_API_TOKEN, MODEL_TYPES
+from ..config import (
+    TrainingConfig, TRAINING_PRESETS, LOG_FILE_PATH, TRAINING_VIDEOS_PATH, 
+    STORAGE_PATH, TRAINING_PATH, MODEL_PATH, OUTPUT_PATH, HF_API_TOKEN, 
+    MODEL_TYPES, TRAINING_TYPES
+)
 from ..utils import make_archive, parse_training_log, is_image_file, is_video_file, prepare_finetrainers_dataset, copy_files_to_training_dir
 
 logger = logging.getLogger(__name__)
@@ -112,6 +116,7 @@ class TrainingService:
         ui_state_file = OUTPUT_PATH / "ui_state.json"
         default_state = {
             "model_type": list(MODEL_TYPES.keys())[0],
+            "training_type": list(TRAINING_TYPES.keys())[0],
             "lora_rank": "128",
             "lora_alpha": "128", 
             "num_epochs": 50,
@@ -153,7 +158,6 @@ class TrainingService:
                 # Make sure we have all keys (in case structure changed)
                 merged_state = default_state.copy()
                 merged_state.update(saved_state)
-                #logger.info(f"Successfully loaded UI state from {ui_state_file}")
                 return merged_state
         except json.JSONDecodeError as e:
             logger.error(f"Error parsing UI state JSON: {str(e)}")
@@ -171,6 +175,7 @@ class TrainingService:
             logger.info("Creating new UI state file with default values")
             default_state = {
                 "model_type": list(MODEL_TYPES.keys())[0],
+                "training_type": list(TRAINING_TYPES.keys())[0],
                 "lora_rank": "128",
                 "lora_alpha": "128", 
                 "num_epochs": 50,
@@ -203,6 +208,7 @@ class TrainingService:
             # Create a new file with default values
             default_state = {
                 "model_type": list(MODEL_TYPES.keys())[0],
+                "training_type": list(TRAINING_TYPES.keys())[0],
                 "lora_rank": "128",
                 "lora_alpha": "128", 
                 "num_epochs": 50,
@@ -331,6 +337,9 @@ class TrainingService:
             elif model_type == "ltx_video":
                 if config.batch_size > 4:
                     return "LTX model recommended batch size is 1-4"
+            elif model_type == "wan":
+                if config.batch_size > 4:
+                    return "Wan model recommended batch size is 1-4"
                     
             logger.info(f"Config validation passed with {len(video_lines)} training files")
             return None
@@ -350,6 +359,7 @@ class TrainingService:
         save_iterations: int,
         repo_id: str,
         preset_name: str,
+        training_type: str = "lora",
         resume_from_checkpoint: Optional[str] = None,
     ) -> Tuple[str, str]:
         """Start training with finetrainers"""
@@ -360,11 +370,13 @@ class TrainingService:
             raise ValueError("model_type cannot be empty")
         if model_type not in MODEL_TYPES.values():
             raise ValueError(f"Invalid model_type: {model_type}. Must be one of {list(MODEL_TYPES.values())}")
+        if training_type not in TRAINING_TYPES.values():
+            raise ValueError(f"Invalid training_type: {training_type}. Must be one of {list(TRAINING_TYPES.values())}")
 
         # Check if we're resuming or starting new
         is_resuming = resume_from_checkpoint is not None
         log_prefix = "Resuming" if is_resuming else "Initializing"
-        logger.info(f"{log_prefix} training with model_type={model_type}")
+        logger.info(f"{log_prefix} training with model_type={model_type}, training_type={training_type}")
         
         try:
             # Get absolute paths - FIXED to look in project root instead of within vms directory
@@ -409,32 +421,66 @@ class TrainingService:
                 logger.error(error_msg)
                 return error_msg, "No training data available"
 
-
             # Get preset configuration
             preset = TRAINING_PRESETS[preset_name]
             training_buckets = preset["training_buckets"]
+            flow_weighting_scheme = preset.get("flow_weighting_scheme", "none")
+            preset_training_type = preset.get("training_type", "lora")
 
             # Get config for selected model type with preset buckets
             if model_type == "hunyuan_video":
-                config = TrainingConfig.hunyuan_video_lora(
-                    data_path=str(TRAINING_PATH),
-                    output_path=str(OUTPUT_PATH),
-                    buckets=training_buckets
-                )
-            else:  # ltx_video
-                config = TrainingConfig.ltx_video_lora(
-                    data_path=str(TRAINING_PATH),
-                    output_path=str(OUTPUT_PATH),
-                    buckets=training_buckets
-                )
+                if training_type == "lora":
+                    config = TrainingConfig.hunyuan_video_lora(
+                        data_path=str(TRAINING_PATH),
+                        output_path=str(OUTPUT_PATH),
+                        buckets=training_buckets
+                    )
+                else:
+                    # Hunyuan doesn't support full finetune in our UI yet
+                    error_msg = "Full finetune is not supported for Hunyuan Video due to memory limitations"
+                    logger.error(error_msg)
+                    return error_msg, "Training configuration error"
+            elif model_type == "ltx_video":
+                if training_type == "lora":
+                    config = TrainingConfig.ltx_video_lora(
+                        data_path=str(TRAINING_PATH),
+                        output_path=str(OUTPUT_PATH),
+                        buckets=training_buckets
+                    )
+                else:
+                    config = TrainingConfig.ltx_video_full_finetune(
+                        data_path=str(TRAINING_PATH),
+                        output_path=str(OUTPUT_PATH),
+                        buckets=training_buckets
+                    )
+            elif model_type == "wan":
+                if training_type == "lora":
+                    config = TrainingConfig.wan_lora(
+                        data_path=str(TRAINING_PATH),
+                        output_path=str(OUTPUT_PATH),
+                        buckets=training_buckets
+                    )
+                else:
+                    error_msg = "Full finetune for Wan is not yet supported in this UI"
+                    logger.error(error_msg)
+                    return error_msg, "Training configuration error"
+            else:
+                error_msg = f"Unsupported model type: {model_type}"
+                logger.error(error_msg)
+                return error_msg, "Unsupported model"
             
             # Update with UI parameters
             config.train_epochs = int(num_epochs)
-            config.lora_rank = int(lora_rank)
-            config.lora_alpha = int(lora_alpha)
             config.batch_size = int(batch_size)
             config.lr = float(learning_rate)
             config.checkpointing_steps = int(save_iterations)
+            config.training_type = training_type
+            config.flow_weighting_scheme = flow_weighting_scheme
+            
+            # Update LoRA parameters if using LoRA training type
+            if training_type == "lora":
+                config.lora_rank = int(lora_rank)
+                config.lora_alpha = int(lora_alpha)
 
             # Update with resume_from_checkpoint if provided
             if resume_from_checkpoint:
@@ -469,7 +515,6 @@ class TrainingService:
             # Convert config to command line arguments
             config_args = config.to_args_list()
             
-
             logger.debug("Generated args list: %s", config_args)
 
             # Log the full command for debugging
@@ -505,6 +550,7 @@ class TrainingService:
             # Save session info including repo_id for later hub upload
             self.save_session({
                 "model_type": model_type,
+                "training_type": training_type,
                 "lora_rank": lora_rank,
                 "lora_alpha": lora_alpha,
                 "num_epochs": num_epochs,
@@ -526,13 +572,14 @@ class TrainingService:
                 total_epochs=num_epochs,
                 message='Training started',
                 repo_id=repo_id,
-                model_type=model_type
+                model_type=model_type,
+                training_type=training_type
             )
             
             # Start monitoring process output
             self._start_log_monitor(process)
             
-            success_msg = f"Started training {model_type} model"
+            success_msg = f"Started {training_type} training for {model_type} model"
             self.append_log(success_msg)
             logger.info(success_msg)
             
@@ -668,6 +715,7 @@ class TrainingService:
                     last_session = {
                         "params": {
                             "model_type": MODEL_TYPES.get(ui_state.get("model_type", list(MODEL_TYPES.keys())[0])),
+                            "training_type": TRAINING_TYPES.get(ui_state.get("training_type", list(TRAINING_TYPES.keys())[0])),
                             "lora_rank": ui_state.get("lora_rank", "128"),
                             "lora_alpha": ui_state.get("lora_alpha", "128"),
                             "num_epochs": ui_state.get("num_epochs", 70),
@@ -724,10 +772,15 @@ class TrainingService:
                     logger.info(f"Mapped internal model type '{model_type_internal}' to display name '{model_type_display}'")
                     break
             
+            # Get training type (default to LoRA if not present in saved session)
+            training_type_internal = params.get('training_type', 'lora')
+            training_type_display = next((disp for disp, val in TRAINING_TYPES.items() if val == training_type_internal), list(TRAINING_TYPES.keys())[0])
+            
             # Add UI updates to restore the training parameters in the UI
             # This shows the user what values are being used for the resumed training
             ui_updates.update({
                 "model_type": model_type_display,  # Use the display name for the UI dropdown
+                "training_type": training_type_display,  # Use the display name for training type
                 "lora_rank": params.get('lora_rank', "128"),
                 "lora_alpha": params.get('lora_alpha', "128"),
                 "num_epochs": params.get('num_epochs', 70),
@@ -755,6 +808,7 @@ class TrainingService:
                         save_iterations=params.get('save_iterations', 500),
                         repo_id=params.get('repo_id', ''),
                         preset_name=params.get('preset_name', list(TRAINING_PRESETS.keys())[0]),
+                        training_type=training_type_internal,
                         resume_from_checkpoint=str(latest_checkpoint)
                     )
                     
@@ -1030,4 +1084,3 @@ class TrainingService:
             except Exception as e:
                 print(f"Failed to create zip: {str(e)}")
                 raise gr.Error(f"Failed to create zip: {str(e)}")
-

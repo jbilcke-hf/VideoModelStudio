@@ -45,11 +45,21 @@ class TrainTab(BaseTab):
                                 label="Model Type",
                                 value=list(MODEL_TYPES.keys())[0]
                             )
-                        self.components["model_info"] = gr.Markdown(
-                            value=self.get_model_info(list(MODEL_TYPES.keys())[0])
-                        )
+                        with gr.Column():
+                            self.components["training_type"] = gr.Dropdown(
+                                choices=list(TRAINING_TYPES.keys()),
+                                label="Training Type",
+                                value=list(TRAINING_TYPES.keys())[0]
+                            )
 
                     with gr.Row():
+                        self.components["model_info"] = gr.Markdown(
+                            value=self.get_model_info(list(MODEL_TYPES.keys())[0], list(TRAINING_TYPES.keys())[0])
+                        )
+
+                    # LoRA specific parameters (will show/hide based on training type)
+                    with gr.Row(visible=True) as lora_params_row:
+                        self.components["lora_params_row"] = lora_params_row
                         self.components["lora_rank"] = gr.Dropdown(
                             label="LoRA Rank",
                             choices=["16", "32", "64", "128", "256", "512", "1024"],
@@ -62,6 +72,7 @@ class TrainTab(BaseTab):
                             value="128",
                             type="value"
                         )
+                    
                     with gr.Row():
                         self.components["num_epochs"] = gr.Number(
                             label="Number of Epochs",
@@ -143,15 +154,18 @@ class TrainTab(BaseTab):
     def connect_events(self) -> None:
         """Connect event handlers to UI components"""
         # Model type change event
-        def update_model_info(model):
-            params = self.get_default_params(MODEL_TYPES[model])
-            info = self.get_model_info(MODEL_TYPES[model])
+        def update_model_info(model, training_type):
+            params = self.get_default_params(MODEL_TYPES[model], TRAINING_TYPES[training_type])
+            info = self.get_model_info(MODEL_TYPES[model], TRAINING_TYPES[training_type])
+            show_lora_params = training_type == list(TRAINING_TYPES.keys())[0]  # Show if LoRA Finetune
+            
             return {
                 self.components["model_info"]: info,
                 self.components["num_epochs"]: params["num_epochs"],
                 self.components["batch_size"]: params["batch_size"],
                 self.components["learning_rate"]: params["learning_rate"],
-                self.components["save_iterations"]: params["save_iterations"]
+                self.components["save_iterations"]: params["save_iterations"],
+                self.components["lora_params_row"]: gr.Row(visible=show_lora_params)
             }
             
         self.components["model_type"].change(
@@ -160,13 +174,32 @@ class TrainTab(BaseTab):
             outputs=[]
         ).then(
             fn=update_model_info,
-            inputs=[self.components["model_type"]],
+            inputs=[self.components["model_type"], self.components["training_type"]],
             outputs=[
                 self.components["model_info"],
                 self.components["num_epochs"],
                 self.components["batch_size"],
                 self.components["learning_rate"],
-                self.components["save_iterations"]
+                self.components["save_iterations"],
+                self.components["lora_params_row"]
+            ]
+        )
+        
+        # Training type change event
+        self.components["training_type"].change(
+            fn=lambda v: self.app.update_ui_state(training_type=v),
+            inputs=[self.components["training_type"]],
+            outputs=[]
+        ).then(
+            fn=update_model_info,
+            inputs=[self.components["model_type"], self.components["training_type"]],
+            outputs=[
+                self.components["model_info"],
+                self.components["num_epochs"],
+                self.components["batch_size"],
+                self.components["learning_rate"],
+                self.components["save_iterations"],
+                self.components["lora_params_row"]
             ]
         )
         
@@ -217,13 +250,15 @@ class TrainTab(BaseTab):
             inputs=[self.components["training_preset"]],
             outputs=[
                 self.components["model_type"],
+                self.components["training_type"],
                 self.components["lora_rank"],
                 self.components["lora_alpha"],
                 self.components["num_epochs"],
                 self.components["batch_size"],
                 self.components["learning_rate"],
                 self.components["save_iterations"],
-                self.components["preset_info"]
+                self.components["preset_info"],
+                self.components["lora_params_row"]
             ]
         )
         
@@ -233,6 +268,7 @@ class TrainTab(BaseTab):
             inputs=[
                 self.components["training_preset"],
                 self.components["model_type"],
+                self.components["training_type"],
                 self.components["lora_rank"],
                 self.components["lora_alpha"],
                 self.components["num_epochs"],
@@ -278,7 +314,7 @@ class TrainTab(BaseTab):
             ]
         )
         
-    def handle_training_start(self, preset, model_type, *args):
+    def handle_training_start(self, preset, model_type, training_type, *args):
         """Handle training start with proper log parser reset and checkpoint detection"""
         # Safely reset log parser if it exists
         if hasattr(self.app, 'log_parser') and self.app.log_parser is not None:
@@ -305,12 +341,20 @@ class TrainTab(BaseTab):
             logger.error(f"Invalid model type: {model_type}")
             return f"Error: Invalid model type '{model_type}'", "Model type not recognized"
         
+        # Convert training_type display name to internal name
+        training_internal_type = TRAINING_TYPES.get(training_type)
+        
+        if not training_internal_type:
+            logger.error(f"Invalid training type: {training_type}")
+            return f"Error: Invalid training type '{training_type}'", "Training type not recognized"
+        
         # Start training (it will automatically use the checkpoint if provided)
         try:
             return self.app.trainer.start_training(
                 model_internal_type,  # Use internal model type
                 *args,
                 preset_name=preset,
+                training_type=training_internal_type,  # Pass the internal training type
                 resume_from_checkpoint=resume_from
             )
         except Exception as e:
@@ -318,25 +362,56 @@ class TrainTab(BaseTab):
             return f"Error starting training: {str(e)}", f"Exception: {str(e)}\n\nCheck the logs for more details."
 
     
-    def get_model_info(self, model_type: str) -> str:
-        """Get information about the selected model type"""
+    def get_model_info(self, model_type: str, training_type: str) -> str:
+        """Get information about the selected model type and training method"""
+        training_method = "LoRA finetune" if training_type == "lora" else "Full finetune"
+        
         if model_type == "hunyuan_video":
-            return """### HunyuanVideo (LoRA)
+            base_info = """### HunyuanVideo
     - Required VRAM: ~48GB minimum
     - Recommended batch size: 1-2
     - Typical training time: 2-4 hours
-    - Default resolution: 49x512x768
-    - Default LoRA rank: 128 (~600 MB)"""
+    - Default resolution: 49x512x768"""
+            
+            if training_type == "lora":
+                return base_info + "\n- Required VRAM: ~18GB minimum\n- Default LoRA rank: 128 (~400 MB)"
+            else:
+                return base_info + "\n- Required VRAM: ~21GB minimum\n- Full model size: ~8GB"
+                
+        elif model_type == "wan":
+            base_info = """### Wan-2.1-T2V
+    - Recommended batch size: 1-2
+    - Typical training time: 1-3 hours
+    - Default resolution: 49x512x768"""
+            
+            if training_type == "lora":
+                return base_info + "\n- Required VRAM: ~16GB minimum\n- Default LoRA rank: 32 (~120 MB)"
+            else:
+                return base_info + "\n- **Full finetune not supported in this UI**" + "\n- Required VRAM: ~18GB minimum\n- Default LoRA rank: 128 (~400 MB)"
+            else:
+                return base_info + "\n- Required VRAM: ~21GB minimum\n- Full model size: ~8GB"
+                
+        elif model_type == "wan":
+            base_info = """### Wan-2.1-T2V
+    - Recommended batch size: 1-2
+    - Typical training time: 1-3 hours
+    - Default resolution: 49x512x768"""
+            
+            if training_type == "lora":
+                return base_info + "\n- Required VRAM: ~16GB minimum\n- Default LoRA rank: 32 (~120 MB)"
+            else:
+                return base_info + "\n- **Full finetune not supported in this UI**" + "\n- Default LoRA rank: 128 (~600 MB)"
+            else:
+                return base_info + "\n- **Full finetune not recommended due to VRAM requirements**"
                 
         elif model_type == "ltx_video":
-            return """### LTX-Video (LoRA)
-    - Required VRAM: ~18GB minimum 
+            base_info = """### LTX-Video
     - Recommended batch size: 1-4
     - Typical training time: 1-3 hours
-    - Default resolution: 49x512x768
-    - Default LoRA rank: 128"""
-                
-        return ""
+    - Default resolution: 49x512x768"""
+            
+            if training_type == "lora":
+                return base_
 
     def get_default_params(self, model_type: str) -> Dict[str, Any]:
         """Get default training parameters for model type"""
