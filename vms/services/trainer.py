@@ -23,7 +23,12 @@ from huggingface_hub import upload_folder, create_repo
 from ..config import (
     TrainingConfig, TRAINING_PRESETS, LOG_FILE_PATH, TRAINING_VIDEOS_PATH, 
     STORAGE_PATH, TRAINING_PATH, MODEL_PATH, OUTPUT_PATH, HF_API_TOKEN, 
-    MODEL_TYPES, TRAINING_TYPES
+    MODEL_TYPES, TRAINING_TYPES,
+    DEFAULT_NB_TRAINING_STEPS, DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
+    DEFAULT_BATCH_SIZE, DEFAULT_CAPTION_DROPOUT_P,
+    DEFAULT_LEARNING_RATE,
+    DEFAULT_LORA_RANK, DEFAULT_LORA_ALPHA,
+    DEFAULT_LORA_RANK_STR, DEFAULT_LORA_ALPHA_STR
 )
 from ..utils import make_archive, parse_training_log, is_image_file, is_video_file, prepare_finetrainers_dataset, copy_files_to_training_dir
 
@@ -111,18 +116,19 @@ class TrainingService:
         except Exception as e:
             logger.error(f"Error saving UI state: {str(e)}")
 
+    # Additional fix for the load_ui_state method in trainer.py to clean up old values
     def load_ui_state(self) -> Dict[str, Any]:
         """Load saved UI state"""
         ui_state_file = OUTPUT_PATH / "ui_state.json"
         default_state = {
             "model_type": list(MODEL_TYPES.keys())[0],
             "training_type": list(TRAINING_TYPES.keys())[0],
-            "lora_rank": "128",
-            "lora_alpha": "128", 
-            "num_epochs": 50,
-            "batch_size": 1,
-            "learning_rate": 3e-5,
-            "save_iterations": 200,
+            "lora_rank": DEFAULT_LORA_RANK_STR,
+            "lora_alpha": DEFAULT_LORA_ALPHA_STR, 
+            "train_steps": DEFAULT_NB_TRAINING_STEPS,
+            "batch_size": DEFAULT_BATCH_SIZE,
+            "learning_rate": DEFAULT_LEARNING_RATE,
+            "save_iterations": DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
             "training_preset": list(TRAINING_PRESETS.keys())[0]
         }
         
@@ -145,9 +151,14 @@ class TrainingService:
                     
                 saved_state = json.loads(file_content)
                 
+                # Clean up model type if it contains " (LoRA)" suffix
+                if "model_type" in saved_state and " (LoRA)" in saved_state["model_type"]:
+                    saved_state["model_type"] = saved_state["model_type"].replace(" (LoRA)", "")
+                    logger.info(f"Removed (LoRA) suffix from saved model type: {saved_state['model_type']}")
+                
                 # Convert numeric values to appropriate types
-                if "num_epochs" in saved_state:
-                    saved_state["num_epochs"] = int(saved_state["num_epochs"])
+                if "train_steps" in saved_state:
+                    saved_state["train_steps"] = int(saved_state["train_steps"])
                 if "batch_size" in saved_state:
                     saved_state["batch_size"] = int(saved_state["batch_size"])
                 if "learning_rate" in saved_state:
@@ -158,6 +169,40 @@ class TrainingService:
                 # Make sure we have all keys (in case structure changed)
                 merged_state = default_state.copy()
                 merged_state.update(saved_state)
+                
+                # Validate model_type is in available choices
+                if merged_state["model_type"] not in MODEL_TYPES:
+                    # Try to map from internal name
+                    model_found = False
+                    for display_name, internal_name in MODEL_TYPES.items():
+                        if internal_name == merged_state["model_type"]:
+                            merged_state["model_type"] = display_name
+                            model_found = True
+                            break
+                    # If still not found, use default
+                    if not model_found:
+                        merged_state["model_type"] = default_state["model_type"]
+                        logger.warning(f"Invalid model type in saved state, using default")
+                
+                # Validate training_type is in available choices
+                if merged_state["training_type"] not in TRAINING_TYPES:
+                    # Try to map from internal name
+                    training_found = False
+                    for display_name, internal_name in TRAINING_TYPES.items():
+                        if internal_name == merged_state["training_type"]:
+                            merged_state["training_type"] = display_name
+                            training_found = True
+                            break
+                    # If still not found, use default
+                    if not training_found:
+                        merged_state["training_type"] = default_state["training_type"]
+                        logger.warning(f"Invalid training type in saved state, using default")
+                
+                # Validate training_preset is in available choices
+                if merged_state["training_preset"] not in TRAINING_PRESETS:
+                    merged_state["training_preset"] = default_state["training_preset"]
+                    logger.warning(f"Invalid training preset in saved state, using default")
+                    
                 return merged_state
         except json.JSONDecodeError as e:
             logger.error(f"Error parsing UI state JSON: {str(e)}")
@@ -176,12 +221,12 @@ class TrainingService:
             default_state = {
                 "model_type": list(MODEL_TYPES.keys())[0],
                 "training_type": list(TRAINING_TYPES.keys())[0],
-                "lora_rank": "128",
-                "lora_alpha": "128", 
-                "num_epochs": 50,
-                "batch_size": 1,
-                "learning_rate": 3e-5,
-                "save_iterations": 200,
+                "lora_rank": DEFAULT_LORA_RANK_STR,
+                "lora_alpha": DEFAULT_LORA_ALPHA_STR, 
+                "train_steps": DEFAULT_NB_TRAINING_STEPS,
+                "batch_size": DEFAULT_BATCH_SIZE,
+                "learning_rate": DEFAULT_LEARNING_RATE,
+                "save_iterations": DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
                 "training_preset": list(TRAINING_PRESETS.keys())[0]
             }
             self.save_ui_state(default_state)
@@ -209,12 +254,12 @@ class TrainingService:
             default_state = {
                 "model_type": list(MODEL_TYPES.keys())[0],
                 "training_type": list(TRAINING_TYPES.keys())[0],
-                "lora_rank": "128",
-                "lora_alpha": "128", 
-                "num_epochs": 50,
-                "batch_size": 1,
-                "learning_rate": 3e-5,
-                "save_iterations": 200,
+                "lora_rank": DEFAULT_LORA_RANK_STR,
+                "lora_alpha": DEFAULT_LORA_ALPHA_STR,
+                "train_steps": DEFAULT_NB_TRAINING_STEPS,
+                "batch_size": DEFAULT_BATCH_SIZE,
+                "learning_rate": DEFAULT_LEARNING_RATE,
+                "save_iterations": DEFAULT_NB_TRAINING_STEPS,
                 "training_preset": list(TRAINING_PRESETS.keys())[0]
             }
             self.save_ui_state(default_state)
@@ -361,7 +406,7 @@ class TrainingService:
         model_type: str,
         lora_rank: str,
         lora_alpha: str,
-        num_epochs: int,
+        train_steps: int,
         batch_size: int, 
         learning_rate: float,
         save_iterations: int,
@@ -508,7 +553,7 @@ class TrainingService:
                 return error_msg, "Unsupported model"
             
             # Update with UI parameters
-            config.train_epochs = int(num_epochs)
+            config.train_steps = int(train_steps)
             config.batch_size = int(batch_size)
             config.lr = float(learning_rate)
             config.checkpointing_steps = int(save_iterations)
@@ -530,11 +575,11 @@ class TrainingService:
                 
             # Common settings for both models
             config.mixed_precision = "bf16"
-            config.seed = 42
+            config.seed = DEFAULT_SEED
             config.gradient_checkpointing = True
             config.enable_slicing = True
             config.enable_tiling = True
-            config.caption_dropout_p = 0.05
+            config.caption_dropout_p = DEFAULT_CAPTION_DROPOUT_P
 
             validation_error = self.validate_training_config(config, model_type)
             if validation_error:
@@ -626,7 +671,7 @@ class TrainingService:
                 "training_type": training_type,
                 "lora_rank": lora_rank,
                 "lora_alpha": lora_alpha,
-                "num_epochs": num_epochs,
+                "train_steps": train_steps,
                 "batch_size": batch_size,
                 "learning_rate": learning_rate,
                 "save_iterations": save_iterations,
@@ -635,14 +680,12 @@ class TrainingService:
             })
             
             # Update initial training status
-            total_steps = num_epochs * (max(1, video_count) // batch_size)
+            total_steps = int(train_steps)
             self.save_status(
                 state='training',
-                epoch=0,
                 step=0,
                 total_steps=total_steps,
                 loss=0.0,
-                total_epochs=num_epochs,
                 message='Training started',
                 repo_id=repo_id,
                 model_type=model_type,
@@ -789,12 +832,12 @@ class TrainingService:
                         "params": {
                             "model_type": MODEL_TYPES.get(ui_state.get("model_type", list(MODEL_TYPES.keys())[0])),
                             "training_type": TRAINING_TYPES.get(ui_state.get("training_type", list(TRAINING_TYPES.keys())[0])),
-                            "lora_rank": ui_state.get("lora_rank", "128"),
-                            "lora_alpha": ui_state.get("lora_alpha", "128"),
-                            "num_epochs": ui_state.get("num_epochs", 70),
-                            "batch_size": ui_state.get("batch_size", 1),
-                            "learning_rate": ui_state.get("learning_rate", 3e-5),
-                            "save_iterations": ui_state.get("save_iterations", 500),
+                            "lora_rank": ui_state.get("lora_rank", DEFAULT_LORA_RANK_STR),
+                            "lora_alpha": ui_state.get("lora_alpha", DEFAULT_LORA_ALPHA_STR),
+                            "train_steps": ui_state.get("train_steps", DEFAULT_NB_TRAINING_STEPS),
+                            "batch_size": ui_state.get("batch_size", DEFAULT_BATCH_SIZE),
+                            "learning_rate": ui_state.get("learning_rate", DEFAULT_LEARNING_RATE),
+                            "save_iterations": ui_state.get("save_iterations", DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS),
                             "preset_name": ui_state.get("training_preset", list(TRAINING_PRESETS.keys())[0]),
                             "repo_id": ""  # Default empty repo ID
                         }
@@ -853,12 +896,12 @@ class TrainingService:
             ui_updates.update({
                 "model_type": model_type_display,  # Use the display name for the UI dropdown
                 "training_type": training_type_display,  # Use the display name for training type
-                "lora_rank": params.get('lora_rank', "128"),
-                "lora_alpha": params.get('lora_alpha', "128"),
-                "num_epochs": params.get('num_epochs', 70),
-                "batch_size": params.get('batch_size', 1),
-                "learning_rate": params.get('learning_rate', 3e-5),
-                "save_iterations": params.get('save_iterations', 500),
+                "lora_rank": params.get('lora_rank', DEFAULT_LORA_RANK_STR),
+                "lora_alpha": params.get('lora_alpha', DEFAULT_LORA_ALPHA_STR),
+                "train_steps": params.get('train_steps', DEFAULT_NB_TRAINING_STEPS),
+                "batch_size": params.get('batch_size', DEFAULT_BATCH_SIZE),
+                "learning_rate": params.get('learning_rate', DEFAULT_LEARNING_RATE),
+                "save_iterations": params.get('save_iterations', DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS),
                 "training_preset": params.get('preset_name', list(TRAINING_PRESETS.keys())[0])
             })
             
@@ -872,12 +915,12 @@ class TrainingService:
                     # But keep model_type_display for the UI
                     result = self.start_training(
                         model_type=model_type_internal,
-                        lora_rank=params.get('lora_rank', "128"),
-                        lora_alpha=params.get('lora_alpha', "128"),
-                        num_epochs=params.get('num_epochs', 70),
-                        batch_size=params.get('batch_size', 1),
-                        learning_rate=params.get('learning_rate', 3e-5),
-                        save_iterations=params.get('save_iterations', 500),
+                        lora_rank=params.get('lora_rank', DEFAULT_LORA_RANK_STR),
+                        lora_alpha=params.get('lora_alpha', DEFAULT_LORA_ALPHA_STR),
+                        train_size=params.get('train_steps', DEFAULT_NB_TRAINING_STEPS),
+                        batch_size=params.get('batch_size', DEFAULT_BATCH_SIZE),
+                        learning_rate=params.get('learning_rate', DEFAULT_LEARNING_RATE),
+                        save_iterations=params.get('save_iterations', DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS),
                         repo_id=params.get('repo_id', ''),
                         preset_name=params.get('preset_name', list(TRAINING_PRESETS.keys())[0]),
                         training_type=training_type_internal,
