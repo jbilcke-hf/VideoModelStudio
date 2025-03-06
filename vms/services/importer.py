@@ -10,8 +10,7 @@ from pytubefix import YouTube
 import logging
 
 from ..config import NORMALIZE_IMAGES_TO, TRAINING_VIDEOS_PATH, VIDEOS_TO_SPLIT_PATH, STAGING_PATH, DEFAULT_PROMPT_PREFIX
-from ..utils import normalize_image, is_image_file, is_video_file, add_prefix_to_caption
-from ..webdataset import webdataset_handler
+from ..utils import normalize_image, is_image_file, is_video_file, add_prefix_to_caption, webdataset_handler
 
 logger = logging.getLogger(__name__)
 
