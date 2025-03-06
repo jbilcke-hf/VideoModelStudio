@@ -4,12 +4,12 @@ Train tab for Video Model Studio UI
 
 import gradio as gr
 import logging
+import os
 from typing import Dict, Any, List, Optional, Tuple
 from pathlib import Path
 
 from .base_tab import BaseTab
-from ..config import TRAINING_PRESETS, OUTPUT_PATH, MODEL_TYPES, ASK_USER_TO_DUPLICATE_SPACE, SMALL_TRAINING_BUCKETS
-from ..utils import TrainingLogParser
+from ..config import TRAINING_PRESETS, OUTPUT_PATH, MODEL_TYPES, ASK_USER_TO_DUPLICATE_SPACE, SMALL_TRAINING_BUCKETS, TRAINING_TYPES
 
 logger = logging.getLogger(__name__)
 
@@ -156,7 +156,7 @@ class TrainTab(BaseTab):
         # Model type change event
         def update_model_info(model, training_type):
             params = self.get_default_params(MODEL_TYPES[model], TRAINING_TYPES[training_type])
-            info = self.get_model_info(MODEL_TYPES[model], TRAINING_TYPES[training_type])
+            info = self.get_model_info(model, training_type)
             show_lora_params = training_type == list(TRAINING_TYPES.keys())[0]  # Show if LoRA Finetune
             
             return {
@@ -313,6 +313,21 @@ class TrainTab(BaseTab):
                 self.components["pause_resume_btn"]
             ]
         )
+
+        # Add an event handler for delete_checkpoints_btn
+        self.components["delete_checkpoints_btn"].click(
+            fn=lambda: self.app.trainer.delete_all_checkpoints(),
+            outputs=[self.components["status_box"]]
+        ).then(
+            fn=self.get_latest_status_message_logs_and_button_labels,
+            outputs=[
+                self.components["status_box"],
+                self.components["log_box"],
+                self.components["start_btn"],
+                self.components["stop_btn"],
+                self.components["delete_checkpoints_btn"]
+            ]
+        )
         
     def handle_training_start(self, preset, model_type, training_type, *args):
         """Handle training start with proper log parser reset and checkpoint detection"""
@@ -360,86 +375,103 @@ class TrainTab(BaseTab):
         except Exception as e:
             logger.exception("Error starting training")
             return f"Error starting training: {str(e)}", f"Exception: {str(e)}\n\nCheck the logs for more details."
-
     
     def get_model_info(self, model_type: str, training_type: str) -> str:
         """Get information about the selected model type and training method"""
-        training_method = "LoRA finetune" if training_type == "lora" else "Full finetune"
-        
-        if model_type == "hunyuan_video":
+        if model_type == "HunyuanVideo (LoRA)":
             base_info = """### HunyuanVideo
     - Required VRAM: ~48GB minimum
     - Recommended batch size: 1-2
     - Typical training time: 2-4 hours
     - Default resolution: 49x512x768"""
             
-            if training_type == "lora":
+            if training_type == "LoRA Finetune":
                 return base_info + "\n- Required VRAM: ~18GB minimum\n- Default LoRA rank: 128 (~400 MB)"
             else:
-                return base_info + "\n- Required VRAM: ~21GB minimum\n- Full model size: ~8GB"
+                return base_info + "\n- Required VRAM: ~48GB minimum\n- **Full finetune not recommended due to VRAM requirements**"
                 
-        elif model_type == "wan":
-            base_info = """### Wan-2.1-T2V
-    - Recommended batch size: 1-2
-    - Typical training time: 1-3 hours
-    - Default resolution: 49x512x768"""
-            
-            if training_type == "lora":
-                return base_info + "\n- Required VRAM: ~16GB minimum\n- Default LoRA rank: 32 (~120 MB)"
-            else:
-                return base_info + "\n- **Full finetune not supported in this UI**" + "\n- Required VRAM: ~18GB minimum\n- Default LoRA rank: 128 (~400 MB)"
-            else:
-                return base_info + "\n- Required VRAM: ~21GB minimum\n- Full model size: ~8GB"
-                
-        elif model_type == "wan":
-            base_info = """### Wan-2.1-T2V
-    - Recommended batch size: 1-2
-    - Typical training time: 1-3 hours
-    - Default resolution: 49x512x768"""
-            
-            if training_type == "lora":
-                return base_info + "\n- Required VRAM: ~16GB minimum\n- Default LoRA rank: 32 (~120 MB)"
-            else:
-                return base_info + "\n- **Full finetune not supported in this UI**" + "\n- Default LoRA rank: 128 (~600 MB)"
-            else:
-                return base_info + "\n- **Full finetune not recommended due to VRAM requirements**"
-                
-        elif model_type == "ltx_video":
+        elif model_type == "LTX-Video (LoRA)":
             base_info = """### LTX-Video
     - Recommended batch size: 1-4
     - Typical training time: 1-3 hours
     - Default resolution: 49x512x768"""
             
-            if training_type == "lora":
-                return base_
+            if training_type == "LoRA Finetune":
+                return base_info + "\n- Required VRAM: ~18GB minimum\n- Default LoRA rank: 128 (~400 MB)"
+            else:
+                return base_info + "\n- Required VRAM: ~21GB minimum\n- Full model size: ~8GB"
+                
+        elif model_type == "Wan-2.1-T2V (LoRA)":
+            base_info = """### Wan-2.1-T2V
+    - Recommended batch size: 1-2
+    - Typical training time: 1-3 hours
+    - Default resolution: 49x512x768"""
+            
+            if training_type == "LoRA Finetune":
+                return base_info + "\n- Required VRAM: ~16GB minimum\n- Default LoRA rank: 32 (~120 MB)"
+            else:
+                return base_info + "\n- **Full finetune not recommended due to VRAM requirements**"
+        
+        # Default fallback
+        return f"### {model_type}\nPlease check documentation for VRAM requirements and recommended settings."
 
-    def get_default_params(self, model_type: str) -> Dict[str, Any]:
+    def get_default_params(self, model_type: str, training_type: str) -> Dict[str, Any]:
         """Get default training parameters for model type"""
+        # Find preset that matches model type and training type
+        matching_presets = [
+            preset for preset_name, preset in TRAINING_PRESETS.items() 
+            if preset["model_type"] == model_type and preset["training_type"] == training_type
+        ]
+        
+        if matching_presets:
+            # Use the first matching preset
+            preset = matching_presets[0]
+            return {
+                "num_epochs": preset.get("num_epochs", 70),
+                "batch_size": preset.get("batch_size", 1),
+                "learning_rate": preset.get("learning_rate", 3e-5),
+                "save_iterations": preset.get("save_iterations", 500),
+                "lora_rank": preset.get("lora_rank", "128"),
+                "lora_alpha": preset.get("lora_alpha", "128")
+            }
+        
+        # Default fallbacks
         if model_type == "hunyuan_video":
             return {
                 "num_epochs": 70,
                 "batch_size": 1,
                 "learning_rate": 2e-5,
                 "save_iterations": 500,
-                "video_resolution_buckets": SMALL_TRAINING_BUCKETS,
-                "video_reshape_mode": "center",
-                "caption_dropout_p": 0.05,
-                "gradient_accumulation_steps": 1,
-                "rank": 128,
-                "lora_alpha": 128
+                "lora_rank": "128",
+                "lora_alpha": "128"
             }
-        else:  # ltx_video
+        elif model_type == "ltx_video":
             return {
                 "num_epochs": 70,
                 "batch_size": 1,
                 "learning_rate": 3e-5,
                 "save_iterations": 500,
-                "video_resolution_buckets": SMALL_TRAINING_BUCKETS,
-                "video_reshape_mode": "center",
-                "caption_dropout_p": 0.05,
-                "gradient_accumulation_steps": 4,
-                "rank": 128,
-                "lora_alpha": 128
+                "lora_rank": "128",
+                "lora_alpha": "128"
+            }
+        elif model_type == "wan":
+            return {
+                "num_epochs": 70,
+                "batch_size": 1,
+                "learning_rate": 5e-5,
+                "save_iterations": 500,
+                "lora_rank": "32",
+                "lora_alpha": "32"
+            }
+        else:
+            # Generic defaults
+            return {
+                "num_epochs": 70,
+                "batch_size": 1,
+                "learning_rate": 3e-5,
+                "save_iterations": 500,
+                "lora_rank": "128",
+                "lora_alpha": "128"
             }
             
     def update_training_params(self, preset_name: str) -> Tuple:
@@ -454,6 +486,12 @@ class TrainTab(BaseTab):
             key for key, value in MODEL_TYPES.items() 
             if value == preset["model_type"]
         )
+        
+        # Find the display name that maps to our training type
+        training_display_name = next(
+            key for key, value in TRAINING_TYPES.items() 
+            if value == preset["training_type"]
+        )
             
         # Get preset description for display
         description = preset.get("description", "")
@@ -467,24 +505,29 @@ class TrainTab(BaseTab):
         
         info_text = f"{description}{bucket_info}"
         
-        # Return values in the same order as the output components
-        # Use preset defaults but preserve user-modified values if they exist
-        lora_rank_val = current_state.get("lora_rank") if current_state.get("lora_rank") != preset.get("lora_rank", "128") else preset["lora_rank"]
-        lora_alpha_val = current_state.get("lora_alpha") if current_state.get("lora_alpha") != preset.get("lora_alpha", "128") else preset["lora_alpha"]
-        num_epochs_val = current_state.get("num_epochs") if current_state.get("num_epochs") != preset.get("num_epochs", 70) else preset["num_epochs"]
-        batch_size_val = current_state.get("batch_size") if current_state.get("batch_size") != preset.get("batch_size", 1) else preset["batch_size"]
-        learning_rate_val = current_state.get("learning_rate") if current_state.get("learning_rate") != preset.get("learning_rate", 3e-5) else preset["learning_rate"]
-        save_iterations_val = current_state.get("save_iterations") if current_state.get("save_iterations") != preset.get("save_iterations", 500) else preset["save_iterations"]
+        # Check if LoRA params should be visible
+        show_lora_params = preset["training_type"] == "lora"
         
+        # Use preset defaults but preserve user-modified values if they exist
+        lora_rank_val = current_state.get("lora_rank") if current_state.get("lora_rank") != preset.get("lora_rank", "128") else preset.get("lora_rank", "128")
+        lora_alpha_val = current_state.get("lora_alpha") if current_state.get("lora_alpha") != preset.get("lora_alpha", "128") else preset.get("lora_alpha", "128")
+        num_epochs_val = current_state.get("num_epochs") if current_state.get("num_epochs") != preset.get("num_epochs", 70) else preset.get("num_epochs", 70)
+        batch_size_val = current_state.get("batch_size") if current_state.get("batch_size") != preset.get("batch_size", 1) else preset.get("batch_size", 1)
+        learning_rate_val = current_state.get("learning_rate") if current_state.get("learning_rate") != preset.get("learning_rate", 3e-5) else preset.get("learning_rate", 3e-5)
+        save_iterations_val = current_state.get("save_iterations") if current_state.get("save_iterations") != preset.get("save_iterations", 500) else preset.get("save_iterations", 500)
+        
+        # Return values in the same order as the output components
         return (
             model_display_name,
+            training_display_name,
             lora_rank_val,
             lora_alpha_val,
             num_epochs_val,
             batch_size_val,
             learning_rate_val,
             save_iterations_val,
-            info_text
+            info_text,
+            gr.Row(visible=show_lora_params)
         )
     
     def update_training_ui(self, training_state: Dict[str, Any]):
@@ -498,13 +541,6 @@ class TrainTab(BaseTab):
                 f"Status: {training_state['status']}",
                 f"Progress: {training_state['progress']}",
                 f"Step: {training_state['current_step']}/{training_state['total_steps']}",
-                    
-                # Epoch information
-                # there is an issue with how epoch is reported because we display:
-                # Progress: 96.9%, Step: 872/900, Epoch: 12/50
-                # we should probably just show the steps
-                #f"Epoch: {training_state['current_epoch']}/{training_state['total_epochs']}",
-                
                 f"Time elapsed: {training_state['elapsed']}",
                 f"Estimated remaining: {training_state['remaining']}",
                 "",
