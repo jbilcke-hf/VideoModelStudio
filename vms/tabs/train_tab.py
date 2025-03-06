@@ -15,7 +15,13 @@ from ..config import (
     DEFAULT_BATCH_SIZE, DEFAULT_CAPTION_DROPOUT_P,
     DEFAULT_LEARNING_RATE,
     DEFAULT_LORA_RANK, DEFAULT_LORA_ALPHA,
-    DEFAULT_LORA_RANK_STR, DEFAULT_LORA_ALPHA_STR
+    DEFAULT_LORA_RANK_STR, DEFAULT_LORA_ALPHA_STR,
+    DEFAULT_SEED,
+    DEFAULT_NUM_GPUS,
+    DEFAULT_MAX_GPUS,
+    DEFAULT_PRECOMPUTATION_ITEMS,
+    DEFAULT_NB_TRAINING_STEPS,
+    DEFAULT_NB_LR_WARMUP_STEPS,
 )
 
 logger = logging.getLogger(__name__)
@@ -106,7 +112,30 @@ class TrainTab(BaseTab):
                             precision=0,
                             info="Model will be saved periodically after these many steps"
                         )
-                
+                    with gr.Row():
+                        self.components["num_gpus"] = gr.Slider(
+                            label="Number of GPUs to use",
+                            value=DEFAULT_NUM_GPUS,
+                            minimum=1,
+                            maximum=DEFAULT_MAX_GPUS,
+                            step=1,
+                            info="Number of GPUs to use for training"
+                        )
+                        self.components["precomputation_items"] = gr.Number(
+                            label="Precomputation Items",
+                            value=DEFAULT_PRECOMPUTATION_ITEMS,
+                            minimum=1,
+                            precision=0,
+                            info="Should be more or less the number of total items (ex: 200 videos), divided by the number of GPUs"
+                        )
+                    with gr.Row():
+                        self.components["lr_warmup_steps"] = gr.Number(
+                            label="Learning Rate Warmup Steps",
+                            value=DEFAULT_NB_LR_WARMUP_STEPS,
+                            minimum=0,
+                            precision=0,
+                            info="Number of warmup steps (typically 20-40% of total training steps)"
+                        )
                 with gr.Column():
                     with gr.Row():
                         # Check for existing checkpoints to determine button text
@@ -218,7 +247,27 @@ class TrainTab(BaseTab):
                 self.components["lora_params_row"]
             ]
         )
-        
+
+
+        # Add in the connect_events() method:
+        self.components["num_gpus"].change(
+            fn=lambda v: self.app.update_ui_state(num_gpus=v),
+            inputs=[self.components["num_gpus"]],
+            outputs=[]
+        )
+
+        self.components["precomputation_items"].change(
+            fn=lambda v: self.app.update_ui_state(precomputation_items=v),
+            inputs=[self.components["precomputation_items"]],
+            outputs=[]
+        )
+
+        self.components["lr_warmup_steps"].change(
+            fn=lambda v: self.app.update_ui_state(lr_warmup_steps=v),
+            inputs=[self.components["lr_warmup_steps"]],
+            outputs=[]
+        )
+                
         # Training parameters change events
         self.components["lora_rank"].change(
             fn=lambda v: self.app.update_ui_state(lora_rank=v),
@@ -274,7 +323,10 @@ class TrainTab(BaseTab):
                 self.components["learning_rate"],
                 self.components["save_iterations"],
                 self.components["preset_info"],
-                self.components["lora_params_row"]
+                self.components["lora_params_row"],
+                self.components["num_gpus"],
+                self.components["precomputation_items"],
+                self.components["lr_warmup_steps"]
             ]
         )
         
@@ -332,7 +384,7 @@ class TrainTab(BaseTab):
             outputs=[self.components["status_box"]]
         )
         
-    def handle_training_start(self, preset, model_type, training_type, *args):
+    def handle_training_start(self, preset, model_type, training_type, *args, progress=gr.Progress()):
         """Handle training start with proper log parser reset and checkpoint detection"""
         # Safely reset log parser if it exists
         if hasattr(self.app, 'log_parser') and self.app.log_parser is not None:
@@ -341,6 +393,9 @@ class TrainTab(BaseTab):
             logger.warning("Log parser not initialized, creating a new one")
             from ..utils import TrainingLogParser
             self.app.log_parser = TrainingLogParser()
+            
+        # Initialize progress
+        progress(0, desc="Initializing training")
         
         # Check for latest checkpoint
         checkpoints = list(OUTPUT_PATH.glob("checkpoint-*"))
@@ -351,6 +406,9 @@ class TrainTab(BaseTab):
             latest_checkpoint = max(checkpoints, key=os.path.getmtime)
             resume_from = str(latest_checkpoint)
             logger.info(f"Found checkpoint at {resume_from}, will resume training")
+            progress(0.05, desc=f"Resuming from checkpoint {Path(resume_from).name}")
+        else:
+            progress(0.05, desc="Starting new training run")
         
         # Convert model_type display name to internal name
         model_internal_type = MODEL_TYPES.get(model_type)
@@ -366,19 +424,32 @@ class TrainTab(BaseTab):
             logger.error(f"Invalid training type: {training_type}")
             return f"Error: Invalid training type '{training_type}'", "Training type not recognized"
         
+        # Progress update
+        progress(0.1, desc="Preparing dataset")
+        
         # Start training (it will automatically use the checkpoint if provided)
         try:
             return self.app.trainer.start_training(
-                model_internal_type,  # Use internal model type
-                *args,
+                model_internal_type,
+                lora_rank,
+                lora_alpha,
+                train_steps,
+                batch_size,
+                learning_rate,
+                save_iterations,
+                repo_id,
                 preset_name=preset,
-                training_type=training_internal_type,  # Pass the internal training type
-                resume_from_checkpoint=resume_from
+                training_type=training_internal_type,
+                resume_from_checkpoint=resume_from,
+                num_gpus=num_gpus,
+                precomputation_items=precomputation_items,
+                lr_warmup_steps=lr_warmup_steps,
+                progress=progress
             )
         except Exception as e:
             logger.exception("Error starting training")
             return f"Error starting training: {str(e)}", f"Exception: {str(e)}\n\nCheck the logs for more details."
-    
+
     def get_model_info(self, model_type: str, training_type: str) -> str:
         """Get information about the selected model type and training method"""
         if model_type == "HunyuanVideo":
@@ -518,6 +589,9 @@ class TrainTab(BaseTab):
         batch_size_val = current_state.get("batch_size") if current_state.get("batch_size") != preset.get("batch_size", DEFAULT_BATCH_SIZE) else preset.get("batch_size", DEFAULT_BATCH_SIZE)
         learning_rate_val = current_state.get("learning_rate") if current_state.get("learning_rate") != preset.get("learning_rate", DEFAULT_LEARNING_RATE) else preset.get("learning_rate", DEFAULT_LEARNING_RATE)
         save_iterations_val = current_state.get("save_iterations") if current_state.get("save_iterations") != preset.get("save_iterations", DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS) else preset.get("save_iterations", DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS)
+        num_gpus_val = current_state.get("num_gpus") if current_state.get("num_gpus") != preset.get("num_gpus", DEFAULT_NUM_GPUS) else preset.get("num_gpus", DEFAULT_NUM_GPUS)
+        precomputation_items_val = current_state.get("precomputation_items") if current_state.get("precomputation_items") != preset.get("precomputation_items", DEFAULT_PRECOMPUTATION_ITEMS) else preset.get("precomputation_items", DEFAULT_PRECOMPUTATION_ITEMS)
+        lr_warmup_steps_val = current_state.get("lr_warmup_steps") if current_state.get("lr_warmup_steps") != preset.get("lr_warmup_steps", DEFAULT_NB_LR_WARMUP_STEPS) else preset.get("lr_warmup_steps", DEFAULT_NB_LR_WARMUP_STEPS)
         
         # Return values in the same order as the output components
         return (
@@ -530,7 +604,10 @@ class TrainTab(BaseTab):
             learning_rate_val,
             save_iterations_val,
             info_text,
-            gr.Row(visible=show_lora_params)
+            gr.Row(visible=show_lora_params),
+            num_gpus_val,
+            precomputation_items_val,
+            lr_warmup_steps_val
         )
     
     def get_latest_status_message_and_logs(self) -> Tuple[str, str, str]:

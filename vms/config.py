@@ -2,6 +2,8 @@ import os
 from dataclasses import dataclass, field
 from typing import Dict, Any, Optional, List, Tuple
 from pathlib import Path
+import torch
+import math
 
 def parse_bool_env(env_value: Optional[str]) -> bool:
     """Parse environment variable string to boolean
@@ -71,7 +73,16 @@ TRAINING_TYPES = {
 
 DEFAULT_SEED = 42
 
-DEFAULT_NB_TRAINING_STEPS = 1000
+DEFAULT_REMOVE_COMMON_LLM_CAPTION_PREFIXES = True
+
+DEFAULT_DATASET_TYPE = "video"
+DEFAULT_TRAINING_TYPE = "lora"
+
+DEFAULT_RESHAPE_MODE = "bicubic"
+
+DEFAULT_MIXED_PRECISION = "bf16"
+
+
 
 DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS = 200
 
@@ -86,6 +97,23 @@ DEFAULT_CAPTION_DROPOUT_P = 0.05
 DEFAULT_BATCH_SIZE = 1
 
 DEFAULT_LEARNING_RATE = 3e-5
+
+# GPU SETTINGS
+DEFAULT_NUM_GPUS = 1
+DEFAULT_MAX_GPUS = min(8, torch.cuda.device_count() if torch.cuda.is_available() else 1)
+DEFAULT_PRECOMPUTATION_ITEMS = 512
+
+DEFAULT_NB_TRAINING_STEPS = 1000
+
+# For this value, it is recommended to use about 20 to 40% of the number of training steps
+DEFAULT_NB_LR_WARMUP_STEPS = math.ceil(0.20 * DEFAULT_NB_TRAINING_STEPS)  # 20% of training steps
+
+# For validation
+DEFAULT_VALIDATION_NB_STEPS = 50
+DEFAULT_VALIDATION_HEIGHT = 512
+DEFAULT_VALIDATION_WIDTH = 768
+DEFAULT_VALIDATION_NB_FRAMES = 49
+DEFAULT_VALIDATION_FRAMERATE = 8
 
 # it is best to use resolutions that are powers of 8
 # The resolution should be divisible by 32
@@ -183,7 +211,10 @@ TRAINING_PRESETS = {
         "learning_rate": 2e-5,
         "save_iterations": DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
         "training_buckets": SMALL_TRAINING_BUCKETS,
-        "flow_weighting_scheme": "none"
+        "flow_weighting_scheme": "none",
+        "num_gpus": DEFAULT_NUM_GPUS,
+        "precomputation_items": DEFAULT_PRECOMPUTATION_ITEMS,
+        "lr_warmup_steps": DEFAULT_NB_LR_WARMUP_STEPS,
     },
     "LTX-Video (normal)": {
         "model_type": "ltx_video", 
@@ -195,7 +226,10 @@ TRAINING_PRESETS = {
         "learning_rate": DEFAULT_LEARNING_RATE,
         "save_iterations": DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
         "training_buckets": SMALL_TRAINING_BUCKETS,
-        "flow_weighting_scheme": "logit_normal"
+        "flow_weighting_scheme": "none",
+        "num_gpus": DEFAULT_NUM_GPUS,
+        "precomputation_items": DEFAULT_PRECOMPUTATION_ITEMS,
+        "lr_warmup_steps": DEFAULT_NB_LR_WARMUP_STEPS,
     },
     "LTX-Video (16:9, HQ)": {
         "model_type": "ltx_video",
@@ -207,7 +241,10 @@ TRAINING_PRESETS = {
         "learning_rate": DEFAULT_LEARNING_RATE,
         "save_iterations": DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
         "training_buckets": MEDIUM_19_9_RATIO_BUCKETS,
-        "flow_weighting_scheme": "logit_normal"
+        "flow_weighting_scheme": "logit_normal",
+        "num_gpus": DEFAULT_NUM_GPUS,
+        "precomputation_items": DEFAULT_PRECOMPUTATION_ITEMS,
+        "lr_warmup_steps": DEFAULT_NB_LR_WARMUP_STEPS,
     },
     "LTX-Video (Full Finetune)": {
         "model_type": "ltx_video",
@@ -217,7 +254,10 @@ TRAINING_PRESETS = {
         "learning_rate": DEFAULT_LEARNING_RATE,
         "save_iterations": DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
         "training_buckets": SMALL_TRAINING_BUCKETS,
-        "flow_weighting_scheme": "logit_normal"
+        "flow_weighting_scheme": "logit_normal",
+        "num_gpus": DEFAULT_NUM_GPUS,
+        "precomputation_items": DEFAULT_PRECOMPUTATION_ITEMS,
+        "lr_warmup_steps": DEFAULT_NB_LR_WARMUP_STEPS,
     },
     "Wan-2.1-T2V (normal)": {
         "model_type": "wan",
@@ -229,7 +269,10 @@ TRAINING_PRESETS = {
         "learning_rate": 5e-5,
         "save_iterations": DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
         "training_buckets": SMALL_TRAINING_BUCKETS,
-        "flow_weighting_scheme": "logit_normal"
+        "flow_weighting_scheme": "logit_normal",
+        "num_gpus": DEFAULT_NUM_GPUS,
+        "precomputation_items": DEFAULT_PRECOMPUTATION_ITEMS,
+        "lr_warmup_steps": DEFAULT_NB_LR_WARMUP_STEPS,
     },
     "Wan-2.1-T2V (HQ)": {
         "model_type": "wan",
@@ -241,7 +284,10 @@ TRAINING_PRESETS = {
         "learning_rate": DEFAULT_LEARNING_RATE,
         "save_iterations": DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
         "training_buckets": MEDIUM_19_9_RATIO_BUCKETS,
-        "flow_weighting_scheme": "logit_normal"
+        "flow_weighting_scheme": "logit_normal",
+        "num_gpus": DEFAULT_NUM_GPUS,
+        "precomputation_items": DEFAULT_PRECOMPUTATION_ITEMS,
+        "lr_warmup_steps": DEFAULT_NB_LR_WARMUP_STEPS,
     }
 }
 
@@ -287,7 +333,7 @@ class TrainingConfig:
     seed: int = DEFAULT_SEED
     mixed_precision: str = "bf16"
     batch_size: int = 1
-    train_step: int = DEFAULT_NB_TRAINING_STEPS
+    train_steps: int = DEFAULT_NB_TRAINING_STEPS
     lora_rank: int = DEFAULT_LORA_RANK
     lora_alpha: int = DEFAULT_LORA_ALPHA
     target_modules: List[str] = field(default_factory=lambda: ["to_q", "to_k", "to_v", "to_out.0"])
@@ -301,10 +347,10 @@ class TrainingConfig:
 
     # Optimizer arguments
     optimizer: str = "adamw"
-    lr: float = 3e-5
+    lr: float = DEFAULT_LEARNING_RATE
     scale_lr: bool = False
     lr_scheduler: str = "constant_with_warmup"
-    lr_warmup_steps: int = 100
+    lr_warmup_steps: int = DEFAULT_NB_LR_WARMUP_STEPS
     lr_num_cycles: int = 1
     lr_power: float = 1.0
     beta1: float = 0.9

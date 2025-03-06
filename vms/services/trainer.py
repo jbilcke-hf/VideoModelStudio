@@ -28,9 +28,26 @@ from ..config import (
     DEFAULT_BATCH_SIZE, DEFAULT_CAPTION_DROPOUT_P,
     DEFAULT_LEARNING_RATE,
     DEFAULT_LORA_RANK, DEFAULT_LORA_ALPHA,
-    DEFAULT_LORA_RANK_STR, DEFAULT_LORA_ALPHA_STR
+    DEFAULT_LORA_RANK_STR, DEFAULT_LORA_ALPHA_STR,
+    DEFAULT_SEED, DEFAULT_RESHAPE_MODE,
+    DEFAULT_REMOVE_COMMON_LLM_CAPTION_PREFIXES,
+    DEFAULT_DATASET_TYPE, DEFAULT_PROMPT_PREFIX,
+    DEFAULT_MIXED_PRECISION, DEFAULT_TRAINING_TYPE,
+    DEFAULT_NUM_GPUS,
+    DEFAULT_MAX_GPUS,
+    DEFAULT_PRECOMPUTATION_ITEMS,
+    DEFAULT_NB_TRAINING_STEPS,
+    DEFAULT_NB_LR_WARMUP_STEPS
 )
-from ..utils import make_archive, parse_training_log, is_image_file, is_video_file, prepare_finetrainers_dataset, copy_files_to_training_dir
+from ..utils import (
+    get_available_gpu_count,
+    make_archive,
+    parse_training_log,
+    is_image_file,
+    is_video_file,
+    prepare_finetrainers_dataset,
+    copy_files_to_training_dir
+)
 
 logger = logging.getLogger(__name__)
 
@@ -107,18 +124,89 @@ class TrainingService:
     
             
     def save_ui_state(self, values: Dict[str, Any]) -> None:
-        """Save current UI state to file"""
+        """Save current UI state to file with validation"""
         ui_state_file = OUTPUT_PATH / "ui_state.json"
+        
+        # Validate values before saving
+        validated_values = {}
+        default_state = {
+            "model_type": list(MODEL_TYPES.keys())[0],
+            "training_type": list(TRAINING_TYPES.keys())[0],
+            "lora_rank": DEFAULT_LORA_RANK_STR,
+            "lora_alpha": DEFAULT_LORA_ALPHA_STR, 
+            "train_steps": DEFAULT_NB_TRAINING_STEPS,
+            "batch_size": DEFAULT_BATCH_SIZE,
+            "learning_rate": DEFAULT_LEARNING_RATE,
+            "save_iterations": DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
+            "training_preset": list(TRAINING_PRESETS.keys())[0],
+            "num_gpus": DEFAULT_NUM_GPUS,
+            "precomputation_items": DEFAULT_PRECOMPUTATION_ITEMS,
+            "lr_warmup_steps": DEFAULT_NB_LR_WARMUP_STEPS
+        }
+        
+        # Copy default values first
+        validated_values = default_state.copy()
+        
+        # Update with provided values, converting types as needed
+        for key, value in values.items():
+            if key in default_state:
+                if key == "train_steps":
+                    try:
+                        validated_values[key] = int(value)
+                    except (ValueError, TypeError):
+                        validated_values[key] = default_state[key]
+                elif key == "batch_size":
+                    try:
+                        validated_values[key] = int(value)
+                    except (ValueError, TypeError):
+                        validated_values[key] = default_state[key]
+                elif key == "learning_rate":
+                    try:
+                        validated_values[key] = float(value)
+                    except (ValueError, TypeError):
+                        validated_values[key] = default_state[key]
+                elif key == "save_iterations":
+                    try:
+                        validated_values[key] = int(value)
+                    except (ValueError, TypeError):
+                        validated_values[key] = default_state[key]
+                elif key == "lora_rank" and value not in ["16", "32", "64", "128", "256", "512", "1024"]:
+                    validated_values[key] = default_state[key]
+                elif key == "lora_alpha" and value not in ["16", "32", "64", "128", "256", "512", "1024"]:
+                    validated_values[key] = default_state[key]
+                else:
+                    validated_values[key] = value
+        
         try:
+            # First verify we can serialize to JSON
+            json_data = json.dumps(validated_values, indent=2)
+            
+            # Write to the file
             with open(ui_state_file, 'w') as f:
-                json.dump(values, f, indent=2)
-            logger.debug(f"UI state saved: {values}")
+                f.write(json_data)
+            logger.debug(f"UI state saved successfully")
         except Exception as e:
             logger.error(f"Error saving UI state: {str(e)}")
 
-    # Additional fix for the load_ui_state method in trainer.py to clean up old values
+    def _backup_and_recreate_ui_state(self, ui_state_file, default_state):
+        """Backup the corrupted UI state file and create a new one with defaults"""
+        try:
+            # Create a backup with timestamp
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_file = ui_state_file.with_suffix(f'.json.bak_{timestamp}')
+            
+            # Copy the corrupted file
+            shutil.copy2(ui_state_file, backup_file)
+            logger.info(f"Backed up corrupted UI state file to {backup_file}")
+        except Exception as backup_error:
+            logger.error(f"Failed to backup corrupted UI state file: {str(backup_error)}")
+        
+        # Create a new file with default values
+        self.save_ui_state(default_state)
+        logger.info("Created new UI state file with default values after error")
+        
     def load_ui_state(self) -> Dict[str, Any]:
-        """Load saved UI state"""
+        """Load saved UI state with robust error handling"""
         ui_state_file = OUTPUT_PATH / "ui_state.json"
         default_state = {
             "model_type": list(MODEL_TYPES.keys())[0],
@@ -129,7 +217,10 @@ class TrainingService:
             "batch_size": DEFAULT_BATCH_SIZE,
             "learning_rate": DEFAULT_LEARNING_RATE,
             "save_iterations": DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
-            "training_preset": list(TRAINING_PRESETS.keys())[0]
+            "training_preset": list(TRAINING_PRESETS.keys())[0],
+            "num_gpus": DEFAULT_NUM_GPUS,
+            "precomputation_items": DEFAULT_PRECOMPUTATION_ITEMS,
+            "lr_warmup_steps": DEFAULT_NB_LR_WARMUP_STEPS
         }
         
         if not ui_state_file.exists():
@@ -149,7 +240,13 @@ class TrainingService:
                     logger.warning("UI state file is empty or contains only whitespace, using default values")
                     return default_state
                     
-                saved_state = json.loads(file_content)
+                try:
+                    saved_state = json.loads(file_content)
+                except json.JSONDecodeError as e:
+                    logger.error(f"Error parsing UI state JSON: {str(e)}")
+                    # Instead of showing the error, recreate the file with defaults
+                    self._backup_and_recreate_ui_state(ui_state_file, default_state)
+                    return default_state
                 
                 # Clean up model type if it contains " (LoRA)" suffix
                 if "model_type" in saved_state and " (LoRA)" in saved_state["model_type"]:
@@ -158,17 +255,36 @@ class TrainingService:
                 
                 # Convert numeric values to appropriate types
                 if "train_steps" in saved_state:
-                    saved_state["train_steps"] = int(saved_state["train_steps"])
+                    try:
+                        saved_state["train_steps"] = int(saved_state["train_steps"])
+                    except (ValueError, TypeError):
+                        saved_state["train_steps"] = default_state["train_steps"]
+                        logger.warning("Invalid train_steps value, using default")
+                        
                 if "batch_size" in saved_state:
-                    saved_state["batch_size"] = int(saved_state["batch_size"])
+                    try:
+                        saved_state["batch_size"] = int(saved_state["batch_size"])
+                    except (ValueError, TypeError):
+                        saved_state["batch_size"] = default_state["batch_size"]
+                        logger.warning("Invalid batch_size value, using default")
+                        
                 if "learning_rate" in saved_state:
-                    saved_state["learning_rate"] = float(saved_state["learning_rate"])
+                    try:
+                        saved_state["learning_rate"] = float(saved_state["learning_rate"])
+                    except (ValueError, TypeError):
+                        saved_state["learning_rate"] = default_state["learning_rate"]
+                        logger.warning("Invalid learning_rate value, using default")
+                        
                 if "save_iterations" in saved_state:
-                    saved_state["save_iterations"] = int(saved_state["save_iterations"])
+                    try:
+                        saved_state["save_iterations"] = int(saved_state["save_iterations"])
+                    except (ValueError, TypeError):
+                        saved_state["save_iterations"] = default_state["save_iterations"]
+                        logger.warning("Invalid save_iterations value, using default")
                     
                 # Make sure we have all keys (in case structure changed)
                 merged_state = default_state.copy()
-                merged_state.update(saved_state)
+                merged_state.update({k: v for k, v in saved_state.items() if v is not None})
                 
                 # Validate model_type is in available choices
                 if merged_state["model_type"] not in MODEL_TYPES:
@@ -203,67 +319,80 @@ class TrainingService:
                     merged_state["training_preset"] = default_state["training_preset"]
                     logger.warning(f"Invalid training preset in saved state, using default")
                     
+                # Validate lora_rank is in allowed values
+                if merged_state.get("lora_rank") not in ["16", "32", "64", "128", "256", "512", "1024"]:
+                    merged_state["lora_rank"] = default_state["lora_rank"]
+                    logger.warning(f"Invalid lora_rank in saved state, using default")
+                    
+                # Validate lora_alpha is in allowed values
+                if merged_state.get("lora_alpha") not in ["16", "32", "64", "128", "256", "512", "1024"]:
+                    merged_state["lora_alpha"] = default_state["lora_alpha"]
+                    logger.warning(f"Invalid lora_alpha in saved state, using default")
+                    
                 return merged_state
-        except json.JSONDecodeError as e:
-            logger.error(f"Error parsing UI state JSON: {str(e)}")
-            return default_state
         except Exception as e:
             logger.error(f"Error loading UI state: {str(e)}")
+            # If anything goes wrong, backup and recreate
+            self._backup_and_recreate_ui_state(ui_state_file, default_state)
             return default_state
 
     def ensure_valid_ui_state_file(self):
         """Ensure UI state file exists and is valid JSON"""
         ui_state_file = OUTPUT_PATH / "ui_state.json"
         
+        # Default state with all required values
+        default_state = {
+            "model_type": list(MODEL_TYPES.keys())[0],
+            "training_type": list(TRAINING_TYPES.keys())[0],
+            "lora_rank": DEFAULT_LORA_RANK_STR,
+            "lora_alpha": DEFAULT_LORA_ALPHA_STR, 
+            "train_steps": DEFAULT_NB_TRAINING_STEPS,
+            "batch_size": DEFAULT_BATCH_SIZE,
+            "learning_rate": DEFAULT_LEARNING_RATE,
+            "save_iterations": DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
+            "training_preset": list(TRAINING_PRESETS.keys())[0],
+            "num_gpus": DEFAULT_NUM_GPUS,
+            "precomputation_items": DEFAULT_PRECOMPUTATION_ITEMS,
+            "lr_warmup_steps": DEFAULT_NB_LR_WARMUP_STEPS
+        }
+        
+        # If file doesn't exist, create it with default values
         if not ui_state_file.exists():
-            # Create a new file with default values
             logger.info("Creating new UI state file with default values")
-            default_state = {
-                "model_type": list(MODEL_TYPES.keys())[0],
-                "training_type": list(TRAINING_TYPES.keys())[0],
-                "lora_rank": DEFAULT_LORA_RANK_STR,
-                "lora_alpha": DEFAULT_LORA_ALPHA_STR, 
-                "train_steps": DEFAULT_NB_TRAINING_STEPS,
-                "batch_size": DEFAULT_BATCH_SIZE,
-                "learning_rate": DEFAULT_LEARNING_RATE,
-                "save_iterations": DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
-                "training_preset": list(TRAINING_PRESETS.keys())[0]
-            }
             self.save_ui_state(default_state)
             return
         
         # Check if file is valid JSON
         try:
+            # First check if the file is empty
+            file_size = ui_state_file.stat().st_size
+            if file_size == 0:
+                logger.warning("UI state file exists but is empty, recreating with default values")
+                self.save_ui_state(default_state)
+                return
+                
             with open(ui_state_file, 'r') as f:
                 file_content = f.read().strip()
                 if not file_content:
-                    raise ValueError("Empty file")
-                json.loads(file_content)
-            logger.debug("UI state file validation successful")
+                    logger.warning("UI state file is empty or contains only whitespace, recreating with default values")
+                    self.save_ui_state(default_state)
+                    return
+                    
+                # Try to parse the JSON content
+                try:
+                    saved_state = json.loads(file_content)
+                    logger.debug("UI state file validation successful")
+                except json.JSONDecodeError as e:
+                    # JSON parsing failed, backup and recreate
+                    logger.error(f"Error parsing UI state JSON: {str(e)}")
+                    self._backup_and_recreate_ui_state(ui_state_file, default_state)
+                    return
         except Exception as e:
-            logger.warning(f"Invalid UI state file detected: {str(e)}. Creating new one with defaults.")
-            # Backup the invalid file
-            backup_file = ui_state_file.with_suffix('.json.bak')
-            try:
-                shutil.copy2(ui_state_file, backup_file)
-                logger.info(f"Backed up invalid UI state file to {backup_file}")
-            except Exception as backup_error:
-                logger.error(f"Failed to backup invalid UI state file: {str(backup_error)}")
-            
-            # Create a new file with default values
-            default_state = {
-                "model_type": list(MODEL_TYPES.keys())[0],
-                "training_type": list(TRAINING_TYPES.keys())[0],
-                "lora_rank": DEFAULT_LORA_RANK_STR,
-                "lora_alpha": DEFAULT_LORA_ALPHA_STR,
-                "train_steps": DEFAULT_NB_TRAINING_STEPS,
-                "batch_size": DEFAULT_BATCH_SIZE,
-                "learning_rate": DEFAULT_LEARNING_RATE,
-                "save_iterations": DEFAULT_NB_TRAINING_STEPS,
-                "training_preset": list(TRAINING_PRESETS.keys())[0]
-            }
-            self.save_ui_state(default_state)
-            
+            # Any other error (file access, etc)
+            logger.error(f"Error checking UI state file: {str(e)}")
+            self._backup_and_recreate_ui_state(ui_state_file, default_state)
+            return
+                
     # Modify save_session to also store the UI state at training start
     def save_session(self, params: Dict) -> None:
         """Save training session parameters"""
@@ -412,8 +541,12 @@ class TrainingService:
         save_iterations: int,
         repo_id: str,
         preset_name: str,
-        training_type: str = "lora",
+        training_type: str = DEFAULT_TRAINING_TYPE,
         resume_from_checkpoint: Optional[str] = None,
+        num_gpus: int = DEFAULT_NUM_GPUS,
+        precomputation_items: int = DEFAULT_PRECOMPUTATION_ITEMS,
+        lr_warmup_steps: int = DEFAULT_NB_LR_WARMUP_STEPS,
+        progress: Optional[gr.Progress] = None,
     ) -> Tuple[str, str]:
         """Start training with finetrainers"""
         
@@ -430,6 +563,10 @@ class TrainingService:
         is_resuming = resume_from_checkpoint is not None
         log_prefix = "Resuming" if is_resuming else "Initializing"
         logger.info(f"{log_prefix} training with model_type={model_type}, training_type={training_type}")
+        
+        # Update progress if available
+        if progress:
+            progress(0.15, desc="Setting up training configuration")
         
         try:
             # Get absolute paths - FIXED to look in project root instead of within vms directory
@@ -459,6 +596,10 @@ class TrainingService:
             logger.info("Current working directory: %s", current_dir)
             logger.info("Training script path: %s", train_script)
             logger.info("Training data path: %s", TRAINING_PATH)
+                
+            # Update progress
+            if progress:
+                progress(0.2, desc="Preparing training dataset")
             
             videos_file, prompts_file = prepare_finetrainers_dataset()
             if videos_file is None or prompts_file is None:
@@ -474,32 +615,45 @@ class TrainingService:
                 logger.error(error_msg)
                 return error_msg, "No training data available"
 
+            # Update progress
+            if progress:
+                progress(0.25, desc="Creating dataset configuration")
+                
             # Get preset configuration
             preset = TRAINING_PRESETS[preset_name]
             training_buckets = preset["training_buckets"]
             flow_weighting_scheme = preset.get("flow_weighting_scheme", "none")
             preset_training_type = preset.get("training_type", "lora")
 
+            # Get the custom prompt prefix from the tabs
+            custom_prompt_prefix = None
+            if hasattr(self.app, 'tabs') and 'caption_tab' in self.app.tabs:
+                if hasattr(self.app.tabs['caption_tab'], 'components') and 'custom_prompt_prefix' in self.app.tabs['caption_tab'].components:
+                    # Get the value and clean it
+                    prefix = self.app.tabs['caption_tab'].components['custom_prompt_prefix'].value
+                    if prefix:
+                        # Clean the prefix - remove trailing comma, space or comma+space
+                        custom_prompt_prefix = prefix.rstrip(', ')
+
             # Create a proper dataset configuration JSON file
             dataset_config_file = OUTPUT_PATH / "dataset_config.json"
 
-            # Determine appropriate ID token based on model type
-            id_token = None
-            if model_type == "hunyuan_video":
-                id_token = "afkx"
-            elif model_type == "ltx_video":
-                id_token = "BW_STYLE"
-            # Wan doesn't use an ID token by default, so leave it as None
+            # Determine appropriate ID token based on model type and custom prefix
+            id_token = custom_prompt_prefix  # Use custom prefix as the primary id_token
+
+            # Only use default ID tokens if no custom prefix is provided
+            if not id_token:
+                id_token = DEFAULT_PROMPT_PREFIX
 
             dataset_config = {
                 "datasets": [
                     {
                         "data_root": str(TRAINING_PATH),
-                        "dataset_type": "video",
+                        "dataset_type": DEFAULT_DATASET_TYPE,
                         "id_token": id_token,
                         "video_resolution_buckets": [[f, h, w] for f, h, w in training_buckets],
-                        "reshape_mode": "bicubic",
-                        "remove_common_llm_caption_prefixes": True
+                        "reshape_mode": DEFAULT_RESHAPE_MODE,
+                        "remove_common_llm_caption_prefixes": DEFAULT_REMOVE_COMMON_LLM_CAPTION_PREFIXES,
                     }
                 ]
             }
@@ -552,6 +706,16 @@ class TrainingService:
                 logger.error(error_msg)
                 return error_msg, "Unsupported model"
             
+            # Create validation dataset if needed
+            validation_file = None
+            #if enable_validation:  # Add a parameter to control this
+            #    validation_file = create_validation_config()
+            #    if validation_file:
+            #        config_args.extend([
+            #            "--validation_dataset_file", str(validation_file),
+            #            "--validation_steps", "500"  # Set this to a suitable value
+            #        ])
+                    
             # Update with UI parameters
             config.train_steps = int(train_steps)
             config.batch_size = int(batch_size)
@@ -560,7 +724,19 @@ class TrainingService:
             config.training_type = training_type
             config.flow_weighting_scheme = flow_weighting_scheme
             
-            # CRITICAL FIX: Update the dataset_config to point to the JSON file, not the directory
+            config.lr_warmup_steps = int(lr_warmup_steps)
+            config_args.extend([
+                "--precomputation_items", str(precomputation_items)
+            ])
+
+            # Update the NUM_GPUS variable and CUDA_VISIBLE_DEVICES
+            num_gpus = min(num_gpus, get_available_gpu_count())
+            if num_gpus <= 0:
+                num_gpus = 1
+            
+            # Generate CUDA_VISIBLE_DEVICES string
+            visible_devices = ",".join([str(i) for i in range(num_gpus)])
+            
             config.data_root = str(dataset_config_file)
             
             # Update LoRA parameters if using LoRA training type
@@ -574,7 +750,7 @@ class TrainingService:
                 self.append_log(f"Resuming from checkpoint: {resume_from_checkpoint}")
                 
             # Common settings for both models
-            config.mixed_precision = "bf16"
+            config.mixed_precision = DEFAULT_MIXED_PRECISION
             config.seed = DEFAULT_SEED
             config.gradient_checkpointing = True
             config.enable_slicing = True
@@ -598,7 +774,7 @@ class TrainingService:
                 torchrun_args = [
                     "torchrun",
                     "--standalone",
-                    "--nproc_per_node=1",
+                    "--nproc_per_node=" + str(num_gpus),
                     "--nnodes=1",
                     "--rdzv_backend=c10d",
                     "--rdzv_endpoint=localhost:0",
@@ -623,11 +799,29 @@ class TrainingService:
                 launch_args = torchrun_args
             else:
                 # For other models, use accelerate launch as before
+                # Determine the appropriate accelerate config file based on num_gpus
+                accelerate_config = None
+                if num_gpus == 1:
+                    accelerate_config = "accelerate_configs/uncompiled_1.yaml"
+                elif num_gpus == 2:
+                    accelerate_config = "accelerate_configs/uncompiled_2.yaml"
+                elif num_gpus == 4:
+                    accelerate_config = "accelerate_configs/uncompiled_4.yaml"
+                elif num_gpus == 8:
+                    accelerate_config = "accelerate_configs/uncompiled_8.yaml"
+                else:
+                    # Default to 1 GPU config if no matching config is found
+                    accelerate_config = "accelerate_configs/uncompiled_1.yaml"
+                    num_gpus = 1
+                    visible_devices = "0"
+
                 # Configure accelerate parameters
                 accelerate_args = [
                     "accelerate", "launch",
+                    "--config_file", accelerate_config,
+                    "--gpu_ids", visible_devices,
                     "--mixed_precision=bf16",
-                    "--num_processes=1",
+                    "--num_processes=" + str(num_gpus),
                     "--num_machines=1",
                     "--dynamo_backend=no",
                     str(train_script)
@@ -647,7 +841,11 @@ class TrainingService:
             env["WANDB_MODE"] = "offline"
             env["HF_API_TOKEN"] = HF_API_TOKEN
             env["FINETRAINERS_LOG_LEVEL"] = "DEBUG"  # Added for better debugging
-            
+            env["CUDA_VISIBLE_DEVICES"] = visible_devices
+
+            if progress:
+                progress(0.9, desc="Launching training process")
+
             # Start the training process
             process = subprocess.Popen(
                 launch_args + config_args,
@@ -675,6 +873,9 @@ class TrainingService:
                 "batch_size": batch_size,
                 "learning_rate": learning_rate,
                 "save_iterations": save_iterations,
+                "num_gpus": num_gpus,
+                "precomputation_items": precomputation_items,
+                "lr_warmup_steps": lr_warmup_steps,
                 "repo_id": repo_id,
                 "start_time": datetime.now().isoformat()
             })
@@ -699,6 +900,10 @@ class TrainingService:
             self.append_log(success_msg)
             logger.info(success_msg)
             
+            # Final progress update - now we'll track it through the log monitor
+            if progress:
+                progress(1.0, desc="Training started successfully")
+
             return success_msg, self.get_logs()
             
         except Exception as e:
@@ -1064,19 +1269,28 @@ class TrainingService:
                     if output:
                         # Remove decode() since output is already a string due to universal_newlines=True
                         line = output.strip()
+                        self.append_log(line)
                         if is_error:
-                            #self.append_log(f"ERROR: {line}")
                             #logger.error(line)
-                            #logger.info(line)
-                            self.append_log(line)
-                        else:
-                            self.append_log(line)
-                            # Parse metrics only from stdout
-                            metrics = parse_training_log(line)
-                            if metrics:
-                                status = self.get_status()
-                                status.update(metrics)
-                                self.save_status(**status)
+                            pass
+                        
+                        # Parse metrics only from stdout
+                        metrics = parse_training_log(line)
+                        if metrics:
+                            status = self.get_status()
+                            status.update(metrics)
+                            self.save_status(**status)
+
+                            # Extract total_steps and current_step for progress tracking
+                            if 'step' in metrics:
+                                current_step = metrics['step']
+                            if 'total_steps' in status:
+                                total_steps = status['total_steps']
+                                
+                            # Update progress bar if available and total_steps is known
+                            if progress_obj and total_steps > 0:
+                                progress_value = min(0.99, current_step / total_steps)
+                                progress_obj(progress_value, desc=f"Training: step {current_step}/{total_steps}")
                         return True
                 return False
 
