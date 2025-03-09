@@ -10,7 +10,7 @@ import asyncio
 import logging
 import gradio as gr
 from pathlib import Path
-from typing import List, Dict, Optional, Tuple, Any, Union
+from typing import List, Dict, Optional, Tuple, Any, Union, Callable
 
 from huggingface_hub import (
     HfApi, 
@@ -43,6 +43,7 @@ class HubDatasetBrowser:
             
         Returns:
             List of datasets matching the query [id, title, downloads]
+            Note: We still return all columns internally, but the UI will only display the first column
         """
         try:
             # Start with some filters to find video-related datasets
@@ -126,15 +127,10 @@ class HubDatasetBrowser:
             
             # Add basic stats (with safer access)
             downloads = getattr(dataset_info, 'downloads', None)
-            info_text += f"**Downloads:** {downloads if downloads is not None else 'N/A'}\n"
+            info_text += f"## Downloads: {downloads if downloads is not None else 'N/A'}\n"
             
             last_modified = getattr(dataset_info, 'last_modified', None)
-            info_text += f"**Last modified:** {last_modified if last_modified is not None else 'N/A'}\n"
-            
-            # Show tags if available (with safer access)
-            tags = getattr(dataset_info, "tags", None) or []
-            if tags:
-                info_text += f"**Tags:** {', '.join(tags[:10])}\n\n"
+            info_text += f"## Last modified: {last_modified if last_modified is not None else 'N/A'}\n"
             
             # Group files by type
             file_groups = {
@@ -168,13 +164,20 @@ class HubDatasetBrowser:
             logger.error(f"Error getting dataset info: {str(e)}", exc_info=True)
             return f"Error loading dataset information: {str(e)}", {}, {}
     
-    async def download_file_group(self, dataset_id: str, file_type: str, enable_splitting: bool = True) -> str:
+    async def download_file_group(
+        self, 
+        dataset_id: str, 
+        file_type: str, 
+        enable_splitting: bool = True,
+        progress_callback: Optional[Callable] = None
+    ) -> str:
         """Download all files of a specific type from the dataset
         
         Args:
             dataset_id: The dataset ID
             file_type: Either "video" or "webdataset"
             enable_splitting: Whether to enable automatic video splitting
+            progress_callback: Optional callback for progress updates
             
         Returns:
             Status message
@@ -190,6 +193,11 @@ class HubDatasetBrowser:
                 return f"No {file_type} files found in the dataset"
             
             logger.info(f"Downloading {len(files)} {file_type} files from dataset {dataset_id}")
+            gr.Info(f"Starting download of {len(files)} {file_type} files from {dataset_id}")
+            
+            # Initialize progress if callback provided
+            if progress_callback:
+                progress_callback(0, desc=f"Starting download of {len(files)} {file_type} files", total=len(files))
             
             # Track counts for status message
             video_count = 0
@@ -200,8 +208,16 @@ class HubDatasetBrowser:
                 temp_path = Path(temp_dir)
                 
                 # Process all files of the requested type
-                for filename in files:
+                for i, filename in enumerate(files):
                     try:
+                        # Update progress
+                        if progress_callback:
+                            progress_callback(
+                                i, 
+                                desc=f"Downloading file {i+1}/{len(files)}: {Path(filename).name}",
+                                total=len(files)
+                            )
+                        
                         # Download the file
                         file_path = hf_hub_download(
                             repo_id=dataset_id,
@@ -212,6 +228,7 @@ class HubDatasetBrowser:
                         
                         file_path = Path(file_path)
                         logger.info(f"Downloaded file to {file_path}")
+                        #gr.Info(f"Downloaded {file_path.name} ({i+1}/{len(files)})")
                         
                         # Process based on file type
                         if file_type == "video":
@@ -274,9 +291,13 @@ class HubDatasetBrowser:
                     except Exception as e:
                         logger.warning(f"Error processing file {filename}: {e}")
                 
+                # Update progress to complete
+                if progress_callback:
+                    progress_callback(len(files), desc="Download complete", total=len(files))
+                
                 # Generate status message
                 if file_type == "video":
-                    return f"Successfully imported {video_count} videos from dataset {dataset_id}"
+                    status_msg = f"Successfully imported {video_count} videos from dataset {dataset_id}"
                 elif file_type == "webdataset":
                     parts = []
                     if video_count > 0:
@@ -285,23 +306,37 @@ class HubDatasetBrowser:
                         parts.append(f"{image_count} image{'s' if image_count != 1 else ''}")
                         
                     if parts:
-                        return f"Successfully imported {' and '.join(parts)} from WebDataset archives"
+                        status_msg = f"Successfully imported {' and '.join(parts)} from WebDataset archives"
                     else:
-                        return f"No media was found in the WebDataset archives"
+                        status_msg = f"No media was found in the WebDataset archives"
+                else:
+                    status_msg = f"Unknown file type: {file_type}"
                 
-                return f"Unknown file type: {file_type}"
+                # Final notification
+                logger.info(f"✅ Download complete! {status_msg}")
+                # This info message will appear as a toast notification
+                gr.Info(f"✅ Download complete! {status_msg}")
+                
+                return status_msg
                 
         except Exception as e:
             error_msg = f"Error downloading {file_type} files: {str(e)}"
             logger.error(error_msg, exc_info=True)
+            gr.Error(error_msg)
             return error_msg
     
-    async def download_dataset(self, dataset_id: str, enable_splitting: bool = True) -> Tuple[str, str]:
+    async def download_dataset(
+        self, 
+        dataset_id: str, 
+        enable_splitting: bool = True,
+        progress_callback: Optional[Callable] = None
+    ) -> Tuple[str, str]:
         """Download a dataset and process its video/image content
         
         Args:
             dataset_id: The dataset ID to download
             enable_splitting: Whether to enable automatic video splitting
+            progress_callback: Optional callback for progress tracking
             
         Returns:
             Tuple of (loading_msg, status_msg)
@@ -327,9 +362,15 @@ class HubDatasetBrowser:
                 video_files = [s.rfilename for s in siblings if hasattr(s, 'rfilename') and s.rfilename.lower().endswith((".mp4", ".webm"))]
                 tar_files = [s.rfilename for s in siblings if hasattr(s, 'rfilename') and s.rfilename.lower().endswith(".tar")]
             
+            # Initialize progress tracking
+            total_files = len(video_files) + len(tar_files)
+            if progress_callback:
+                progress_callback(0, desc=f"Starting download of dataset: {dataset_id}", total=total_files)
+            
             # Create a temporary directory for downloads
             with tempfile.TemporaryDirectory() as temp_dir:
                 temp_path = Path(temp_dir)
+                files_processed = 0
                 
                 # If we have video files, download them individually
                 if video_files:
@@ -337,6 +378,14 @@ class HubDatasetBrowser:
                     logger.info(f"Downloading {len(video_files)} video files from {dataset_id}")
                     
                     for i, video_file in enumerate(video_files):
+                        # Update progress
+                        if progress_callback:
+                            progress_callback(
+                                files_processed, 
+                                desc=f"Downloading video {i+1}/{len(video_files)}: {Path(video_file).name}",
+                                total=total_files
+                            )
+                            
                         # Download the video file
                         try:
                             file_path = hf_hub_download(
@@ -369,6 +418,7 @@ class HubDatasetBrowser:
                                 
                             status_msg = f"Downloaded video {i+1}/{len(video_files)} from {dataset_id}"
                             logger.info(status_msg)
+                            files_processed += 1
                         except Exception as e:
                             logger.warning(f"Error downloading {video_file}: {e}")
                 
@@ -378,6 +428,14 @@ class HubDatasetBrowser:
                     logger.info(f"Downloading {len(tar_files)} WebDataset files from {dataset_id}")
                     
                     for i, tar_file in enumerate(tar_files):
+                        # Update progress
+                        if progress_callback:
+                            progress_callback(
+                                files_processed, 
+                                desc=f"Downloading WebDataset {i+1}/{len(tar_files)}: {Path(tar_file).name}",
+                                total=total_files
+                            )
+                            
                         try:
                             file_path = hf_hub_download(
                                 repo_id=dataset_id,
@@ -387,6 +445,7 @@ class HubDatasetBrowser:
                             )
                             status_msg = f"Downloaded WebDataset {i+1}/{len(tar_files)} from {dataset_id}"
                             logger.info(status_msg)
+                            files_processed += 1
                         except Exception as e:
                             logger.warning(f"Error downloading {tar_file}: {e}")
                 
@@ -394,6 +453,9 @@ class HubDatasetBrowser:
                 if not video_files and not tar_files:
                     loading_msg = f"{loading_msg}\n\nDownloading entire dataset repository..."
                     logger.info(f"No specific media files found, downloading entire repository for {dataset_id}")
+                    
+                    if progress_callback:
+                        progress_callback(0, desc=f"Downloading entire repository for {dataset_id}", total=1)
                     
                     try:
                         snapshot_download(
@@ -403,6 +465,9 @@ class HubDatasetBrowser:
                         )
                         status_msg = f"Downloaded entire repository for {dataset_id}"
                         logger.info(status_msg)
+                        
+                        if progress_callback:
+                            progress_callback(1, desc="Repository download complete", total=1)
                     except Exception as e:
                         logger.error(f"Error downloading dataset snapshot: {e}", exc_info=True)
                         return loading_msg, f"Error downloading dataset: {str(e)}"
@@ -410,6 +475,9 @@ class HubDatasetBrowser:
                 # Process the downloaded files
                 loading_msg = f"{loading_msg}\n\nProcessing downloaded files..."
                 logger.info(f"Processing downloaded files from {dataset_id}")
+                
+                if progress_callback:
+                    progress_callback(0, desc="Processing downloaded files", total=100)
                 
                 # Count imported files
                 video_count = 0
@@ -420,10 +488,27 @@ class HubDatasetBrowser:
                 async def process_files():
                     nonlocal video_count, image_count, tar_count
                     
+                    # Get total number of files to process
+                    file_count = 0
+                    for root, _, files in os.walk(temp_path):
+                        file_count += len(files)
+                    
+                    processed = 0
+                    
                     # Process all files in the temp directory
                     for root, _, files in os.walk(temp_path):
                         for file in files:
                             file_path = Path(root) / file
+                            
+                            # Update progress (every 5 files to avoid too many updates)
+                            if progress_callback and processed % 5 == 0:
+                                if file_count > 0:
+                                    progress_percent = int((processed / file_count) * 100)
+                                    progress_callback(
+                                        progress_percent, 
+                                        desc=f"Processing files: {processed}/{file_count}",
+                                        total=100
+                                    )
                             
                             # Process videos
                             if file.lower().endswith((".mp4", ".webm")):
@@ -490,9 +575,15 @@ class HubDatasetBrowser:
                                     logger.info(f"Extracted {vid_count} videos and {img_count} images from {file}")
                                 except Exception as e:
                                     logger.error(f"Error processing WebDataset file {file_path}: {str(e)}", exc_info=True)
+                            
+                            processed += 1
                                     
                 # Run the processing asynchronously
                 await process_files()
+                
+                # Update progress to complete
+                if progress_callback:
+                    progress_callback(100, desc="Processing complete", total=100)
                 
                 # Generate final status message
                 parts = []

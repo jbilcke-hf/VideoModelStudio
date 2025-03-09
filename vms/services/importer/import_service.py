@@ -4,7 +4,7 @@ Delegates to specialized handler classes for different import types.
 """
 
 import logging
-from typing import List, Dict, Optional, Tuple, Any, Union
+from typing import List, Dict, Optional, Tuple, Any, Union, Callable
 from pathlib import Path
 import gradio as gr
 
@@ -76,27 +76,40 @@ class ImportService:
         """
         return self.hub_browser.get_dataset_info(dataset_id)
     
-    async def download_dataset(self, dataset_id: str, enable_splitting: bool = True) -> Tuple[str, str]:
+    async def download_dataset(
+        self, 
+        dataset_id: str, 
+        enable_splitting: bool = True,
+        progress_callback: Optional[Callable] = None
+    ) -> Tuple[str, str]:
         """Download a dataset and process its video/image content
         
         Args:
             dataset_id: The dataset ID to download
             enable_splitting: Whether to enable automatic video splitting
+            progress_callback: Optional callback for progress tracking
             
         Returns:
             Tuple of (loading_msg, status_msg)
         """
-        return await self.hub_browser.download_dataset(dataset_id, enable_splitting)
+        return await self.hub_browser.download_dataset(dataset_id, enable_splitting, progress_callback)
     
-    async def download_file_group(self, dataset_id: str, file_type: str, enable_splitting: bool = True) -> str:
+    async def download_file_group(
+        self, 
+        dataset_id: str, 
+        file_type: str, 
+        enable_splitting: bool = True,
+        progress_callback: Optional[Callable] = None
+    ) -> str:
         """Download a group of files (videos or WebDatasets)
         
         Args:
             dataset_id: The dataset ID
             file_type: Type of file ("video" or "webdataset")
             enable_splitting: Whether to enable automatic video splitting
+            progress_callback: Optional callback for progress tracking
             
         Returns:
             Status message
         """
-        return await self.hub_browser.download_file_group(dataset_id, file_type, enable_splitting)
+        return await self.hub_browser.download_file_group(dataset_id, file_type, enable_splitting, progress_callback)
