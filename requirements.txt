@@ -40,5 +40,5 @@ av==14.1.0
 git+https://github.com/LLaVA-VL/LLaVA-NeXT.git
 
 # for our frontend
-gradio==5.15.0
+gradio==5.20.1
 gradio_toggle
