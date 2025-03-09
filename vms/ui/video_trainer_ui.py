@@ -5,7 +5,7 @@ import logging
 import asyncio
 from typing import Any, Optional, Dict, List, Union, Tuple
 
-from ..services import TrainingService, CaptioningService, SplittingService, ImportService
+from ..services import TrainingService, CaptioningService, SplittingService, ImportService, MonitoringService
 from ..config import (
     STORAGE_PATH, VIDEOS_TO_SPLIT_PATH, STAGING_PATH, OUTPUT_PATH,
     TRAINING_PATH, LOG_FILE_PATH, TRAINING_PRESETS, TRAINING_VIDEOS_PATH, MODEL_PATH, OUTPUT_PATH,
@@ -28,7 +28,7 @@ from ..utils import (
     format_media_title,
     TrainingLogParser
 )
-from ..tabs import ImportTab, SplitTab, CaptionTab, TrainTab, ManageTab
+from ..tabs import ImportTab, SplitTab, CaptionTab, TrainTab, MonitorTab, ManageTab
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -44,7 +44,11 @@ class VideoTrainerUI:
         self.splitter = SplittingService()
         self.importer = ImportService()
         self.captioner = CaptioningService()
-        
+        self.monitor = MonitoringService()
+
+        # Start the monitoring service on app creation
+        self.monitor.start_monitoring()
+    
         # Recovery status from any interrupted training
         recovery_result = self.trainer.recover_interrupted_training()
         # Add null check for recovery_result
@@ -81,6 +85,7 @@ class VideoTrainerUI:
                 self.tabs["split_tab"] = SplitTab(self)
                 self.tabs["caption_tab"] = CaptionTab(self)
                 self.tabs["train_tab"] = TrainTab(self)
+                self.tabs["monitor_tab"] = MonitorTab(self)
                 self.tabs["manage_tab"] = ManageTab(self)
                 
                 # Create tab UI components

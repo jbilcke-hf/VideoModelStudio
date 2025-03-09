@@ -120,6 +120,33 @@ As this is not automatic, then click on "Restart" in the space dev mode UI widge
 
 I haven't tested it, but you can try to provided Dockerfile
 
+### Prerequisites
+
+About Python:
+
+I haven't tested Python 3.11 or 3.12, but I noticed some incompatibilities with Python 3.13 dependencies failing to install.
+
+So I recommend you to install [pyenv](https://github.com/pyenv/pyenv) to switch between versions of Python.
+
+If you are on macOS, you might already have some versions of Python installed, you can see them by typing:
+
+```bash
+% python3.10 --version
+Python 3.10.16
+% python3.11 --version
+Python 3.11.11
+% python3.12 --version
+Python 3.12.9
+% python3.13 --version
+Python 3.13.2
+```
+
+Once pyenv is installed you can type:
+
+```bash
+pyenv install 3.10.16
+```
+
 ### Full installation in local
 
 the full installation requires:
@@ -127,7 +154,7 @@ the full installation requires:
 - CUDA 12
 - Python 3.10
 
-This is because of flash attention, which is defined in the `requirements.txt` using an URL to download a prebuilt wheel (python bindings for a native library)
+This is because of flash attention, which is defined in the `requirements.txt` using an URL to download a prebuilt wheel expecting this exact configuration (python bindings for a native library)
 
 ```bash
 ./setup.sh
@@ -153,7 +180,7 @@ Here is how to do solution 3:
 Note: please make sure you properly define the environment variables for `STORAGE_PATH` (eg. `/data/`) and `HF_HOME` (eg. `/data/huggingface/`)
 
 ```bash
-python app.py
+python3.10 app.py
 ```
 
 ### Running locally
