@@ -65,7 +65,7 @@ def main():
     ]
 
     # Launch the Gradio app
-    app.queue(default_concurrency_limit=1).launch(
+    app.queue(default_concurrency_limit=2).launch(
         server_name="0.0.0.0",
         allowed_paths=allowed_paths
     )

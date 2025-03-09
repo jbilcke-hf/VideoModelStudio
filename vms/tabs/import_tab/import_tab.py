@@ -5,6 +5,7 @@ Parent import tab for Video Model Studio UI that contains sub-tabs
 import gradio as gr
 import logging
 import asyncio
+import threading
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
 
@@ -82,44 +83,97 @@ class ImportTab(BaseTab):
         self.youtube_tab.connect_events()
         self.hub_tab.connect_events()
     
-    async def on_import_success(self, enable_splitting, enable_automatic_content_captioning, prompt_prefix):
+    def on_import_success(self, enable_splitting, enable_automatic_content_captioning, prompt_prefix):
         """Handle successful import of files"""
         videos = self.app.tabs["split_tab"].list_unprocessed_videos()
         
         # If scene detection isn't already running and there are videos to process,
         # and auto-splitting is enabled, start the detection
         if videos and not self.app.splitter.is_processing() and enable_splitting:
-            await self.app.tabs["split_tab"].start_scene_detection(enable_splitting)
+            # Start the scene detection in a separate thread
+            self._start_scene_detection_bg(enable_splitting)
             msg = "Starting automatic scene detection..."
         else:
             # Just copy files without splitting if auto-split disabled
-            for video_file in VIDEOS_TO_SPLIT_PATH.glob("*.mp4"):
-                await self.app.splitter.process_video(video_file, enable_splitting=False)
+            self._start_copy_files_bg(enable_splitting)
             msg = "Copying videos without splitting..."
         
         self.app.tabs["caption_tab"].copy_files_to_training_dir(prompt_prefix)
 
-        # Start auto-captioning if enabled, and handle async generator properly
+        # Start auto-captioning if enabled
         if enable_automatic_content_captioning:
-            # Create a background task for captioning
-            asyncio.create_task(self.app.tabs["caption_tab"]._process_caption_generator(
-                DEFAULT_CAPTIONING_BOT_INSTRUCTIONS,
-                prompt_prefix
-            ))
+            self._start_captioning_bg(DEFAULT_CAPTIONING_BOT_INSTRUCTIONS, prompt_prefix)
         
-        return {
-            "tabs": gr.Tabs(selected="split_tab"),
-            "video_list": videos,
-            "detect_status": msg
-        }
+        # Return the correct tuple of values as expected by the UI
+        return gr.update(selected="split_tab"), videos, msg
+    
+    def _start_scene_detection_bg(self, enable_splitting):
+        """Start scene detection in a background thread"""
+        def run_async_in_thread():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(
+                    self.app.tabs["split_tab"].start_scene_detection(enable_splitting)
+                )
+            except Exception as e:
+                logger.error(f"Error in background scene detection: {str(e)}", exc_info=True)
+            finally:
+                loop.close()
+        
+        thread = threading.Thread(target=run_async_in_thread)
+        thread.daemon = True
+        thread.start()
+    
+    def _start_copy_files_bg(self, enable_splitting):
+        """Start copying files in a background thread"""
+        def run_async_in_thread():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                async def copy_files():
+                    for video_file in VIDEOS_TO_SPLIT_PATH.glob("*.mp4"):
+                        await self.app.splitter.process_video(video_file, enable_splitting=False)
+                
+                loop.run_until_complete(copy_files())
+            except Exception as e:
+                logger.error(f"Error in background file copying: {str(e)}", exc_info=True)
+            finally:
+                loop.close()
+        
+        thread = threading.Thread(target=run_async_in_thread)
+        thread.daemon = True
+        thread.start()
+    
+    def _start_captioning_bg(self, instructions, prompt_prefix):
+        """Start captioning in a background thread"""
+        def run_async_in_thread():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(
+                    self.app.tabs["caption_tab"]._process_caption_generator(
+                        instructions, prompt_prefix
+                    )
+                )
+            except Exception as e:
+                logger.error(f"Error in background captioning: {str(e)}", exc_info=True)
+            finally:
+                loop.close()
+        
+        thread = threading.Thread(target=run_async_in_thread)
+        thread.daemon = True
+        thread.start()
         
     async def update_titles_after_import(self, enable_splitting, enable_automatic_content_captioning, prompt_prefix):
         """Handle post-import updates including titles"""
-        import_result = await self.on_import_success(enable_splitting, enable_automatic_content_captioning, prompt_prefix)
-        titles = self.app.update_titles()
-        return (
-            import_result["tabs"],
-            import_result["video_list"],
-            import_result["detect_status"],
-            *titles
+        # Call the non-async version since we need to return immediately for the UI
+        tabs, video_list, detect_status = self.on_import_success(
+            enable_splitting, enable_automatic_content_captioning, prompt_prefix
         )
+        
+        # Get updated titles
+        titles = self.app.update_titles()
+        
+        # Return all expected outputs
+        return tabs, video_list, detect_status, *titles

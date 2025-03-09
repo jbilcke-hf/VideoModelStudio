@@ -6,6 +6,7 @@ Handles browsing, searching, and importing datasets from the Hugging Face Hub.
 import gradio as gr
 import logging
 import asyncio
+import threading
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
 
@@ -20,6 +21,7 @@ class HubTab(BaseTab):
         super().__init__(app_state)
         self.id = "hub_tab"
         self.title = "Import from Hugging Face"
+        self.is_downloading = False
     
     def create(self, parent=None) -> gr.Tab:
         """Create the Hub tab UI components"""
@@ -33,8 +35,8 @@ class HubTab(BaseTab):
                 
                 with gr.Row():
                     self.components["dataset_search"] = gr.Textbox(
-                        label="Search Hugging Face Datasets",
-                        placeholder="Search for video datasets..."
+                        label="Search Hugging Face Datasets (eg. cakeify, disney, rickroll..)",
+                        placeholder="Search for video datasets (eg. cakeify, disney, rickroll..)"
                     )
                 
                 with gr.Row():
@@ -46,7 +48,7 @@ class HubTab(BaseTab):
                     
                     with gr.Column(scale=3):
                         self.components["dataset_results"] = gr.Dataframe(
-                            headers=["id", "title", "downloads"],
+                            headers=["Dataset ID"],  # Simplified to show only dataset ID
                             interactive=False,
                             wrap=True,
                             row_count=10,
@@ -58,6 +60,7 @@ class HubTab(BaseTab):
                         self.components["dataset_info"] = gr.Markdown("Select a dataset to see details")
                         self.components["dataset_id"] = gr.State(value=None)
                         self.components["file_type"] = gr.State(value=None)
+                        self.components["download_in_progress"] = gr.State(value=False)
                         
                         # Files section that appears when a dataset is selected
                         with gr.Column(visible=False) as files_section:
@@ -66,27 +69,23 @@ class HubTab(BaseTab):
                             gr.Markdown("## Files:")
                             
                             # Video files row (appears if videos are present)
-                            with gr.Row(visible=False) as video_files_row:
+                            with gr.Row() as video_files_row:
                                 self.components["video_files_row"] = video_files_row
                                 
-                                with gr.Column(scale=4):
-                                    self.components["video_count_text"] = gr.Markdown("Contains 0 video files")
+                                self.components["video_count_text"] = gr.Markdown("Contains 0 video files")
                                 
-                                with gr.Column(scale=1):
-                                    self.components["download_videos_btn"] = gr.Button("Download", variant="primary")
+                                self.components["download_videos_btn"] = gr.Button("Download", variant="primary")
                             
                             # WebDataset files row (appears if tar files are present)
-                            with gr.Row(visible=False) as webdataset_files_row:
+                            with gr.Row() as webdataset_files_row:
                                 self.components["webdataset_files_row"] = webdataset_files_row
                                 
-                                with gr.Column(scale=4):
-                                    self.components["webdataset_count_text"] = gr.Markdown("Contains 0 WebDataset (.tar) files")
+                                self.components["webdataset_count_text"] = gr.Markdown("Contains 0 WebDataset (.tar) files")
                                 
-                                with gr.Column(scale=1):
-                                    self.components["download_webdataset_btn"] = gr.Button("Download", variant="primary")
+                                self.components["download_webdataset_btn"] = gr.Button("Download", variant="primary")
                         
-                        # Status and loading indicators
-                        self.components["dataset_loading"] = gr.Markdown(visible=False)
+                        # Status indicator 
+                        self.components["status_output"] = gr.Markdown("")
             
             return tab
     
@@ -102,7 +101,7 @@ class HubTab(BaseTab):
             ]
         )
         
-        # Dataset selection event - FIX HERE
+        # Dataset selection event
         self.components["dataset_results"].select(
             fn=self.display_dataset_info,
             outputs=[
@@ -112,7 +111,8 @@ class HubTab(BaseTab):
                 self.components["video_files_row"],
                 self.components["video_count_text"],
                 self.components["webdataset_files_row"],
-                self.components["webdataset_count_text"]
+                self.components["webdataset_count_text"],
+                self.components["status_output"]  # Reset status output
             ]
         )
         
@@ -128,20 +128,11 @@ class HubTab(BaseTab):
                 self.components["file_type"]
             ],
             outputs=[
-                self.components["dataset_loading"],
-                self.components["import_status"]
-            ]
-        ).success(
-            fn=self.app.tabs["import_tab"].on_import_success,
-            inputs=[
-                self.components["enable_automatic_video_split"],
-                self.components["enable_automatic_content_captioning"],
-                self.app.tabs["caption_tab"].components["custom_prompt_prefix"]
-            ],
-            outputs=[
-                self.app.tabs_component,
-                self.app.tabs["split_tab"].components["video_list"],
-                self.app.tabs["split_tab"].components["detect_status"]
+                self.components["status_output"],
+                self.components["import_status"],
+                self.components["download_videos_btn"],
+                self.components["download_webdataset_btn"],
+                self.components["download_in_progress"]
             ]
         )
         
@@ -157,20 +148,11 @@ class HubTab(BaseTab):
                 self.components["file_type"]
             ],
             outputs=[
-                self.components["dataset_loading"],
-                self.components["import_status"]
-            ]
-        ).success(
-            fn=self.app.tabs["import_tab"].on_import_success,
-            inputs=[
-                self.components["enable_automatic_video_split"],
-                self.components["enable_automatic_content_captioning"],
-                self.app.tabs["caption_tab"].components["custom_prompt_prefix"]
-            ],
-            outputs=[
-                self.app.tabs_component,
-                self.app.tabs["split_tab"].components["video_list"],
-                self.app.tabs["split_tab"].components["detect_status"]
+                self.components["status_output"],
+                self.components["import_status"],
+                self.components["download_videos_btn"],
+                self.components["download_webdataset_btn"],
+                self.components["download_in_progress"]
             ]
         )
 
@@ -186,12 +168,16 @@ class HubTab(BaseTab):
         """Search datasets on the Hub matching the query"""
         try:
             logger.info(f"Searching for datasets with query: '{query}'")
-            results = self.app.importer.search_datasets(query)
+            results_full = self.app.importer.search_datasets(query)
+            
+            # Extract just the first column (dataset IDs) for display
+            results = [[row[0]] for row in results_full]
+            
             return results, gr.update(visible=True)
         except Exception as e:
             logger.error(f"Error searching datasets: {str(e)}", exc_info=True)
-            return [[f"Error: {str(e)}", "", ""]], gr.update(visible=True)
-    
+            return [[f"Error: {str(e)}"]], gr.update(visible=True)
+
     def display_dataset_info(self, evt: gr.SelectData):
         """Display detailed information about the selected dataset"""
         try:
@@ -204,9 +190,11 @@ class HubTab(BaseTab):
                     gr.update(visible=False), # video_files_row
                     "",                     # video_count_text
                     gr.update(visible=False), # webdataset_files_row
-                    ""                      # webdataset_count_text
+                    "",                      # webdataset_count_text
+                    ""                       # status_output
                 )
             
+            # Extract dataset_id from the simplified format
             dataset_id = evt.value[0] if isinstance(evt.value, list) else evt.value
             logger.info(f"Getting dataset info for: {dataset_id}")
             
@@ -225,7 +213,8 @@ class HubTab(BaseTab):
                 gr.update(visible=video_count > 0),      # video_files_row
                 f"Contains {video_count} video file{'s' if video_count != 1 else ''}", # video_count_text
                 gr.update(visible=webdataset_count > 0), # webdataset_files_row
-                f"Contains {webdataset_count} WebDataset (.tar) file{'s' if webdataset_count != 1 else ''}" # webdataset_count_text
+                f"Contains {webdataset_count} WebDataset (.tar) file{'s' if webdataset_count != 1 else ''}", # webdataset_count_text
+                ""                                       # status_output
             )
         except Exception as e:
             logger.error(f"Error displaying dataset info: {str(e)}", exc_info=True)
@@ -236,38 +225,91 @@ class HubTab(BaseTab):
                 gr.update(visible=False),                      # video_files_row
                 "",                                            # video_count_text
                 gr.update(visible=False),                      # webdataset_files_row
-                ""                                             # webdataset_count_text
+                "",                                            # webdataset_count_text
+                ""                                             # status_output
             )
-    
-    def download_file_group(self, dataset_id: str, enable_splitting: bool, file_type: str) -> Tuple[gr.update, str]:
-        """Handle download of a group of files (videos or WebDatasets)"""
+
+    async def _download_with_progress(self, dataset_id, file_type, enable_splitting, progress_callback):
+        """Wrapper for download_file_group that integrates with progress tracking"""
+        try:
+            # Set up the progress callback adapter
+            def progress_adapter(progress_value, desc=None, total=None):
+                # For a progress bar, we need to convert the values to a 0-1 range
+                if isinstance(progress_value, (int, float)):
+                    if total is not None and total > 0:
+                        # If we have a total, calculate the fraction
+                        fraction = min(1.0, progress_value / total)
+                    else:
+                        # Otherwise, just use the value directly (assumed to be 0-1)
+                        fraction = min(1.0, progress_value)
+                    
+                    # Update the progress with the calculated fraction
+                    progress_callback(fraction, desc=desc)
+            
+            # Call the actual download function with our adapter
+            result = await self.app.importer.download_file_group(
+                dataset_id, 
+                file_type, 
+                enable_splitting,
+                progress_callback=progress_adapter
+            )
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error in download with progress: {str(e)}", exc_info=True)
+            return f"Error: {str(e)}"
+
+    def download_file_group(self, dataset_id: str, enable_splitting: bool, file_type: str, progress=gr.Progress()) -> Tuple:
+        """Handle download of a group of files (videos or WebDatasets) with progress tracking"""
         try:
             if not dataset_id:
-                return gr.update(visible=False), "No dataset selected"
+                return ("No dataset selected", 
+                       "No dataset selected", 
+                       gr.update(), 
+                       gr.update(), 
+                       False)
             
             logger.info(f"Starting download of {file_type} files from dataset: {dataset_id}")
             
-            # Show loading indicator
-            loading_msg = gr.update(
-                value=f"## Downloading {file_type} files from {dataset_id}\n\nThis may take some time...",
-                visible=True
+            # Initialize progress tracking
+            progress(0, desc=f"Starting download of {file_type} files from {dataset_id}")
+            
+            # Disable download buttons during the process
+            videos_btn_update = gr.update(interactive=False)
+            webdataset_btn_update = gr.update(interactive=False)
+            
+            # Run the download function with progress tracking
+            # We need to use asyncio.run to run the coroutine in a synchronous context
+            result = asyncio.run(self._download_with_progress(
+                dataset_id, 
+                file_type, 
+                enable_splitting,
+                progress
+            ))
+            
+            # When download is complete, update the UI
+            progress(1.0, desc="Download complete!")
+            
+            # Create a success message
+            success_msg = f"✅ Download complete! {result}"
+            
+            # Update the UI components
+            return (
+                success_msg,                 # status_output - shows the successful result
+                result,                      # import_status
+                gr.update(interactive=True), # download_videos_btn
+                gr.update(interactive=True), # download_webdataset_btn
+                False                        # download_in_progress
             )
-            status_msg = f"Downloading {file_type} files from {dataset_id}..."
-            
-            # Use the async version in a non-blocking way
-            asyncio.create_task(self._download_file_group_bg(dataset_id, file_type, enable_splitting))
-            
-            return loading_msg, status_msg
             
         except Exception as e:
-            error_msg = f"Error initiating download: {str(e)}"
+            error_msg = f"Error downloading {file_type} files: {str(e)}"
             logger.error(error_msg, exc_info=True)
-            return gr.update(visible=False), error_msg
-    
-    async def _download_file_group_bg(self, dataset_id: str, file_type: str, enable_splitting: bool):
-        """Background task for group file download"""
-        try:
-            # This will execute in the background
-            await self.app.importer.download_file_group(dataset_id, file_type, enable_splitting)
-        except Exception as e:
-            logger.error(f"Error in background file group download: {str(e)}", exc_info=True)
+            return (
+                f"❌ Error: {error_msg}",     # status_output
+                error_msg,                   # import_status
+                gr.update(interactive=True), # download_videos_btn
+                gr.update(interactive=True), # download_webdataset_btn
+                False                        # download_in_progress
+            )

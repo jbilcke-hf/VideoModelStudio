@@ -72,7 +72,33 @@ class VideoTrainerUI:
 
         # Log recovery status
         logger.info(f"Initialization complete. Recovery status: {self.recovery_status}")
+    
+    def add_periodic_callback(self, callback_fn, interval=1.0):
+        """Add a periodic callback function to the UI
         
+        Args:
+            callback_fn: Function to call periodically
+            interval: Time in seconds between calls (default: 1.0)
+        """
+        try:
+            # Store a reference to the callback function
+            if not hasattr(self, "_periodic_callbacks"):
+                self._periodic_callbacks = []
+            
+            self._periodic_callbacks.append(callback_fn)
+            
+            # Add the callback to the Gradio app
+            self.app.add_callback(
+                interval,  # Interval in seconds
+                callback_fn,  # Function to call
+                inputs=None,  # No inputs needed
+                outputs=list(self.components.values())  # All components as possible outputs
+            )
+            
+            logger.info(f"Added periodic callback {callback_fn.__name__} with interval {interval}s")
+        except Exception as e:
+            logger.error(f"Error adding periodic callback: {e}", exc_info=True)
+            
     def create_ui(self):
         """Create the main Gradio UI"""
         with gr.Blocks(title="🎥 Video Model Studio") as app:
