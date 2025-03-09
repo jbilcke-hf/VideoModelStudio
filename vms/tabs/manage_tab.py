@@ -23,7 +23,7 @@ class ManageTab(BaseTab):
     def __init__(self, app_state):
         super().__init__(app_state)
         self.id = "manage_tab"
-        self.title = "5️⃣  Manage"
+        self.title = "6️⃣  Manage"
     
     def create(self, parent=None) -> gr.TabItem:
         """Create the Manage tab UI components"""

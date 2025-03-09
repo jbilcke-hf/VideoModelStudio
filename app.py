@@ -14,6 +14,7 @@ from vms.config import (
     OUTPUT_PATH, ASK_USER_TO_DUPLICATE_SPACE, 
     HF_API_TOKEN
 )
+
 from vms.ui.video_trainer_ui import VideoTrainerUI
 
 # Configure logging
@@ -37,7 +38,9 @@ To avoid overpaying for your space, you can configure the auto-sleep settings to
 
     # Create the main application UI
     ui = VideoTrainerUI()
-    return ui.create_ui()
+    app = ui.create_ui()
+
+    return app
 
 def main():
     """Main entry point for the application"""

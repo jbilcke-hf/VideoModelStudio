@@ -2,10 +2,11 @@ numpy>=1.26.4
 
 # to quote a-r-r-o-w/finetrainers:
 # It is recommended to use Pytorch 2.5.1 or above for training. Previous versions can lead to completely black videos, OOM errors, or other issues and are not tested.
+
+# on some system (Python 3.13+) those do not work:
 torch==2.5.1
 torchvision==0.20.1
 torchao==0.6.1
-
 
 huggingface_hub
 hf_transfer>=0.1.8
@@ -41,3 +42,6 @@ git+https://github.com/LLaVA-VL/LLaVA-NeXT.git
 # for our frontend
 gradio==5.20.1
 gradio_toggle
+
+# used for the monitor
+matplotlib
