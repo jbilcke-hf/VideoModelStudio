@@ -45,7 +45,7 @@ class MonitorTab(BaseTab):
         super().__init__(app_state)
         self.id = "monitor_tab"
         self.title = "4️⃣  Monitor"
-        self.refresh_interval = 2  # Changed from 5 to 2 seconds
+        self.refresh_interval = 8
     
     def create(self, parent=None) -> gr.TabItem:
         """Create the Monitor tab UI components"""
@@ -66,8 +66,8 @@ class MonitorTab(BaseTab):
                 with gr.Tab(label="Memory Usage") as memory_tab:
                     self.components["memory_plot"] = gr.Plot()
                     
-                with gr.Tab(label="Per-Core CPU") as per_core_tab:
-                    self.components["per_core_plot"] = gr.Plot()
+                #with gr.Tab(label="Per-Core CPU") as per_core_tab:
+                #    self.components["per_core_plot"] = gr.Plot()
 
             # System information summary in columns
             with gr.Row():
@@ -117,7 +117,7 @@ class MonitorTab(BaseTab):
                 self.components["current_metrics"],
                 self.components["cpu_plot"],
                 self.components["memory_plot"],
-                self.components["per_core_plot"]
+                #self.components["per_core_plot"]
             ]
         )
         
@@ -133,7 +133,7 @@ class MonitorTab(BaseTab):
                 self.components["current_metrics"],
                 self.components["cpu_plot"],
                 self.components["memory_plot"],
-                self.components["per_core_plot"]
+                #self.components["per_core_plot"]
             ]
         )
     
@@ -167,7 +167,7 @@ class MonitorTab(BaseTab):
             self.components["current_metrics"].value,
             self.components["cpu_plot"].value,
             self.components["memory_plot"].value, 
-            self.components["per_core_plot"].value
+            #self.components["per_core_plot"].value
         )
     
     def refresh_all(self) -> Tuple:
@@ -187,13 +187,13 @@ class MonitorTab(BaseTab):
             storage_info_html = self.format_storage_info()
             
             # Get current metrics
-            current_metrics = self.app.monitor.get_current_metrics()
-            metrics_html = self.format_current_metrics(current_metrics)
+            # current_metrics = self.app.monitor.get_current_metrics()
+            metrics_html = "" # self.format_current_metrics(current_metrics)
             
             # Generate plots
             cpu_plot = self.app.monitor.generate_cpu_plot()
             memory_plot = self.app.monitor.generate_memory_plot()
-            per_core_plot = self.app.monitor.generate_per_core_plot()
+            #per_core_plot = self.app.monitor.generate_per_core_plot()
             
             return (
                 system_info_html, 
@@ -203,7 +203,7 @@ class MonitorTab(BaseTab):
                 metrics_html, 
                 cpu_plot, 
                 memory_plot, 
-                per_core_plot
+                #per_core_plot
             )
             
         except Exception as e:
@@ -215,7 +215,9 @@ class MonitorTab(BaseTab):
                 error_msg,
                 error_msg,
                 error_msg,
-                None, None, None
+                None,
+                None,
+                #None
             )
     
     def format_system_info(self, system_info: Dict[str, Any]) -> str:
