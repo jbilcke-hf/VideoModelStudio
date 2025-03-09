@@ -29,10 +29,13 @@ decord.bridge.set_bridge("torch")
 logger = get_logger()
 
 
+# fmt: off
 MAX_PRECOMPUTABLE_ITEMS_LIMIT = 1024
 COMMON_CAPTION_FILES = ["prompt.txt", "prompts.txt", "caption.txt", "captions.txt"]
 COMMON_VIDEO_FILES = ["video.txt", "videos.txt"]
 COMMON_IMAGE_FILES = ["image.txt", "images.txt"]
+COMMON_WDS_CAPTION_COLUMN_NAMES = ["txt", "text", "caption", "captions", "short_caption", "long_caption", "prompt", "prompts", "short_prompt", "long_prompt", "description", "descriptions", "alt_text", "alt_texts", "alt_caption", "alt_captions", "alt_prompt", "alt_prompts", "alt_description", "alt_descriptions", "image_description", "image_descriptions", "image_caption", "image_captions", "image_prompt", "image_prompts", "image_alt_text", "image_alt_texts", "image_alt_caption", "image_alt_captions", "image_alt_prompt", "image_alt_prompts", "image_alt_description", "image_alt_descriptions", "video_description", "video_descriptions", "video_caption", "video_captions", "video_prompt", "video_prompts", "video_alt_text", "video_alt_texts", "video_alt_caption", "video_alt_captions", "video_alt_prompt", "video_alt_prompts", "video_alt_description"]
+# fmt: on
 
 
 class ImageCaptionFilePairDataset(torch.utils.data.IterableDataset, torch.distributed.checkpoint.stateful.Stateful):
@@ -420,22 +423,69 @@ class VideoFolderDataset(torch.utils.data.IterableDataset, torch.distributed.che
 
 
 class ImageWebDataset(torch.utils.data.IterableDataset, torch.distributed.checkpoint.stateful.Stateful):
-    def __init__(self, dataset_name: str, infinite: bool = False) -> None:
+    def __init__(
+        self,
+        dataset_name: str,
+        infinite: bool = False,
+        column_names: Union[str, List[str]] = "__auto__",
+        weights: Dict[str, float] = -1,
+        **kwargs,
+    ) -> None:
         super().__init__()
+
+        assert weights == -1 or isinstance(
+            weights, dict
+        ), "`weights` must be a dictionary of probabilities for each caption column"
 
         self.dataset_name = dataset_name
         self.infinite = infinite
 
         data = datasets.load_dataset(dataset_name, split="train", streaming=True)
-        data = data.rename_column("txt", "caption")
-        for column_name in constants.SUPPORTED_IMAGE_FILE_EXTENSIONS:
-            if column_name in data.column_names:
-                data = data.cast_column(column_name, datasets.Image(mode="RGB"))
-                data = data.rename_column(column_name, "image")
+
+        if column_names == "__auto__":
+            if weights == -1:
+                caption_columns = [column for column in data.column_names if column in COMMON_WDS_CAPTION_COLUMN_NAMES]
+                if len(caption_columns) == 0:
+                    raise ValueError(
+                        f"No common caption column found in the dataset. Supported columns are: {COMMON_WDS_CAPTION_COLUMN_NAMES}"
+                    )
+                weights = [1] * len(caption_columns)
+            else:
+                caption_columns = list(weights.keys())
+                weights = list(weights.values())
+                if not all(column in data.column_names for column in caption_columns):
+                    raise ValueError(
+                        f"Caption columns {caption_columns} not found in the dataset. Available columns are: {data.column_names}"
+                    )
+        else:
+            if isinstance(column_names, str):
+                if column_names not in data.column_names:
+                    raise ValueError(
+                        f"Caption column {column_names} not found in the dataset. Available columns are: {data.column_names}"
+                    )
+                caption_columns = [column_names]
+                weights = [1] if weights == -1 else [weights.get(column_names)]
+            elif isinstance(column_names, list):
+                if not all(column in data.column_names for column in column_names):
+                    raise ValueError(
+                        f"Caption columns {column_names} not found in the dataset. Available columns are: {data.column_names}"
+                    )
+                caption_columns = column_names
+                weights = [1] if weights == -1 else [weights.get(column) for column in column_names]
+            else:
+                raise ValueError(f"Unsupported type for column_name: {type(column_names)}")
+
+        for column_names in constants.SUPPORTED_IMAGE_FILE_EXTENSIONS:
+            if column_names in data.column_names:
+                data = data.cast_column(column_names, datasets.Image(mode="RGB"))
+                data = data.rename_column(column_names, "image")
+                break
 
         self._data = data
         self._sample_index = 0
         self._precomputable_once = False
+        self._caption_columns = caption_columns
+        self._weights = weights
 
     def _get_data_iter(self):
         if self._sample_index == 0:
@@ -446,6 +496,9 @@ class ImageWebDataset(torch.utils.data.IterableDataset, torch.distributed.checkp
         while True:
             for sample in self._get_data_iter():
                 self._sample_index += 1
+                caption_column = random.choices(self._caption_columns, weights=self._weights, k=1)[0]
+                sample["caption"] = sample[caption_column]
+                sample["image"] = _preprocess_image(sample["image"])
                 yield sample
 
             if not self.infinite:
@@ -464,22 +517,69 @@ class ImageWebDataset(torch.utils.data.IterableDataset, torch.distributed.checkp
 
 
 class VideoWebDataset(torch.utils.data.IterableDataset, torch.distributed.checkpoint.stateful.Stateful):
-    def __init__(self, dataset_name: str, infinite: bool = False) -> None:
+    def __init__(
+        self,
+        dataset_name: str,
+        infinite: bool = False,
+        column_names: Union[str, List[str]] = "__auto__",
+        weights: Dict[str, float] = -1,
+        **kwargs,
+    ) -> None:
         super().__init__()
+
+        assert weights == -1 or isinstance(
+            weights, dict
+        ), "`weights` must be a dictionary of probabilities for each caption column"
 
         self.dataset_name = dataset_name
         self.infinite = infinite
 
         data = datasets.load_dataset(dataset_name, split="train", streaming=True)
-        data = data.rename_column("txt", "caption")
-        for column_name in constants.SUPPORTED_VIDEO_FILE_EXTENSIONS:
-            if column_name in data.column_names:
-                data = data.cast_column(column_name, datasets.Video())
-                data = data.rename_column(column_name, "video")
+
+        if column_names == "__auto__":
+            if weights == -1:
+                caption_columns = [column for column in data.column_names if column in COMMON_WDS_CAPTION_COLUMN_NAMES]
+                if len(caption_columns) == 0:
+                    raise ValueError(
+                        f"No common caption column found in the dataset. Supported columns are: {COMMON_WDS_CAPTION_COLUMN_NAMES}"
+                    )
+                weights = [1] * len(caption_columns)
+            else:
+                caption_columns = list(weights.keys())
+                weights = list(weights.values())
+                if not all(column in data.column_names for column in caption_columns):
+                    raise ValueError(
+                        f"Caption columns {caption_columns} not found in the dataset. Available columns are: {data.column_names}"
+                    )
+        else:
+            if isinstance(column_names, str):
+                if column_names not in data.column_names:
+                    raise ValueError(
+                        f"Caption column {column_names} not found in the dataset. Available columns are: {data.column_names}"
+                    )
+                caption_columns = [column_names]
+                weights = [1] if weights == -1 else [weights.get(column_names)]
+            elif isinstance(column_names, list):
+                if not all(column in data.column_names for column in column_names):
+                    raise ValueError(
+                        f"Caption columns {column_names} not found in the dataset. Available columns are: {data.column_names}"
+                    )
+                caption_columns = column_names
+                weights = [1] if weights == -1 else [weights.get(column) for column in column_names]
+            else:
+                raise ValueError(f"Unsupported type for column_name: {type(column_names)}")
+
+        for column_names in constants.SUPPORTED_VIDEO_FILE_EXTENSIONS:
+            if column_names in data.column_names:
+                data = data.cast_column(column_names, datasets.Video())
+                data = data.rename_column(column_names, "video")
+                break
 
         self._data = data
         self._sample_index = 0
         self._precomputable_once = False
+        self._caption_columns = caption_columns
+        self._weights = weights
 
     def _get_data_iter(self):
         if self._sample_index == 0:
@@ -490,6 +590,9 @@ class VideoWebDataset(torch.utils.data.IterableDataset, torch.distributed.checkp
         while True:
             for sample in self._get_data_iter():
                 self._sample_index += 1
+                caption_column = random.choices(self._caption_columns, weights=self._weights, k=1)[0]
+                sample["caption"] = sample[caption_column]
+                sample["video"] = _preprocess_video(sample["video"])
                 yield sample
 
             if not self.infinite:
@@ -600,11 +703,17 @@ class IterableDatasetPreprocessingWrapper(
         for sample in iter(self.dataset):
             if self.dataset_type == "image":
                 if self.image_resolution_buckets:
+                    sample["_original_num_frames"] = 1
+                    sample["_original_height"] = sample["image"].size(1)
+                    sample["_original_width"] = sample["image"].size(2)
                     sample["image"] = FF.resize_to_nearest_bucket_image(
                         sample["image"], self.image_resolution_buckets, self.reshape_mode
                     )
             elif self.dataset_type == "video":
                 if self.video_resolution_buckets:
+                    sample["_original_num_frames"] = sample["video"].size(0)
+                    sample["_original_height"] = sample["video"].size(2)
+                    sample["_original_width"] = sample["video"].size(3)
                     sample["video"], _first_frame_only = FF.resize_to_nearest_bucket_video(
                         sample["video"], self.video_resolution_buckets, self.reshape_mode
                     )
@@ -682,7 +791,12 @@ class IterableCombinedDataset(torch.utils.data.IterableDataset, torch.distribute
 
 # TODO(aryan): maybe write a test for this
 def initialize_dataset(
-    dataset_name_or_root: str, dataset_type: str = "video", streaming: bool = True, infinite: bool = False
+    dataset_name_or_root: str,
+    dataset_type: str = "video",
+    streaming: bool = True,
+    infinite: bool = False,
+    *,
+    _caption_options: Optional[Dict[str, Any]] = None,
 ) -> torch.utils.data.IterableDataset:
     assert dataset_type in ["image", "video"]
 
@@ -692,7 +806,7 @@ def initialize_dataset(
         does_repo_exist_on_hub = False
 
     if does_repo_exist_on_hub:
-        return _initialize_hub_dataset(dataset_name_or_root, dataset_type, infinite)
+        return _initialize_hub_dataset(dataset_name_or_root, dataset_type, infinite, _caption_options=_caption_options)
     else:
         return _initialize_local_dataset(dataset_name_or_root, dataset_type, infinite)
 
@@ -745,14 +859,33 @@ def _initialize_local_dataset(dataset_name_or_root: str, dataset_type: str, infi
     return dataset
 
 
-def _initialize_hub_dataset(dataset_name: str, dataset_type: str, infinite: bool = False):
+def _initialize_hub_dataset(
+    dataset_name: str, dataset_type: str, infinite: bool = False, *, _caption_options: Optional[Dict[str, Any]] = None
+):
     repo_file_list = list_repo_files(dataset_name, repo_type="dataset")
     if _has_data_caption_file_pairs(repo_file_list, remote=True):
         return _initialize_data_caption_file_dataset_from_hub(dataset_name, dataset_type, infinite)
     elif _has_data_file_caption_file_lists(repo_file_list, remote=True):
         return _initialize_data_file_caption_file_dataset_from_hub(dataset_name, dataset_type, infinite)
-    else:
-        return _initialize_webdataset(dataset_name, dataset_type, infinite)
+
+    has_tar_files = any(file.endswith(".tar") or file.endswith(".parquet") for file in repo_file_list)
+    if has_tar_files:
+        return _initialize_webdataset(dataset_name, dataset_type, infinite, _caption_options=_caption_options)
+
+    # TODO(aryan): This should be improved
+    caption_files = [pathlib.Path(file).name for file in repo_file_list if file.endswith(".txt")]
+    if len(caption_files) < MAX_PRECOMPUTABLE_ITEMS_LIMIT:
+        try:
+            dataset_root = snapshot_download(dataset_name, repo_type="dataset")
+            if dataset_type == "image":
+                dataset = ImageFolderDataset(dataset_root, infinite=infinite)
+            else:
+                dataset = VideoFolderDataset(dataset_root, infinite=infinite)
+            return dataset
+        except Exception:
+            pass
+
+    raise ValueError(f"Could not load dataset {dataset_name} from the HF Hub")
 
 
 def _initialize_data_caption_file_dataset_from_hub(
@@ -778,13 +911,14 @@ def _initialize_data_file_caption_file_dataset_from_hub(
 
 
 def _initialize_webdataset(
-    dataset_name: str, dataset_type: str, infinite: bool = False
+    dataset_name: str, dataset_type: str, infinite: bool = False, _caption_options: Optional[Dict[str, Any]] = None
 ) -> torch.utils.data.IterableDataset:
     logger.info(f"Streaming webdataset {dataset_name} from the HF Hub")
+    _caption_options = _caption_options or {}
     if dataset_type == "image":
-        return ImageWebDataset(dataset_name, infinite=infinite)
+        return ImageWebDataset(dataset_name, infinite=infinite, **_caption_options)
     else:
-        return VideoWebDataset(dataset_name, infinite=infinite)
+        return VideoWebDataset(dataset_name, infinite=infinite, **_caption_options)
 
 
 def _has_data_caption_file_pairs(root: Union[pathlib.Path, List[str]], remote: bool = False) -> bool:
