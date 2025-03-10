@@ -44,7 +44,7 @@ class MonitorTab(BaseTab):
     def __init__(self, app_state):
         super().__init__(app_state)
         self.id = "monitor_tab"
-        self.title = "4️⃣  Monitor"
+        self.title = "5️⃣  Monitor"
         self.refresh_interval = 8
     
     def create(self, parent=None) -> gr.TabItem:

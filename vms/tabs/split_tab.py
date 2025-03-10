@@ -32,7 +32,7 @@ class SplitTab(BaseTab):
                 with gr.Column():
                     self.components["video_list"] = gr.Dataframe(
                         headers=["name", "status"],
-                        label="Videos to split",
+                        label="Videos to split (note: Nvidia A100 cannot split videos encoded in AV1)",
                         interactive=False,
                         wrap=True
                     )

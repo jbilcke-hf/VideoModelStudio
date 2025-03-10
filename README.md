@@ -73,6 +73,11 @@ VMS uses `Finetrainers` under the hood. In theory any model supported by Finetra
 
 In practice, a PR (pull request) will be necessary to adapt the UI a bit to accomodate for each model specificities.
 
+
+### Wan
+
+I am currently testing Wan LoRA training!
+
 ### LTX-Video
 
 I have tested training a LTX-Video LoRA model using videos (not images), on a single A100 instance.
@@ -89,6 +94,22 @@ It requires about 47~49 Gb of VRAM, depending on your settings.
 Do you want support for this one? Let me know in the comments!
 
 ## Limitations
+
+### No AV1 on A100
+
+If your dataset contains videos encoded using the AV1 codec, you might not be able to decode them (eg. during scene splitting) if your machine doesn't support hardware decoding.
+
+Nvidia A100 don't support hardware AV1 decoding for instance.
+
+It might be possible to convert them on server-side or use software decoding directly from Python, but I haven't looked into that yet (you can submit a PR if you have an idea).
+
+My recommendation is to make sure your data comes in h264.
+
+You can use FFmpeg to do this, eg:
+
+```bash
+ffmpeg -i input_video_in_av1.mp4 -vcodec libx264 -acodec aac output_video_in_h264.mp4
+```
 
 ### One-user-per-space design
 
