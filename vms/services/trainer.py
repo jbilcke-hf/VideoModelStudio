@@ -52,7 +52,10 @@ from ..utils import (
 logger = logging.getLogger(__name__)
 
 class TrainingService:
-    def __init__(self):
+    def __init__(self, app=None):
+        # Store reference to app
+        self.app = app
+
         # State and log files
         self.session_file = OUTPUT_PATH / "session.json"
         self.status_file = OUTPUT_PATH / "status.json"
@@ -565,8 +568,8 @@ class TrainingService:
         logger.info(f"{log_prefix} training with model_type={model_type}, training_type={training_type}")
         
         # Update progress if available
-        if progress:
-            progress(0.15, desc="Setting up training configuration")
+        #if progress:
+        #    progress(0.15, desc="Setting up training configuration")
         
         try:
             # Get absolute paths - FIXED to look in project root instead of within vms directory
@@ -598,8 +601,8 @@ class TrainingService:
             logger.info("Training data path: %s", TRAINING_PATH)
                 
             # Update progress
-            if progress:
-                progress(0.2, desc="Preparing training dataset")
+            #if progress:
+            #    progress(0.2, desc="Preparing training dataset")
             
             videos_file, prompts_file = prepare_finetrainers_dataset()
             if videos_file is None or prompts_file is None:
@@ -616,8 +619,8 @@ class TrainingService:
                 return error_msg, "No training data available"
 
             # Update progress
-            if progress:
-                progress(0.25, desc="Creating dataset configuration")
+            #if progress:
+            #    progress(0.25, desc="Creating dataset configuration")
                 
             # Get preset configuration
             preset = TRAINING_PRESETS[preset_name]
@@ -627,13 +630,14 @@ class TrainingService:
 
             # Get the custom prompt prefix from the tabs
             custom_prompt_prefix = None
-            if hasattr(self.app, 'tabs') and 'caption_tab' in self.app.tabs:
-                if hasattr(self.app.tabs['caption_tab'], 'components') and 'custom_prompt_prefix' in self.app.tabs['caption_tab'].components:
-                    # Get the value and clean it
-                    prefix = self.app.tabs['caption_tab'].components['custom_prompt_prefix'].value
-                    if prefix:
-                        # Clean the prefix - remove trailing comma, space or comma+space
-                        custom_prompt_prefix = prefix.rstrip(', ')
+            if hasattr(self, 'app') and self.app is not None:
+                if hasattr(self.app, 'tabs') and 'caption_tab' in self.app.tabs:
+                    if hasattr(self.app.tabs['caption_tab'], 'components') and 'custom_prompt_prefix' in self.app.tabs['caption_tab'].components:
+                        # Get the value and clean it
+                        prefix = self.app.tabs['caption_tab'].components['custom_prompt_prefix'].value
+                        if prefix:
+                            # Clean the prefix - remove trailing comma, space or comma+space
+                            custom_prompt_prefix = prefix.rstrip(', ')
 
             # Create a proper dataset configuration JSON file
             dataset_config_file = OUTPUT_PATH / "dataset_config.json"
@@ -725,10 +729,7 @@ class TrainingService:
             config.flow_weighting_scheme = flow_weighting_scheme
             
             config.lr_warmup_steps = int(lr_warmup_steps)
-            config_args.extend([
-                "--precomputation_items", str(precomputation_items)
-            ])
-
+    
             # Update the NUM_GPUS variable and CUDA_VISIBLE_DEVICES
             num_gpus = min(num_gpus, get_available_gpu_count())
             if num_gpus <= 0:
@@ -757,6 +758,8 @@ class TrainingService:
             config.enable_tiling = True
             config.caption_dropout_p = DEFAULT_CAPTION_DROPOUT_P
 
+            config.precomputation_items = precomputation_items
+            
             validation_error = self.validate_training_config(config, model_type)
             if validation_error:
                 error_msg = f"Configuration validation failed: {validation_error}"
@@ -843,8 +846,8 @@ class TrainingService:
             env["FINETRAINERS_LOG_LEVEL"] = "DEBUG"  # Added for better debugging
             env["CUDA_VISIBLE_DEVICES"] = visible_devices
 
-            if progress:
-                progress(0.9, desc="Launching training process")
+            #if progress:
+            #    progress(0.9, desc="Launching training process")
 
             # Start the training process
             process = subprocess.Popen(
@@ -901,8 +904,8 @@ class TrainingService:
             logger.info(success_msg)
             
             # Final progress update - now we'll track it through the log monitor
-            if progress:
-                progress(1.0, desc="Training started successfully")
+            #if progress:
+            #    progress(1.0, desc="Training started successfully")
 
             return success_msg, self.get_logs()
             

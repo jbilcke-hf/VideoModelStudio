@@ -384,7 +384,9 @@ class TrainTab(BaseTab):
             outputs=[self.components["status_box"]]
         )
         
-    def handle_training_start(self, preset, model_type, training_type, *args, progress=gr.Progress()):
+    def handle_training_start(
+        self, preset, model_type, training_type, lora_rank, lora_alpha, train_steps, batch_size, learning_rate, save_iterations, repo_id, progress=gr.Progress()
+    ):
         """Handle training start with proper log parser reset and checkpoint detection"""
         # Safely reset log parser if it exists
         if hasattr(self.app, 'log_parser') and self.app.log_parser is not None:
@@ -395,7 +397,7 @@ class TrainTab(BaseTab):
             self.app.log_parser = TrainingLogParser()
             
         # Initialize progress
-        progress(0, desc="Initializing training")
+        #progress(0, desc="Initializing training")
         
         # Check for latest checkpoint
         checkpoints = list(OUTPUT_PATH.glob("checkpoint-*"))
@@ -406,9 +408,10 @@ class TrainTab(BaseTab):
             latest_checkpoint = max(checkpoints, key=os.path.getmtime)
             resume_from = str(latest_checkpoint)
             logger.info(f"Found checkpoint at {resume_from}, will resume training")
-            progress(0.05, desc=f"Resuming from checkpoint {Path(resume_from).name}")
+            #progress(0.05, desc=f"Resuming from checkpoint {Path(resume_from).name}")
         else:
-            progress(0.05, desc="Starting new training run")
+            #progress(0.05, desc="Starting new training run")
+            pass
         
         # Convert model_type display name to internal name
         model_internal_type = MODEL_TYPES.get(model_type)
@@ -424,8 +427,13 @@ class TrainTab(BaseTab):
             logger.error(f"Invalid training type: {training_type}")
             return f"Error: Invalid training type '{training_type}'", "Training type not recognized"
         
+        # Get other parameters from UI form
+        num_gpus = int(self.components["num_gpus"].value)
+        precomputation_items = int(self.components["precomputation_items"].value)
+        lr_warmup_steps = int(self.components["lr_warmup_steps"].value)
+        
         # Progress update
-        progress(0.1, desc="Preparing dataset")
+        #progress(0.1, desc="Preparing dataset")
         
         # Start training (it will automatically use the checkpoint if provided)
         try:

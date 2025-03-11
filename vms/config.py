@@ -485,6 +485,9 @@ class TrainingConfig:
         if self.precompute_conditions:
             args.append("--precompute_conditions")
 
+        if hasattr(self, 'precomputation_items') and self.precomputation_items:
+            args.extend(["--precomputation_items", str(self.precomputation_items)])
+            
         # Diffusion arguments
         if self.flow_resolution_shifting:
             args.append("--flow_resolution_shifting")
