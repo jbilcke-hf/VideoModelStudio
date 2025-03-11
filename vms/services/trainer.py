@@ -1280,20 +1280,20 @@ class TrainingService:
                         # Parse metrics only from stdout
                         metrics = parse_training_log(line)
                         if metrics:
-                            status = self.get_status()
-                            status.update(metrics)
-                            self.save_status(**status)
-
-                            # Extract total_steps and current_step for progress tracking
-                            if 'step' in metrics:
-                                current_step = metrics['step']
-                            if 'total_steps' in status:
-                                total_steps = status['total_steps']
-                                
-                            # Update progress bar if available and total_steps is known
-                            if progress_obj and total_steps > 0:
-                                progress_value = min(0.99, current_step / total_steps)
-                                progress_obj(progress_value, desc=f"Training: step {current_step}/{total_steps}")
+                            # Get current status first
+                            current_status = self.get_status()
+                            
+                            # Update with new metrics
+                            current_status.update(metrics)
+                            
+                            # Ensure 'state' is present, use current status if available, default to 'training'
+                            if 'status' in current_status:
+                                # Use 'status' as 'state' to match the required parameter
+                                state = current_status.pop('status', 'training')
+                                self.save_status(state, **current_status)
+                            else:
+                                # If no status in the current_status, use 'training' as the default state
+                                self.save_status('training', **current_status)
                         return True
                 return False
 
