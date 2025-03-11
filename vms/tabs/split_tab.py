@@ -57,7 +57,7 @@ class SplitTab(BaseTab):
     
     def list_unprocessed_videos(self) -> gr.Dataframe:
         """Update list of unprocessed videos"""
-        videos = self.app.splitter.list_unprocessed_videos()
+        videos = self.app.splitting.list_unprocessed_videos()
         # videos is already in [[name, status]] format from splitting_service
         return gr.Dataframe(
             headers=["name", "status"],
@@ -71,11 +71,11 @@ class SplitTab(BaseTab):
         Args:
             enable_splitting: Whether to split videos into scenes
         """
-        if self.app.splitter.is_processing():
+        if self.app.splitting.is_processing():
             return "Scene detection already running"
             
         try:
-            await self.app.splitter.start_processing(enable_splitting)
+            await self.app.splitting.start_processing(enable_splitting)
             return "Scene detection completed"
         except Exception as e:
             return f"Error during scene detection: {str(e)}"

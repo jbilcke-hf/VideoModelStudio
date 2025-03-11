@@ -497,7 +497,7 @@ class TrainingConfig:
         args.extend(["--flow_mode_scale", str(self.flow_mode_scale)])
 
         # Training arguments
-        args.extend(["--training_type", self.training_type])
+        args.extend(["--training_type",self.training_type])
         args.extend(["--seed", str(self.seed)])
         
         # We don't use this, because mixed precision is handled by accelerate launch, not by the training script itself.
@@ -507,7 +507,7 @@ class TrainingConfig:
         args.extend(["--train_steps", str(self.train_steps)])
         
         # LoRA specific arguments
-        if self.training_type == "lora":
+        ifself.training_type == "lora":
             args.extend(["--rank", str(self.lora_rank)])
             args.extend(["--lora_alpha", str(self.lora_alpha)])
             args.extend(["--target_modules"] + self.target_modules)

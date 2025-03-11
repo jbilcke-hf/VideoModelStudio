@@ -23,7 +23,7 @@ class ManageTab(BaseTab):
     def __init__(self, app_state):
         super().__init__(app_state)
         self.id = "manage_tab"
-        self.title = "6️⃣  Manage"
+        self.title = "7️⃣  Manage"
     
     def create(self, parent=None) -> gr.TabItem:
         """Create the Manage tab UI components"""
@@ -90,12 +90,12 @@ class ManageTab(BaseTab):
         
         # Download buttons
         self.components["download_dataset_btn"].click(
-            fn=self.app.trainer.create_training_dataset_zip,
+            fn=self.app.training.create_training_dataset_zip,
             outputs=[self.components["download_dataset_btn"]]
         )
 
         self.components["download_model_btn"].click(
-            fn=self.app.trainer.get_model_output_safetensors,
+            fn=self.app.training.get_model_output_safetensors,
             outputs=[self.components["download_model_btn"]]
         )
         
@@ -139,11 +139,11 @@ class ManageTab(BaseTab):
             return f"Error: {validation['error']}"
         
         # Check if we have a model to upload
-        if not self.app.trainer.get_model_output_safetensors():
+        if not self.app.training.get_model_output_safetensors():
             return "Error: No model found to upload"
         
         # Upload model to hub
-        success = self.app.trainer.upload_to_hub(OUTPUT_PATH, repo_id)
+        success = self.app.training.upload_to_hub(OUTPUT_PATH, repo_id)
         
         if success:
             return f"Successfully uploaded model to {repo_id}"
@@ -184,25 +184,25 @@ class ManageTab(BaseTab):
         
         try:
             # Stop training if running
-            if self.app.trainer.is_training_running():
-                training_result = self.app.trainer.stop_training()
+            if self.app.training.is_training_running():
+                training_result = self.app.training.stop_training()
                 status_messages["training"] = training_result["status"]
             
             # Stop captioning if running
-            if self.app.captioner:
-                self.app.captioner.stop_captioning()
+            if self.app.captioning:
+                self.app.captioning.stop_captioning()
                 status_messages["captioning"] = "Captioning stopped"
             
             # Stop scene detection if running
-            if self.app.splitter.is_processing():
-                self.app.splitter.processing = False
+            if self.app.splitting.is_processing():
+                self.app.splitting.processing = False
                 status_messages["splitting"] = "Scene detection stopped"
             
             # Properly close logging before clearing log file
-            if self.app.trainer.file_handler:
-                self.app.trainer.file_handler.close()
-                logger.removeHandler(self.app.trainer.file_handler)
-                self.app.trainer.file_handler = None
+            if self.app.training.file_handler:
+                self.app.training.file_handler.close()
+                logger.removeHandler(self.app.training.file_handler)
+                self.app.training.file_handler = None
                 
             if LOG_FILE_PATH.exists():
                 LOG_FILE_PATH.unlink()
@@ -221,10 +221,10 @@ class ManageTab(BaseTab):
             
             # Reset any persistent state
             self.app.tabs["caption_tab"]._should_stop_captioning = True
-            self.app.splitter.processing = False
+            self.app.splitting.processing = False
             
             # Recreate logging setup
-            self.app.trainer.setup_logging()
+            self.app.training.setup_logging()
             
             return {
                 "status": "All processes stopped and data cleared",

@@ -224,8 +224,8 @@ class CaptionTab(BaseTab):
             self._should_stop_captioning = True
             
             # Call stop method on captioner
-            if self.app.captioner:
-                self.app.captioner.stop_captioning()
+            if self.app.captioning:
+                self.app.captioning.stop_captioning()
                 
             # Get updated file list
             updated_list = self.list_training_files_to_caption()
@@ -286,7 +286,7 @@ class CaptionTab(BaseTab):
             file_statuses = {}
             
             # Start the actual captioning process
-            async for rows in self.app.captioner.start_caption_generation(captioning_bot_instructions, prompt_prefix):
+            async for rows in self.app.captioning.start_caption_generation(captioning_bot_instructions, prompt_prefix):
                 # Update our tracking of file statuses
                 for name, status in rows:
                     file_statuses[name] = status
@@ -516,7 +516,7 @@ class CaptionTab(BaseTab):
             # Use the original file path stored during selection instead of the temporary preview paths
             if original_file_path:
                 file_path = Path(original_file_path)
-                self.app.captioner.update_file_caption(file_path, preview_caption)
+                self.app.captioning.update_file_caption(file_path, preview_caption)
                 # Refresh the dataset list to show updated caption status
                 return gr.update(value="Caption saved successfully!")
             else:

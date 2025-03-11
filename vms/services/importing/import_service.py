@@ -17,7 +17,7 @@ from vms.config import HF_API_TOKEN
 
 logger = logging.getLogger(__name__)
 
-class ImportService:
+class ImportingService:
     """Main service class for handling imports from various sources"""
     
     def __init__(self):

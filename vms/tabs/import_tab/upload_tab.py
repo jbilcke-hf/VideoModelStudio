@@ -53,7 +53,7 @@ class UploadTab(BaseTab):
         """Connect event handlers to UI components"""
         # File upload event
         self.components["files"].upload(
-            fn=lambda x: self.app.importer.process_uploaded_files(x),
+            fn=lambda x: self.app.importing.process_uploaded_files(x),
             inputs=[self.components["files"]],
             outputs=[self.components["import_status"]]  # This comes from parent tab
         ).success(

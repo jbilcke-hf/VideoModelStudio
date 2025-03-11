@@ -1,14 +1,16 @@
-from .captioner import CaptioningProgress, CaptioningService
-from .importer import ImportService
+from .captioning import CaptioningProgress, CaptioningService
+from .importing import ImportingService
 from .monitoring import MonitoringService
-from .splitter import SplittingService
-from .trainer import TrainingService
+from .splitting import SplittingService
+from .previewing import PreviewingService
+from .training import TrainingService
 
 __all__ = [
     'CaptioningProgress',
     'CaptioningService',
-    'ImportService',
+    'ImportingService',
     'MonitoringService',
     'SplittingService',
+    'PreviewingService',
     'TrainingService',
 ]

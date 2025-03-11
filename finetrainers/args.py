@@ -447,7 +447,7 @@ class BaseArgs:
         }
 
         training_arguments = {
-            "training_type": self.training_type,
+            "training_type":self.training_type,
             "seed": self.seed,
             "batch_size": self.batch_size,
             "train_steps": self.train_steps,

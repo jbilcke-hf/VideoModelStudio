@@ -168,7 +168,7 @@ class HubTab(BaseTab):
         """Search datasets on the Hub matching the query"""
         try:
             logger.info(f"Searching for datasets with query: '{query}'")
-            results_full = self.app.importer.search_datasets(query)
+            results_full = self.app.importing.search_datasets(query)
             
             # Extract just the first column (dataset IDs) for display
             results = [[row[0]] for row in results_full]
@@ -199,7 +199,7 @@ class HubTab(BaseTab):
             logger.info(f"Getting dataset info for: {dataset_id}")
             
             # Use the importer service to get dataset info
-            info_text, file_counts, _ = self.app.importer.get_dataset_info(dataset_id)
+            info_text, file_counts, _ = self.app.importing.get_dataset_info(dataset_id)
             
             # Get counts of each file type
             video_count = file_counts.get("video", 0)
@@ -247,7 +247,7 @@ class HubTab(BaseTab):
                     progress_callback(fraction, desc=desc)
             
             # Call the actual download function with our adapter
-            result = await self.app.importer.download_file_group(
+            result = await self.app.importing.download_file_group(
                 dataset_id, 
                 file_type, 
                 enable_splitting,
