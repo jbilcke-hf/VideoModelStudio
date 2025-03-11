@@ -7,6 +7,7 @@ from .split_tab import SplitTab
 from .caption_tab import CaptionTab
 from .train_tab import TrainTab
 from .monitor_tab import MonitorTab
+from .preview_tab import PreviewTab
 from .manage_tab import ManageTab
 
 __all__ = [
@@ -15,5 +16,6 @@ __all__ = [
     'CaptionTab',
     'TrainTab',
     'MonitorTab',
+    'PreviewTab',
     'ManageTab'
 ]
