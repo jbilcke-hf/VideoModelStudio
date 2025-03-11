@@ -6,13 +6,13 @@ Handles the video generation logic and model integration
 
 import logging
 import tempfile
-import torch
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple, Callable
+import time
 
 from vms.config import (
     OUTPUT_PATH, STORAGE_PATH, MODEL_TYPES, TRAINING_PATH,
-    DEFAULT_PROMPT_PREFIX
+    DEFAULT_PROMPT_PREFIX, MODEL_VARIANTS
 )
 from vms.utils import format_time
 
@@ -48,9 +48,14 @@ class PreviewingService:
             logger.error(f"Error finding LoRA weights: {e}")
             return None
     
+    def get_model_variants(self, model_type: str) -> Dict[str, Dict[str, str]]:
+        """Get available model variants for the given model type"""
+        return MODEL_VARIANTS.get(model_type, {})
+    
     def generate_video(
         self,
         model_type: str,
+        model_variant: str,
         prompt: str,
         negative_prompt: str,
         prompt_prefix: str,
@@ -62,7 +67,8 @@ class PreviewingService:
         lora_weight: float,
         inference_steps: int,
         enable_cpu_offload: bool,
-        fps: int
+        fps: int,
+        conditioning_image: Optional[str] = None
     ) -> Tuple[Optional[str], str, str]:
         """Generate a video using the trained model"""
         try:
@@ -71,6 +77,7 @@ class PreviewingService:
             def log(msg: str):
                 log_messages.append(msg)
                 logger.info(msg)
+                # Return updated log string for UI updates
                 return "\n".join(log_messages)
             
             # Find latest LoRA weights
@@ -95,7 +102,30 @@ class PreviewingService:
             if not internal_model_type:
                 return None, f"Error: Invalid model type {model_type}", log(f"Error: Invalid model type {model_type}")
             
+            # Check if model variant is valid for this model type
+            variants = self.get_model_variants(internal_model_type)
+            if model_variant not in variants:
+                # Use default variant if specified one is invalid
+                if len(variants) > 0:
+                    model_variant = next(iter(variants.keys()))
+                    log(f"Warning: Invalid model variant, using default: {model_variant}")
+                else:
+                    # Fall back to default IDs if no variants defined
+                    if internal_model_type == "wan":
+                        model_variant = "Wan-AI/Wan2.1-T2V-1.3B-Diffusers"
+                    elif internal_model_type == "ltx_video":
+                        model_variant = "Lightricks/LTX-Video"
+                    elif internal_model_type == "hunyuan_video":
+                        model_variant = "hunyuanvideo-community/HunyuanVideo"
+                    log(f"Warning: No variants defined for model type, using default: {model_variant}")
+            
+            # Check if this is an image-to-video model but no image was provided
+            variant_info = variants.get(model_variant, {})
+            if variant_info.get("type") == "image-to-video" and not conditioning_image:
+                return None, "Error: This model requires a conditioning image", log("Error: This model variant requires a conditioning image but none was provided")
+            
             log(f"Generating video with model type: {internal_model_type}")
+            log(f"Using model variant: {model_variant}")
             log(f"Using LoRA weights from: {lora_path}")
             log(f"Resolution: {width}x{height}, Frames: {num_frames}, FPS: {fps}")
             log(f"Guidance Scale: {guidance_scale}, Flow Shift: {flow_shift}, LoRA Weight: {lora_weight}")
@@ -107,19 +137,22 @@ class PreviewingService:
                 return self.generate_wan_video(
                     full_prompt, negative_prompt, width, height, num_frames,
                     guidance_scale, flow_shift, lora_path, lora_weight,
-                    inference_steps, enable_cpu_offload, fps, log
+                    inference_steps, enable_cpu_offload, fps, log,
+                    model_variant, conditioning_image
                 )
             elif internal_model_type == "ltx_video":
                 return self.generate_ltx_video(
                     full_prompt, negative_prompt, width, height, num_frames,
                     guidance_scale, flow_shift, lora_path, lora_weight,
-                    inference_steps, enable_cpu_offload, fps, log
+                    inference_steps, enable_cpu_offload, fps, log,
+                    model_variant, conditioning_image
                 )
             elif internal_model_type == "hunyuan_video":
                 return self.generate_hunyuan_video(
                     full_prompt, negative_prompt, width, height, num_frames,
                     guidance_scale, flow_shift, lora_path, lora_weight,
-                    inference_steps, enable_cpu_offload, fps, log
+                    inference_steps, enable_cpu_offload, fps, log,
+                    model_variant, conditioning_image
                 )
             else:
                 return None, f"Error: Unsupported model type {internal_model_type}", log(f"Error: Unsupported model type {internal_model_type}")
@@ -142,28 +175,31 @@ class PreviewingService:
         inference_steps: int,
         enable_cpu_offload: bool,
         fps: int,
-        log_fn: Callable
+        log_fn: Callable,
+        model_variant: str = "Wan-AI/Wan2.1-T2V-1.3B-Diffusers",
+        conditioning_image: Optional[str] = None
     ) -> Tuple[Optional[str], str, str]:
         """Generate video using Wan model"""
-        start_time = torch.cuda.Event(enable_timing=True)
-        end_time = torch.cuda.Event(enable_timing=True)
-        
+
         try:
             import torch
             from diffusers import AutoencoderKLWan, WanPipeline
             from diffusers.schedulers.scheduling_unipc_multistep import UniPCMultistepScheduler
             from diffusers.utils import export_to_video
+            from PIL import Image
+            import os
+
+            start_time = torch.cuda.Event(enable_timing=True)
+            end_time = torch.cuda.Event(enable_timing=True)
+        
             
             log_fn("Importing Wan model components...")
             
-            # Use the smaller model for faster inference
-            model_id = "Wan-AI/Wan2.1-T2V-1.3B-Diffusers"
+            log_fn(f"Loading VAE from {model_variant}...")
+            vae = AutoencoderKLWan.from_pretrained(model_variant, subfolder="vae", torch_dtype=torch.float32)
             
-            log_fn(f"Loading VAE from {model_id}...")
-            vae = AutoencoderKLWan.from_pretrained(model_id, subfolder="vae", torch_dtype=torch.float32)
-            
-            log_fn(f"Loading transformer from {model_id}...")
-            pipe = WanPipeline.from_pretrained(model_id, vae=vae, torch_dtype=torch.bfloat16)
+            log_fn(f"Loading transformer from {model_variant}...")
+            pipe = WanPipeline.from_pretrained(model_variant, vae=vae, torch_dtype=torch.bfloat16)
             
             log_fn(f"Configuring scheduler with flow_shift={flow_shift}...")
             pipe.scheduler = UniPCMultistepScheduler.from_config(
@@ -189,15 +225,36 @@ class PreviewingService:
             log_fn("Starting video generation...")
             start_time.record()
             
-            output = pipe(
-                prompt=prompt,
-                negative_prompt=negative_prompt,
-                height=height,
-                width=width,
-                num_frames=num_frames,
-                guidance_scale=guidance_scale,
-                num_inference_steps=inference_steps,
-            ).frames[0]
+            # Check if this is an image-to-video model
+            is_i2v = "I2V" in model_variant
+            
+            if is_i2v and conditioning_image:
+                log_fn(f"Loading conditioning image from {conditioning_image}...")
+                image = Image.open(conditioning_image).convert("RGB")
+                image = image.resize((width, height))
+                
+                log_fn("Generating video with image conditioning...")
+                output = pipe(
+                    prompt=prompt,
+                    negative_prompt=negative_prompt,
+                    image=image,
+                    height=height,
+                    width=width,
+                    num_frames=num_frames,
+                    guidance_scale=guidance_scale,
+                    num_inference_steps=inference_steps,
+                ).frames[0]
+            else:
+                log_fn("Generating video with text-only conditioning...")
+                output = pipe(
+                    prompt=prompt,
+                    negative_prompt=negative_prompt,
+                    height=height,
+                    width=width,
+                    num_frames=num_frames,
+                    guidance_scale=guidance_scale,
+                    num_inference_steps=inference_steps,
+                ).frames[0]
             
             end_time.record()
             torch.cuda.synchronize()
@@ -236,23 +293,25 @@ class PreviewingService:
         inference_steps: int,
         enable_cpu_offload: bool,
         fps: int,
-        log_fn: Callable
+        log_fn: Callable,
+        model_variant: str = "Lightricks/LTX-Video",
+        conditioning_image: Optional[str] = None
     ) -> Tuple[Optional[str], str, str]:
         """Generate video using LTX model"""
-        start_time = torch.cuda.Event(enable_timing=True)
-        end_time = torch.cuda.Event(enable_timing=True)
-        
+
         try:
             import torch
             from diffusers import LTXPipeline
             from diffusers.utils import export_to_video
+            from PIL import Image
             
+            start_time = torch.cuda.Event(enable_timing=True)
+            end_time = torch.cuda.Event(enable_timing=True)
+        
             log_fn("Importing LTX model components...")
             
-            model_id = "Lightricks/LTX-Video"
-            
-            log_fn(f"Loading pipeline from {model_id}...")
-            pipe = LTXPipeline.from_pretrained(model_id, torch_dtype=torch.bfloat16)
+            log_fn(f"Loading pipeline from {model_variant}...")
+            pipe = LTXPipeline.from_pretrained(model_variant, torch_dtype=torch.bfloat16)
             
             log_fn("Moving pipeline to CUDA device...")
             pipe.to("cuda")
@@ -272,6 +331,7 @@ class PreviewingService:
             log_fn("Starting video generation...")
             start_time.record()
             
+            # LTX doesn't currently support image conditioning in the standard way
             video = pipe(
                 prompt=prompt,
                 negative_prompt=negative_prompt,
@@ -321,31 +381,33 @@ class PreviewingService:
         inference_steps: int,
         enable_cpu_offload: bool,
         fps: int,
-        log_fn: Callable
+        log_fn: Callable,
+        model_variant: str = "hunyuanvideo-community/HunyuanVideo",
+        conditioning_image: Optional[str] = None
     ) -> Tuple[Optional[str], str, str]:
         """Generate video using HunyuanVideo model"""
-        start_time = torch.cuda.Event(enable_timing=True)
-        end_time = torch.cuda.Event(enable_timing=True)
+
         
         try:
             import torch
             from diffusers import HunyuanVideoPipeline, HunyuanVideoTransformer3DModel, AutoencoderKLHunyuanVideo
             from diffusers.utils import export_to_video
             
+            start_time = torch.cuda.Event(enable_timing=True)
+            end_time = torch.cuda.Event(enable_timing=True)
+
             log_fn("Importing HunyuanVideo model components...")
             
-            model_id = "hunyuanvideo-community/HunyuanVideo"
-            
-            log_fn(f"Loading transformer from {model_id}...")
+            log_fn(f"Loading transformer from {model_variant}...")
             transformer = HunyuanVideoTransformer3DModel.from_pretrained(
-                model_id, 
+                model_variant, 
                 subfolder="transformer", 
                 torch_dtype=torch.bfloat16
             )
             
-            log_fn(f"Loading pipeline from {model_id}...")
+            log_fn(f"Loading pipeline from {model_variant}...")
             pipe = HunyuanVideoPipeline.from_pretrained(
-                model_id, 
+                model_variant, 
                 transformer=transformer,
                 torch_dtype=torch.float16
             )
@@ -371,9 +433,13 @@ class PreviewingService:
             log_fn("Starting video generation...")
             start_time.record()
             
+            # Fix for Issue #2: The pipe() expected list rather than float
+            # Make sure negative_prompt is a list or None
+            neg_prompt = [negative_prompt] if negative_prompt else None
+            
             output = pipe(
                 prompt=prompt,
-                negative_prompt=negative_prompt if negative_prompt else None,
+                negative_prompt=neg_prompt,
                 height=height,
                 width=width,
                 num_frames=num_frames,

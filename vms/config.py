@@ -58,7 +58,6 @@ if NORMALIZE_IMAGES_TO not in ['png', 'jpg']:
     raise ValueError("NORMALIZE_IMAGES_TO must be either 'png' or 'jpg'")
 JPEG_QUALITY = int(os.environ.get('JPEG_QUALITY', '97'))
 
-# Expanded model types to include Wan-2.1-T2V
 MODEL_TYPES = {
     "HunyuanVideo": "hunyuan_video", 
     "LTX-Video": "ltx_video",
@@ -69,6 +68,46 @@ MODEL_TYPES = {
 TRAINING_TYPES = {
     "LoRA Finetune": "lora",
     "Full Finetune": "full-finetune"
+}
+
+# Model variants for each model type
+MODEL_VARIANTS = {
+    "wan": {
+        "Wan-AI/Wan2.1-T2V-1.3B-Diffusers": {
+            "name": "Wan 2.1 T2V 1.3B (text-only, smaller)",
+            "type": "text-to-video",
+            "description": "Faster, smaller model (1.3B parameters)"
+        },
+        "Wan-AI/Wan2.1-T2V-14B-Diffusers": {
+            "name": "Wan 2.1 T2V 14B (text-only, larger)",
+            "type": "text-to-video",
+            "description": "Higher quality but slower (14B parameters)"
+        },
+        "Wan-AI/Wan2.1-I2V-14B-480P-Diffusers": {
+            "name": "Wan 2.1 I2V 480p (image+text)",
+            "type": "image-to-video",
+            "description": "Image conditioning at 480p resolution"
+        },
+        "Wan-AI/Wan2.1-I2V-14B-720P-Diffusers": {
+            "name": "Wan 2.1 I2V 720p (image+text)",
+            "type": "image-to-video",
+            "description": "Image conditioning at 720p resolution"
+        }
+    },
+    "ltx_video": {
+        "Lightricks/LTX-Video": {
+            "name": "LTX Video (official)",
+            "type": "text-to-video",
+            "description": "Official LTX Video model"
+        }
+    },
+    "hunyuan_video": {
+        "hunyuanvideo-community/HunyuanVideo": {
+            "name": "Hunyuan Video (official)",
+            "type": "text-to-video",
+            "description": "Official Hunyuan Video model"
+        }
+    }
 }
 
 DEFAULT_SEED = 42
