@@ -7,7 +7,7 @@ import logging
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
 
-from vms.services.base_tab import BaseTab
+from vms.tabs import BaseTab
 from vms.config import (
     MODEL_TYPES, DEFAULT_PROMPT_PREFIX
 )
