@@ -1253,7 +1253,9 @@ class TrainingService:
         if state == "Training started" or state == "initializing":
             gr.Info("Initializing model and dataset..")
         elif state == "training":
-            gr.Info("Training started!")
+            #gr.Info("Training started!")
+            # Training is in progress
+            pass
         elif state == "completed":
             gr.Info("Training completed!")
 
