@@ -38,7 +38,7 @@ class YouTubeTab(BaseTab):
                         with gr.Row():
                             gr.Markdown("You can use a YouTube video as reference, by pasting its URL here:")
                         with gr.Row():
-                            gr.Markdown("Please be aware of the [know limitations](https://stackoverflow.com/questions/78160027/how-to-solve-http-error-400-bad-request-in-pytube) and [issues](https://stackoverflow.com/questions/79226520/pytube-throws-http-error-403-forbidden-since-a-few-days)")
+                            gr.Markdown("Please be aware of the [known limitations](https://stackoverflow.com/questions/78160027/how-to-solve-http-error-400-bad-request-in-pytube) and [issues](https://stackoverflow.com/questions/79226520/pytube-throws-http-error-403-forbidden-since-a-few-days)")
 
                     with gr.Column():
                         self.components["youtube_url"] = gr.Textbox(
