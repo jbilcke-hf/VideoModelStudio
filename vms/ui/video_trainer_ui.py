@@ -40,7 +40,7 @@ class VideoTrainerUI:
     def __init__(self):
         """Initialize services and tabs"""
         # Initialize core services
-        self.trainer = TrainingService()
+        self.trainer = TrainingService(self)
         self.splitter = SplittingService()
         self.importer = ImportService()
         self.captioner = CaptioningService()
