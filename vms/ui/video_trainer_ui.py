@@ -28,7 +28,7 @@ from ..utils import (
     format_media_title,
     TrainingLogParser
 )
-from ..tabs import ImportTab, SplitTab, CaptionTab, TrainTab, MonitorTab, ManageTab
+from ..tabs import ImportTab, SplitTab, CaptionTab, TrainTab, MonitorTab, PreviewTab, ManageTab
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -113,6 +113,7 @@ class VideoTrainerUI:
                 self.tabs["caption_tab"] = CaptionTab(self)
                 self.tabs["train_tab"] = TrainTab(self)
                 self.tabs["monitor_tab"] = MonitorTab(self)
+                self.tabs["preview_tab"] = PreviewTab(self)
                 self.tabs["manage_tab"] = ManageTab(self)
                 
                 # Create tab UI components

@@ -507,7 +507,7 @@ class TrainingConfig:
         args.extend(["--train_steps", str(self.train_steps)])
         
         # LoRA specific arguments
-        ifself.training_type == "lora":
+        if self.training_type == "lora":
             args.extend(["--rank", str(self.lora_rank)])
             args.extend(["--lora_alpha", str(self.lora_alpha)])
             args.extend(["--target_modules"] + self.target_modules)
