@@ -113,7 +113,7 @@ class HubDatasetBrowser:
             dataset_info = self.hf_api.dataset_info(dataset_id)
             
             # Format the information for display
-            info_text = f"## {dataset_info.id}\n\n"
+            info_text = f"### {dataset_info.id}\n\n"
             
             # Add description if available (with safer access)
             card_data = getattr(dataset_info, "card_data", None)
@@ -126,11 +126,11 @@ class HubDatasetBrowser:
                 info_text += f"{description[:500]}{'...' if len(description) > 500 else ''}\n\n"
             
             # Add basic stats (with safer access)
-            downloads = getattr(dataset_info, 'downloads', None)
-            info_text += f"## Downloads: {downloads if downloads is not None else 'N/A'}\n"
+            #downloads = getattr(dataset_info, 'downloads', None)
+            #info_text += f"## Downloads: {downloads if downloads is not None else 'N/A'}\n"
             
-            last_modified = getattr(dataset_info, 'last_modified', None)
-            info_text += f"## Last modified: {last_modified if last_modified is not None else 'N/A'}\n"
+            #last_modified = getattr(dataset_info, 'last_modified', None)
+            #info_text += f"## Last modified: {last_modified if last_modified is not None else 'N/A'}\n"
             
             # Group files by type
             file_groups = {

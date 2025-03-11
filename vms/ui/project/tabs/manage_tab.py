@@ -8,12 +8,11 @@ import shutil
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
-from .base_tab import BaseTab
-from ..config import (
+from vms.utils import BaseTab, validate_model_repo
+from vms.config import (
     HF_API_TOKEN, VIDEOS_TO_SPLIT_PATH, STAGING_PATH, TRAINING_VIDEOS_PATH, 
     TRAINING_PATH, MODEL_PATH, OUTPUT_PATH, LOG_FILE_PATH
 )
-from ..utils import validate_model_repo
 
 logger = logging.getLogger(__name__)
 
@@ -23,59 +22,64 @@ class ManageTab(BaseTab):
     def __init__(self, app_state):
         super().__init__(app_state)
         self.id = "manage_tab"
-        self.title = "7️⃣  Manage"
+        self.title = "6️⃣  Storage"
     
     def create(self, parent=None) -> gr.TabItem:
         """Create the Manage tab UI components"""
         with gr.TabItem(self.title, id=self.id) as tab:
-            with gr.Column():
-                with gr.Row():
-                    with gr.Column():
-                        gr.Markdown("## Publishing")
-                        gr.Markdown("You model can be pushed to Hugging Face (this will use HF_API_TOKEN)")
+            with gr.Row():
+                with gr.Column():
+                    gr.Markdown("## Download your model")
+                    gr.Markdown("There is currently a bug, you might have to click multiple times to trigger a download.")
 
-                        with gr.Row():
-                            with gr.Column():
-                                self.components["repo_id"] = gr.Textbox(
-                                    label="HuggingFace Model Repository",
-                                    placeholder="username/model-name",
-                                    info="The repository will be created if it doesn't exist"
-                                )
-                                self.components["make_public"] = gr.Checkbox(
-                                    label="Check this to make your model public (ie. visible and downloadable by anyone)",
-                                    info="You model is private by default"
-                                )
-                                self.components["push_model_btn"] = gr.Button(
-                                    "Push my model"
-                                )
+                    with gr.Row():
+                        self.components["download_dataset_btn"] = gr.DownloadButton(
+                            "Download training dataset",
+                            variant="secondary",
+                            size="lg"
+                        )
+                        self.components["download_model_btn"] = gr.DownloadButton(
+                            "Download model weights",
+                            variant="secondary",
+                            size="lg"
+                        )
+            with gr.Row():
+                with gr.Column():
+                    gr.Markdown("## Publish your model")
+                    gr.Markdown("You model can be pushed to Hugging Face (this will use HF_API_TOKEN)")
 
-                with gr.Row():
-                    with gr.Column():
-                        with gr.Row():
-                            with gr.Column():
-                                gr.Markdown("## Storage management")
-                                with gr.Row():
-                                    self.components["download_dataset_btn"] = gr.DownloadButton(
-                                        "Download dataset (click again if DL doesn't start)",
-                                        variant="secondary",
-                                        size="lg"
-                                    )
-                                    self.components["download_model_btn"] = gr.DownloadButton(
-                                        "Download model (click again if DL doesn't start)",
-                                        variant="secondary",
-                                        size="lg"
-                                    )
+            with gr.Row():
+                with gr.Column():
+                    self.components["repo_id"] = gr.Textbox(
+                        label="HuggingFace Model Repository",
+                        placeholder="username/model-name",
+                        info="The repository will be created if it doesn't exist"
+                    )
+                    self.components["make_public"] = gr.Checkbox(
+                        label="Check this to make your model public (ie. visible and downloadable by anyone)",
+                        info="You model is private by default"
+                    )
+                    self.components["push_model_btn"] = gr.Button(
+                        "Push my model"
+                    )
 
-                        with gr.Row():
-                            self.components["global_stop_btn"] = gr.Button(
-                                "Stop everything and delete my data",
-                                variant="stop"
-                            )
-                            self.components["global_status"] = gr.Textbox(
-                                label="Global Status",
-                                interactive=False,
-                                visible=False
-                            )
+            with gr.Row():
+                with gr.Column():
+                    gr.Markdown("## Delete your model")
+                    gr.Markdown("If something went wrong, you can trigger a full reset (model shutdown + data destruction).")
+                    gr.Markdown("Make sure you have made a backup first.")
+                    gr.Markdown("If you are deleting because of a bug, remember you can use the Developer Mode on HF to inspect the working directory (in /data or .data)")
+
+            with gr.Row():
+                self.components["global_stop_btn"] = gr.Button(
+                    "Stop everything and delete my data",
+                    variant="stop"
+                )
+                self.components["global_status"] = gr.Textbox(
+                    label="Global Status",
+                    interactive=False,
+                    visible=False
+                )
         
         return tab
     

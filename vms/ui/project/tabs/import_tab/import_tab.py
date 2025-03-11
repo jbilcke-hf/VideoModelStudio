@@ -9,10 +9,10 @@ import threading
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
 
-from ..base_tab import BaseTab
-from .upload_tab import UploadTab
-from .youtube_tab import YouTubeTab
-from .hub_tab import HubTab
+from vms.utils import BaseTab
+from vms.ui.project.tabs.import_tab.upload_tab import UploadTab
+from vms.ui.project.tabs.import_tab.youtube_tab import YouTubeTab
+from vms.ui.project.tabs.import_tab.hub_tab import HubTab
 
 from vms.config import (
     VIDEOS_TO_SPLIT_PATH, DEFAULT_PROMPT_PREFIX, DEFAULT_CAPTIONING_BOT_INSTRUCTIONS,
@@ -28,7 +28,8 @@ class ImportTab(BaseTab):
         super().__init__(app_state)
         self.id = "import_tab"
         self.title = "1️⃣  Import"
-        # Initialize sub-tabs
+        
+        # Initialize sub-tabs - these should be created first
         self.upload_tab = UploadTab(app_state)
         self.youtube_tab = YouTubeTab(app_state)
         self.hub_tab = HubTab(app_state)
@@ -53,7 +54,11 @@ class ImportTab(BaseTab):
                     visible=True,
                 )
             
-            # Create tabs for different import methods
+            # Create the import status textbox before creating the sub-tabs
+            with gr.Row():
+                self.components["import_status"] = gr.Textbox(label="Status", interactive=False)
+            
+            # Now create tabs for different import methods
             with gr.Tabs() as import_tabs:
                 # Create each sub-tab
                 self.upload_tab.create(import_tabs)
@@ -64,19 +69,20 @@ class ImportTab(BaseTab):
                 self.components["upload_tab"] = self.upload_tab
                 self.components["youtube_tab"] = self.youtube_tab
                 self.components["hub_tab"] = self.hub_tab
-            
-            with gr.Row():
-                self.components["import_status"] = gr.Textbox(label="Status", interactive=False)
 
         return tab
     
     def connect_events(self) -> None:
         """Connect event handlers to UI components"""
-        # Set shared components from parent tab to sub-tabs first
+        # Set shared components from parent tab to sub-tabs before connecting events
         for subtab in [self.upload_tab, self.youtube_tab, self.hub_tab]:
-            subtab.components["import_status"] = self.components["import_status"]
-            subtab.components["enable_automatic_video_split"] = self.components["enable_automatic_video_split"]
-            subtab.components["enable_automatic_content_captioning"] = self.components["enable_automatic_content_captioning"]
+            # Ensure these components exist in the parent before sharing them
+            if "import_status" in self.components:
+                subtab.components["import_status"] = self.components["import_status"]
+            if "enable_automatic_video_split" in self.components:
+                subtab.components["enable_automatic_video_split"] = self.components["enable_automatic_video_split"]
+            if "enable_automatic_content_captioning" in self.components:
+                subtab.components["enable_automatic_content_captioning"] = self.components["enable_automatic_content_captioning"]
             
         # Then connect events for each sub-tab
         self.upload_tab.connect_events()

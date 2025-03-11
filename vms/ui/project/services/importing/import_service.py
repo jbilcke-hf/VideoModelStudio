@@ -10,10 +10,11 @@ import gradio as gr
 
 from huggingface_hub import HfApi
 
-from .file_upload import FileUploadHandler
-from .youtube import YouTubeDownloader
-from .hub_dataset import HubDatasetBrowser
 from vms.config import HF_API_TOKEN
+
+from vms.ui.project.services.importing.file_upload import FileUploadHandler
+from vms.ui.project.services.importing.youtube import YouTubeDownloader
+from vms.ui.project.services.importing.hub_dataset import HubDatasetBrowser
 
 logger = logging.getLogger(__name__)
 

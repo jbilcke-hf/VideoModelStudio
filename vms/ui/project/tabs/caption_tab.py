@@ -8,10 +8,10 @@ import asyncio
 import traceback
 from typing import Dict, Any, List, Optional, AsyncGenerator, Tuple
 from pathlib import Path
+import mimetypes
 
-from .base_tab import BaseTab
-from ..config import DEFAULT_CAPTIONING_BOT_INSTRUCTIONS, DEFAULT_PROMPT_PREFIX, STAGING_PATH, TRAINING_VIDEOS_PATH
-from ..utils import is_image_file, is_video_file, copy_files_to_training_dir
+from vms.utils import BaseTab, is_image_file, is_video_file, copy_files_to_training_dir
+from vms.config import DEFAULT_CAPTIONING_BOT_INSTRUCTIONS, DEFAULT_PROMPT_PREFIX, STAGING_PATH, TRAINING_VIDEOS_PATH
 
 logger = logging.getLogger(__name__)
 
@@ -533,9 +533,7 @@ class CaptionTab(BaseTab):
         Returns:
             Dict with preview content for each preview component
         """
-        import mimetypes
-        from ..config import TRAINING_VIDEOS_PATH
-        
+
         if not selected_text or "Caption:" in selected_text:
             return {
                 "video": None,

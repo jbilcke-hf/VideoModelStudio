@@ -20,7 +20,7 @@ from typing import Any, Optional, Dict, List, Union, Tuple
 
 from huggingface_hub import upload_folder, create_repo
 
-from ..config import (
+from vms.config import (
     TrainingConfig, TRAINING_PRESETS, LOG_FILE_PATH, TRAINING_VIDEOS_PATH, 
     STORAGE_PATH, TRAINING_PATH, MODEL_PATH, OUTPUT_PATH, HF_API_TOKEN, 
     MODEL_TYPES, TRAINING_TYPES,
@@ -39,7 +39,7 @@ from ..config import (
     DEFAULT_NB_TRAINING_STEPS,
     DEFAULT_NB_LR_WARMUP_STEPS
 )
-from ..utils import (
+from vms.utils import (
     get_available_gpu_count,
     make_archive,
     parse_training_log,
