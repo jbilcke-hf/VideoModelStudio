@@ -49,7 +49,7 @@ class YouTubeTab(BaseTab):
         """Connect event handlers to UI components"""
         # YouTube download event
         self.components["youtube_download_btn"].click(
-            fn=self.app.importer.download_youtube_video,
+            fn=self.app.importing.download_youtube_video,
             inputs=[self.components["youtube_url"]],
             outputs=[self.components["import_status"]]  # This comes from parent tab
         ).success(

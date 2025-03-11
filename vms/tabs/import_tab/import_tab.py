@@ -89,7 +89,7 @@ class ImportTab(BaseTab):
         
         # If scene detection isn't already running and there are videos to process,
         # and auto-splitting is enabled, start the detection
-        if videos and not self.app.splitter.is_processing() and enable_splitting:
+        if videos and not self.app.splitting.is_processing() and enable_splitting:
             # Start the scene detection in a separate thread
             self._start_scene_detection_bg(enable_splitting)
             msg = "Starting automatic scene detection..."
@@ -133,7 +133,7 @@ class ImportTab(BaseTab):
             try:
                 async def copy_files():
                     for video_file in VIDEOS_TO_SPLIT_PATH.glob("*.mp4"):
-                        await self.app.splitter.process_video(video_file, enable_splitting=False)
+                        await self.app.splitting.process_video(video_file, enable_splitting=False)
                 
                 loop.run_until_complete(copy_files())
             except Exception as e:

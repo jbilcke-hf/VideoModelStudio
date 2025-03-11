@@ -380,7 +380,7 @@ class TrainTab(BaseTab):
 
         # Add an event handler for delete_checkpoints_btn
         self.components["delete_checkpoints_btn"].click(
-            fn=lambda: self.app.trainer.delete_all_checkpoints(),
+            fn=lambda: self.app.training.delete_all_checkpoints(),
             outputs=[self.components["status_box"]]
         )
         
@@ -437,7 +437,7 @@ class TrainTab(BaseTab):
         
         # Start training (it will automatically use the checkpoint if provided)
         try:
-            return self.app.trainer.start_training(
+            return self.app.training.start_training(
                 model_internal_type,
                 lora_rank,
                 lora_alpha,
@@ -620,13 +620,13 @@ class TrainTab(BaseTab):
     
     def get_latest_status_message_and_logs(self) -> Tuple[str, str, str]:
         """Get latest status message, log content, and status code in a safer way"""
-        state = self.app.trainer.get_status()
-        logs = self.app.trainer.get_logs()
+        state = self.app.training.get_status()
+        logs = self.app.training.get_logs()
 
         # Check if training process died unexpectedly
         training_died = False
         
-        if state["status"] == "training" and not self.app.trainer.is_training_running():
+        if state["status"] == "training" and not self.app.training.is_training_running():
             state["status"] = "error"
             state["message"] = "Training process terminated unexpectedly."
             training_died = True
@@ -769,16 +769,16 @@ class TrainTab(BaseTab):
         status, _, _ = self.get_latest_status_message_and_logs()
         
         if status == "paused":
-            self.app.trainer.resume_training()
+            self.app.training.resume_training()
         else:
-            self.app.trainer.pause_training()
+            self.app.training.pause_training()
             
         # Return the updates separately for text and buttons
         return (*self.get_status_updates(), *self.get_button_updates())
 
     def handle_stop(self):
         """Handle stop button click"""
-        self.app.trainer.stop_training()
+        self.app.training.stop_training()
         
         # Return the updates separately for text and buttons
         return (*self.get_status_updates(), *self.get_button_updates())

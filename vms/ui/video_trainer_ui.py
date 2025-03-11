@@ -5,7 +5,7 @@ import logging
 import asyncio
 from typing import Any, Optional, Dict, List, Union, Tuple
 
-from ..services import TrainingService, CaptioningService, SplittingService, ImportService, MonitoringService
+from ..services import TrainingService, CaptioningService, SplittingService, ImportingService, PreviewingService, MonitoringService
 from ..config import (
     STORAGE_PATH, VIDEOS_TO_SPLIT_PATH, STAGING_PATH, OUTPUT_PATH,
     TRAINING_PATH, LOG_FILE_PATH, TRAINING_PRESETS, TRAINING_VIDEOS_PATH, MODEL_PATH, OUTPUT_PATH,
@@ -40,17 +40,18 @@ class VideoTrainerUI:
     def __init__(self):
         """Initialize services and tabs"""
         # Initialize core services
-        self.trainer = TrainingService(self)
-        self.splitter = SplittingService()
-        self.importer = ImportService()
-        self.captioner = CaptioningService()
-        self.monitor = MonitoringService()
+        self.training = TrainingService(self)
+        self.splitting = SplittingService()
+        self.importing = ImportingService()
+        self.captioning = CaptioningService()
+        self.monitoring = MonitoringService()
+        self.previewing = PreviewingService()
 
         # Start the monitoring service on app creation
-        self.monitor.start_monitoring()
+        self.monitoring.start_monitoring()
     
         # Recovery status from any interrupted training
-        recovery_result = self.trainer.recover_interrupted_training()
+        recovery_result = self.training.recover_interrupted_training()
         # Add null check for recovery_result
         if recovery_result is None:
             recovery_result = {"status": "unknown", "ui_updates": {}}
@@ -267,7 +268,7 @@ class VideoTrainerUI:
             if ui_state:
                 current_state = self.load_ui_values()
                 current_state.update(ui_state)
-                self.trainer.save_ui_state(current_state)
+                self.training.save_ui_state(current_state)
                 logger.info(f"Updated UI state from recovery: {ui_state}")
         
         # Load values (potentially with recovery updates applied)
@@ -384,15 +385,15 @@ class VideoTrainerUI:
 
     def update_ui_state(self, **kwargs):
         """Update UI state with new values"""
-        current_state = self.trainer.load_ui_state()
+        current_state = self.training.load_ui_state()
         current_state.update(kwargs)
-        self.trainer.save_ui_state(current_state)
+        self.training.save_ui_state(current_state)
         # Don't return anything to avoid Gradio warnings
         return None
 
     def load_ui_values(self):
         """Load UI state values for initializing form fields"""
-        ui_state = self.trainer.load_ui_state()
+        ui_state = self.training.load_ui_state()
         
         # Ensure proper type conversion for numeric values
         ui_state["lora_rank"] = ui_state.get("lora_rank", DEFAULT_LORA_RANK_STR)
@@ -407,7 +408,7 @@ class VideoTrainerUI:
     # Add this new method to get initial button states:
     def get_initial_button_states(self):
         """Get the initial states for training buttons based on recovery status"""
-        recovery_result = self.state.get("recovery_result") or self.trainer.recover_interrupted_training()
+        recovery_result = self.state.get("recovery_result") or self.training.recover_interrupted_training()
         ui_updates = recovery_result.get("ui_updates", {})
         
         # Check for checkpoints to determine start button text
@@ -415,7 +416,7 @@ class VideoTrainerUI:
         
         # Default button states if recovery didn't provide any
         if not ui_updates or not ui_updates.get("start_btn"):
-            is_training = self.trainer.is_training_running()
+            is_training = self.training.is_training_running()
             
             if is_training:
                 # Active training detected

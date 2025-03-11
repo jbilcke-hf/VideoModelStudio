@@ -140,8 +140,8 @@ class MonitorTab(BaseTab):
     def on_enter(self):
         """Called when the tab is selected"""
         # Start monitoring service if not already running
-        if not self.app.monitor.is_running:
-            self.app.monitor.start_monitoring()
+        if not self.app.monitoring.is_running:
+            self.app.monitoring.start_monitoring()
         
         # Trigger initial refresh
         return self.refresh_all()
@@ -178,7 +178,7 @@ class MonitorTab(BaseTab):
         """
         try:
             # Get system info
-            system_info = self.app.monitor.get_system_info()
+            system_info = self.app.monitoring.get_system_info()
             
             # Split system info into separate components
             system_info_html = self.format_system_info(system_info)
@@ -187,13 +187,13 @@ class MonitorTab(BaseTab):
             storage_info_html = self.format_storage_info()
             
             # Get current metrics
-            # current_metrics = self.app.monitor.get_current_metrics()
+            # current_metrics = self.app.monitoring.get_current_metrics()
             metrics_html = "" # self.format_current_metrics(current_metrics)
             
             # Generate plots
-            cpu_plot = self.app.monitor.generate_cpu_plot()
-            memory_plot = self.app.monitor.generate_memory_plot()
-            #per_core_plot = self.app.monitor.generate_per_core_plot()
+            cpu_plot = self.app.monitoring.generate_cpu_plot()
+            memory_plot = self.app.monitoring.generate_memory_plot()
+            #per_core_plot = self.app.monitoring.generate_per_core_plot()
             
             return (
                 system_info_html, 
