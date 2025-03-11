@@ -137,7 +137,7 @@ class AppUI:
             title="🎞️ Video Model Studio",
 
             # Let's hack Gradio!
-            css="#component-8 > .tab-wrapper{ display: none; }") as app:
+            css="#main-tabs > .tab-wrapper{ display: none; }") as app:
             self.app = app
             
             
@@ -152,7 +152,7 @@ class AppUI:
                 # Main content area with tabs
                 with gr.Column():
                     # Main tabbed interface for switching between Project and Monitor views
-                    with gr.Tabs() as main_tabs:
+                    with gr.Tabs(elem_id="main-tabs") as main_tabs:
                         self.main_tabs = main_tabs
                         
                         # Project View Tab
