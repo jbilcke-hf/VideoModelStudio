@@ -6,7 +6,7 @@ import gradio as gr
 import logging
 from typing import Dict, Any, List, Optional
 
-from .base_tab import BaseTab
+from vms.utils import BaseTab
 
 logger = logging.getLogger(__name__)
 

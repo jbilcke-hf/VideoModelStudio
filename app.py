@@ -15,7 +15,7 @@ from vms.config import (
     HF_API_TOKEN
 )
 
-from vms.ui.video_trainer_ui import VideoTrainerUI
+from vms.ui.app_ui import AppUI
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -37,7 +37,7 @@ To avoid overpaying for your space, you can configure the auto-sleep settings to
         return app
 
     # Create the main application UI
-    ui = VideoTrainerUI()
+    ui = AppUI()
     app = ui.create_ui()
 
     return app

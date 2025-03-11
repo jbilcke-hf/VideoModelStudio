@@ -8,8 +8,8 @@ import os
 from typing import Dict, Any, List, Optional, Tuple
 from pathlib import Path
 
-from .base_tab import BaseTab
-from ..config import (
+from vms.utils import BaseTab
+from vms.config import (
     TRAINING_PRESETS, OUTPUT_PATH, MODEL_TYPES, ASK_USER_TO_DUPLICATE_SPACE, SMALL_TRAINING_BUCKETS, TRAINING_TYPES,
     DEFAULT_NB_TRAINING_STEPS, DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
     DEFAULT_BATCH_SIZE, DEFAULT_CAPTION_DROPOUT_P,

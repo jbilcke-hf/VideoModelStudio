@@ -10,7 +10,7 @@ import threading
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
 
-from ..base_tab import BaseTab
+from vms.utils import BaseTab
 
 logger = logging.getLogger(__name__)
 
@@ -26,21 +26,31 @@ class HubTab(BaseTab):
     def create(self, parent=None) -> gr.Tab:
         """Create the Hub tab UI components"""
         with gr.Tab(self.title, id=self.id) as tab:
+
             with gr.Column():
                 with gr.Row():
-                    gr.Markdown("## Import from Hub datasets")
+                    gr.Markdown("## Import a dataset from Hugging Face")
                 
                 with gr.Row():
-                    gr.Markdown("Search for datasets with videos or WebDataset archives:")
-                
+                    with gr.Column():
+                        with gr.Row():
+                            gr.Markdown("You can use any dataset containing video files (.mp4) with optional captions (same names but in .txt format)")
+                        
+                        with gr.Row():
+                            gr.Markdown("You can also use a dataset containing WebDataset shards (.tar files).")
+
+                    with gr.Column():
+                        self.components["dataset_search"] = gr.Textbox(
+                            label="Search Hugging Face Datasets (MP4, WebDataset)",
+                            placeholder="video datasets eg. cakeify, disney, rickroll.."
+                        )
+                    
                 with gr.Row():
-                    self.components["dataset_search"] = gr.Textbox(
-                        label="Search Hugging Face Datasets (eg. cakeify, disney, rickroll..)",
-                        placeholder="Search for video datasets (eg. cakeify, disney, rickroll..)"
+                    self.components["dataset_search_btn"] = gr.Button(
+                        "Search Datasets",
+                        variant="primary",
+                        #size="md"
                     )
-                
-                with gr.Row():
-                    self.components["dataset_search_btn"] = gr.Button("Search Datasets", variant="primary")
                 
                 # Dataset browser results section
                 with gr.Row(visible=False) as dataset_results_row:
@@ -65,8 +75,6 @@ class HubTab(BaseTab):
                         # Files section that appears when a dataset is selected
                         with gr.Column(visible=False) as files_section:
                             self.components["files_section"] = files_section
-                            
-                            gr.Markdown("## Files:")
                             
                             # Video files row (appears if videos are present)
                             with gr.Row() as video_files_row:

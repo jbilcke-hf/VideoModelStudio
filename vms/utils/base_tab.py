@@ -15,7 +15,7 @@ class BaseTab:
         """Initialize the tab with app state reference
         
         Args:
-            app_state: Reference to main VideoTrainerUI instance
+            app_state: Reference to main AppUI instance
         """
         self.app = app_state
         self.components = {}

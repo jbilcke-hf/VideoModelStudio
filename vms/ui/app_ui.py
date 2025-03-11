@@ -5,8 +5,7 @@ import logging
 import asyncio
 from typing import Any, Optional, Dict, List, Union, Tuple
 
-from ..services import TrainingService, CaptioningService, SplittingService, ImportingService, PreviewingService, MonitoringService
-from ..config import (
+from vms.config import (
     STORAGE_PATH, VIDEOS_TO_SPLIT_PATH, STAGING_PATH, OUTPUT_PATH,
     TRAINING_PATH, LOG_FILE_PATH, TRAINING_PRESETS, TRAINING_VIDEOS_PATH, MODEL_PATH, OUTPUT_PATH,
     MODEL_TYPES, SMALL_TRAINING_BUCKETS, TRAINING_TYPES,
@@ -22,13 +21,27 @@ from ..config import (
     DEFAULT_NB_TRAINING_STEPS,
     DEFAULT_NB_LR_WARMUP_STEPS
 )
-from ..utils import (
+from vms.utils import (
     get_recommended_precomputation_items,
     count_media_files,
     format_media_title,
     TrainingLogParser
 )
-from ..tabs import ImportTab, SplitTab, CaptionTab, TrainTab, MonitorTab, PreviewTab, ManageTab
+
+from vms.ui.project.services import (
+    TrainingService, CaptioningService, SplittingService, ImportingService, PreviewingService
+)
+from vms.ui.project.tabs import (
+    ImportTab, SplitTab, CaptionTab, TrainTab, PreviewTab, ManageTab
+)
+
+from vms.ui.monitoring.services import (
+    MonitoringService
+)
+
+from vms.ui.monitoring.tabs import (
+    GeneralTab
+)
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -36,22 +49,23 @@ logger.setLevel(logging.INFO)
 httpx_logger = logging.getLogger('httpx')
 httpx_logger.setLevel(logging.WARN)
 
-class VideoTrainerUI:       
+class AppUI:       
     def __init__(self):
         """Initialize services and tabs"""
-        # Initialize core services
+        # Project view
         self.training = TrainingService(self)
         self.splitting = SplittingService()
         self.importing = ImportingService()
         self.captioning = CaptioningService()
-        self.monitoring = MonitoringService()
         self.previewing = PreviewingService()
 
-        # Start the monitoring service on app creation
+        # Monitoring view
+        self.monitoring = MonitoringService()
         self.monitoring.start_monitoring()
     
         # Recovery status from any interrupted training
         recovery_result = self.training.recover_interrupted_training()
+
         # Add null check for recovery_result
         if recovery_result is None:
             recovery_result = {"status": "unknown", "ui_updates": {}}
@@ -67,9 +81,13 @@ class VideoTrainerUI:
             "recovery_result": recovery_result
         }
         
-        # Initialize tabs dictionary (will be populated in create_ui)
+        # Initialize tabs dictionary
         self.tabs = {}
-        self.tabs_component = None
+        self.project_tabs = {}
+        self.monitor_tabs = {}
+        self.main_tabs = None  # Main tabbed interface
+        self.project_tabs_component = None  # Project sub-tabs
+        self.monitor_tabs_component = None  # Monitor sub-tabs
 
         # Log recovery status
         logger.info(f"Initialization complete. Recovery status: {self.recovery_status}")
@@ -99,89 +117,153 @@ class VideoTrainerUI:
             logger.info(f"Added periodic callback {callback_fn.__name__} with interval {interval}s")
         except Exception as e:
             logger.error(f"Error adding periodic callback: {e}", exc_info=True)
+    
+    def switch_to_tab(self, tab_index: int):
+        """Switch to the specified tab index
+        
+        Args:
+            tab_index: Index of the tab to select (0 for Project, 1 for Monitor)
             
+        Returns:
+            Tab selection dictionary for Gradio
+        """
+        
+        return gr.Tabs(selected=tab_index)
+    
     def create_ui(self):
-        """Create the main Gradio UI"""
-        with gr.Blocks(title="🎥 Video Model Studio") as app:
-            gr.Markdown("# 🎥 Video Model Studio")
+        self.components = {}
+        """Create the main Gradio UI with tabbed navigation"""
+        with gr.Blocks(
+            title="🎞️ Video Model Studio",
+
+            # Let's hack Gradio!
+            css="#component-8 > .tab-wrapper{ display: none; }") as app:
+            self.app = app
             
-            # Create main tabs component
-            with gr.Tabs() as self.tabs_component:
-                # Initialize tab objects
-                self.tabs["import_tab"] = ImportTab(self)
-                self.tabs["split_tab"] = SplitTab(self)
-                self.tabs["caption_tab"] = CaptionTab(self)
-                self.tabs["train_tab"] = TrainTab(self)
-                self.tabs["monitor_tab"] = MonitorTab(self)
-                self.tabs["preview_tab"] = PreviewTab(self)
-                self.tabs["manage_tab"] = ManageTab(self)
-                
-                # Create tab UI components
-                for tab_id, tab_obj in self.tabs.items():
-                    tab_obj.create(self.tabs_component)
             
-            # Connect event handlers
+            # Main container with sidebar and tab area
+            with gr.Row():
+                # Sidebar for navigation
+                with gr.Sidebar(position="left", open=True):
+                    gr.Markdown("# 🎞️ Video Model Studio")
+                    self.components["current_project_btn"] = gr.Button("Current Project", variant="primary")
+                    self.components["system_monitoring_btn"] = gr.Button("System Monitoring")
+
+                # Main content area with tabs
+                with gr.Column():
+                    # Main tabbed interface for switching between Project and Monitor views
+                    with gr.Tabs() as main_tabs:
+                        self.main_tabs = main_tabs
+                        
+                        # Project View Tab
+                        with gr.Tab("📁 Current Project", id=0) as project_view:
+                            # Create project tabs
+                            with gr.Tabs() as project_tabs:
+                                # Store reference to project tabs component
+                                self.project_tabs_component = project_tabs
+                                
+                                # Initialize project tab objects
+                                self.project_tabs["import_tab"] = ImportTab(self)
+                                self.project_tabs["split_tab"] = SplitTab(self)
+                                self.project_tabs["caption_tab"] = CaptionTab(self)
+                                self.project_tabs["train_tab"] = TrainTab(self)
+                                self.project_tabs["preview_tab"] = PreviewTab(self)
+                                self.project_tabs["manage_tab"] = ManageTab(self)
+                                
+                                # Create tab UI components for project
+                                for tab_id, tab_obj in self.project_tabs.items():
+                                    tab_obj.create(project_tabs)
+                        
+                        # Monitoring View Tab
+                        with gr.Tab("📊 System Monitoring", id=1) as monitoring_view:
+                            # Create monitoring tabs
+                            with gr.Tabs() as monitoring_tabs:
+                                # Store reference to monitoring tabs component
+                                self.monitor_tabs_component = monitoring_tabs
+                                
+                                # Initialize monitoring tab objects
+                                self.monitor_tabs["general_tab"] = GeneralTab(self)
+                                
+                                # Create tab UI components for monitoring
+                                for tab_id, tab_obj in self.monitor_tabs.items():
+                                    tab_obj.create(monitoring_tabs)
+            
+            # Combine all tabs into a single dictionary for event handling
+            self.tabs = {**self.project_tabs, **self.monitor_tabs}
+
+            # Connect event handlers for all tabs - this must happen AFTER all tabs are created
             for tab_id, tab_obj in self.tabs.items():
                 tab_obj.connect_events()
             
             # app-level timers for auto-refresh functionality
             self._add_timers()
+
+            # Connect navigation events using tab switching
+            self.components["current_project_btn"].click(
+                fn=lambda: self.switch_to_tab(0),
+                outputs=[self.main_tabs],
+            )
+            
+            self.components["system_monitoring_btn"].click(
+                fn=lambda: self.switch_to_tab(1),
+                outputs=[self.main_tabs],
+            )
             
             # Initialize app state on load
             app.load(
                 fn=self.initialize_app_state,
                 outputs=[
-                    self.tabs["split_tab"].components["video_list"],
-                    self.tabs["caption_tab"].components["training_dataset"],
-                    self.tabs["train_tab"].components["start_btn"],
-                    self.tabs["train_tab"].components["stop_btn"],
-                    self.tabs["train_tab"].components["pause_resume_btn"],
-                    self.tabs["train_tab"].components["training_preset"],
-                    self.tabs["train_tab"].components["model_type"],
-                    self.tabs["train_tab"].components["training_type"],
-                    self.tabs["train_tab"].components["lora_rank"],
-                    self.tabs["train_tab"].components["lora_alpha"],
-                    self.tabs["train_tab"].components["train_steps"],
-                    self.tabs["train_tab"].components["batch_size"],
-                    self.tabs["train_tab"].components["learning_rate"],
-                    self.tabs["train_tab"].components["save_iterations"],
-                    self.tabs["train_tab"].components["current_task_box"],
-                    self.tabs["train_tab"].components["num_gpus"],
-                    self.tabs["train_tab"].components["precomputation_items"],
-                    self.tabs["train_tab"].components["lr_warmup_steps"]
+                    self.project_tabs["split_tab"].components["video_list"],
+                    self.project_tabs["caption_tab"].components["training_dataset"],
+                    self.project_tabs["train_tab"].components["start_btn"],
+                    self.project_tabs["train_tab"].components["stop_btn"],
+                    self.project_tabs["train_tab"].components["pause_resume_btn"],
+                    self.project_tabs["train_tab"].components["training_preset"],
+                    self.project_tabs["train_tab"].components["model_type"],
+                    self.project_tabs["train_tab"].components["training_type"],
+                    self.project_tabs["train_tab"].components["lora_rank"],
+                    self.project_tabs["train_tab"].components["lora_alpha"],
+                    self.project_tabs["train_tab"].components["train_steps"],
+                    self.project_tabs["train_tab"].components["batch_size"],
+                    self.project_tabs["train_tab"].components["learning_rate"],
+                    self.project_tabs["train_tab"].components["save_iterations"],
+                    self.project_tabs["train_tab"].components["current_task_box"],
+                    self.project_tabs["train_tab"].components["num_gpus"],
+                    self.project_tabs["train_tab"].components["precomputation_items"],
+                    self.project_tabs["train_tab"].components["lr_warmup_steps"]
                 ]
             )
-            
+        
         return app
-    
+        
     def _add_timers(self):
         """Add auto-refresh timers to the UI"""
         # Status update timer for text components (every 1 second)
         status_timer = gr.Timer(value=1)
         status_timer.tick(
-            fn=self.tabs["train_tab"].get_status_updates,  # Use a new function that returns appropriate updates
+            fn=self.project_tabs["train_tab"].get_status_updates,  # Use a new function that returns appropriate updates
             outputs=[
-                self.tabs["train_tab"].components["status_box"],
-                self.tabs["train_tab"].components["log_box"],
-                self.tabs["train_tab"].components["current_task_box"] if "current_task_box" in self.tabs["train_tab"].components else None
+                self.project_tabs["train_tab"].components["status_box"],
+                self.project_tabs["train_tab"].components["log_box"],
+                self.project_tabs["train_tab"].components["current_task_box"] if "current_task_box" in self.project_tabs["train_tab"].components else None
             ]
         )
         
         # Button update timer for button components (every 1 second)
         button_timer = gr.Timer(value=1)
         button_outputs = [
-            self.tabs["train_tab"].components["start_btn"],
-            self.tabs["train_tab"].components["stop_btn"]
+            self.project_tabs["train_tab"].components["start_btn"],
+            self.project_tabs["train_tab"].components["stop_btn"]
         ]
         
         # Add delete_checkpoints_btn or pause_resume_btn as the third button
-        if "delete_checkpoints_btn" in self.tabs["train_tab"].components:
-            button_outputs.append(self.tabs["train_tab"].components["delete_checkpoints_btn"])
-        elif "pause_resume_btn" in self.tabs["train_tab"].components:
-            button_outputs.append(self.tabs["train_tab"].components["pause_resume_btn"])
+        if "delete_checkpoints_btn" in self.project_tabs["train_tab"].components:
+            button_outputs.append(self.project_tabs["train_tab"].components["delete_checkpoints_btn"])
+        elif "pause_resume_btn" in self.project_tabs["train_tab"].components:
+            button_outputs.append(self.project_tabs["train_tab"].components["pause_resume_btn"])
         
         button_timer.tick(
-            fn=self.tabs["train_tab"].get_button_updates,  # Use a new function for button-specific updates
+            fn=self.project_tabs["train_tab"].get_button_updates,  # Use a new function for button-specific updates
             outputs=button_outputs
         )
         
@@ -190,8 +272,8 @@ class VideoTrainerUI:
         dataset_timer.tick(
             fn=self.refresh_dataset,
             outputs=[
-                self.tabs["split_tab"].components["video_list"],
-                self.tabs["caption_tab"].components["training_dataset"]
+                self.project_tabs["split_tab"].components["video_list"],
+                self.project_tabs["caption_tab"].components["training_dataset"]
             ]
         )
         
@@ -200,17 +282,17 @@ class VideoTrainerUI:
         titles_timer.tick(
             fn=self.update_titles,
             outputs=[
-                self.tabs["split_tab"].components["split_title"],
-                self.tabs["caption_tab"].components["caption_title"],
-                self.tabs["train_tab"].components["train_title"]
+                self.project_tabs["split_tab"].components["split_title"],
+                self.project_tabs["caption_tab"].components["caption_title"],
+                self.project_tabs["train_tab"].components["train_title"]
             ]
         )
     
     def initialize_app_state(self):
         """Initialize all app state in one function to ensure correct output count"""
         # Get dataset info
-        video_list = self.tabs["split_tab"].list_unprocessed_videos()
-        training_dataset = self.tabs["caption_tab"].list_training_files_to_caption()
+        video_list = self.project_tabs["split_tab"].list_unprocessed_videos()
+        training_dataset = self.project_tabs["caption_tab"].list_training_files_to_caption()
         
         # Get button states based on recovery status
         button_states = self.get_initial_button_states()
@@ -474,8 +556,8 @@ class VideoTrainerUI:
     
     def refresh_dataset(self):
         """Refresh all dynamic lists and training state"""
-        video_list = self.tabs["split_tab"].list_unprocessed_videos()
-        training_dataset = self.tabs["caption_tab"].list_training_files_to_caption()
+        video_list = self.project_tabs["split_tab"].list_unprocessed_videos()
+        training_dataset = self.project_tabs["caption_tab"].list_training_files_to_caption()
 
         return (
             video_list,

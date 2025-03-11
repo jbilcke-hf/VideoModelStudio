@@ -9,6 +9,7 @@ from .finetrainers_utils import prepare_finetrainers_dataset, copy_files_to_trai
 from . import webdataset_handler
 
 from .gpu_detector import get_available_gpu_count, get_gpu_info, get_recommended_precomputation_items
+from .base_tab import BaseTab
 
 __all__ = [
     'validate_model_repo',
@@ -39,5 +40,7 @@ __all__ = [
 
     'get_available_gpu_count',
     'get_gpu_info',
-    'get_recommended_precomputation_items'
+    'get_recommended_precomputation_items',
+
+    'BaseTab',
 ]

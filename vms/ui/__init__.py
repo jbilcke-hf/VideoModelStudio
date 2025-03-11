@@ -1,5 +1,5 @@
-from .video_trainer_ui import VideoTrainerUI
+from .app_ui import AppUI
 
 __all__ = [
-    'VideoTrainerUI',
+    'AppUI',
 ]

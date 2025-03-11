@@ -8,8 +8,8 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
 import time
 
-from .base_tab import BaseTab
-from ..config import (
+from vms.utils import BaseTab
+from vms.config import (
     MODEL_TYPES, DEFAULT_PROMPT_PREFIX
 )
 
@@ -21,13 +21,13 @@ class PreviewTab(BaseTab):
     def __init__(self, app_state):
         super().__init__(app_state)
         self.id = "preview_tab"
-        self.title = "6️⃣  Preview"
+        self.title = "5️⃣  Preview"
          
     def create(self, parent=None) -> gr.TabItem:
         """Create the Preview tab UI components"""
         with gr.TabItem(self.title, id=self.id) as tab:
             with gr.Row():
-                gr.Markdown("## Test Your Trained Model")
+                gr.Markdown("## Preview your model")
             
             with gr.Row():
                 with gr.Column(scale=2):
