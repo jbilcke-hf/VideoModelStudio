@@ -22,6 +22,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 class MonitoringService:
     """Service for monitoring system resources and performance"""

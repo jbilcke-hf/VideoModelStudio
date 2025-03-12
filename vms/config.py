@@ -61,7 +61,7 @@ JPEG_QUALITY = int(os.environ.get('JPEG_QUALITY', '97'))
 MODEL_TYPES = {
     "HunyuanVideo": "hunyuan_video", 
     "LTX-Video": "ltx_video",
-    "Wan-2.1-T2V": "wan"
+    "Wan": "wan"
 }
 
 # Training types
@@ -70,8 +70,8 @@ TRAINING_TYPES = {
     "Full Finetune": "full-finetune"
 }
 
-# Model variants for each model type
-MODEL_VARIANTS = {
+# Model versions for each model type
+MODEL_VERSIONS = {
     "wan": {
         "Wan-AI/Wan2.1-T2V-1.3B-Diffusers": {
             "name": "Wan 2.1 T2V 1.3B (text-only, smaller)",
@@ -342,7 +342,7 @@ class TrainingConfig:
     
     # Optional arguments follow
     revision: Optional[str] = None
-    variant: Optional[str] = None
+    version: Optional[str] = None
     cache_dir: Optional[str] = None
     
     # Dataset arguments
@@ -415,7 +415,7 @@ class TrainingConfig:
             train_steps=DEFAULT_NB_TRAINING_STEPS,
             lr=2e-5,
             gradient_checkpointing=True,
-            id_token="afkx",
+            id_token=None,
             gradient_accumulation_steps=1,
             lora_rank=DEFAULT_LORA_RANK,
             lora_alpha=DEFAULT_LORA_ALPHA,
@@ -437,7 +437,7 @@ class TrainingConfig:
             train_steps=DEFAULT_NB_TRAINING_STEPS,
             lr=DEFAULT_LEARNING_RATE,
             gradient_checkpointing=True,
-            id_token="BW_STYLE",
+            id_token=None,
             gradient_accumulation_steps=4,
             lora_rank=DEFAULT_LORA_RANK,
             lora_alpha=DEFAULT_LORA_ALPHA,
@@ -459,7 +459,7 @@ class TrainingConfig:
             train_steps=DEFAULT_NB_TRAINING_STEPS,
             lr=1e-5,
             gradient_checkpointing=True,
-            id_token="BW_STYLE",
+            id_token=None,
             gradient_accumulation_steps=1,
             video_resolution_buckets=buckets or SMALL_TRAINING_BUCKETS,
             caption_dropout_p=DEFAULT_CAPTION_DROPOUT_P,
@@ -479,7 +479,7 @@ class TrainingConfig:
             train_steps=DEFAULT_NB_TRAINING_STEPS,
             lr=5e-5,
             gradient_checkpointing=True,
-            id_token=None,  # Default is no ID token for Wan
+            id_token=None,
             gradient_accumulation_steps=1,
             lora_rank=32,
             lora_alpha=32,
@@ -502,8 +502,8 @@ class TrainingConfig:
         args.extend(["--pretrained_model_name_or_path", self.pretrained_model_name_or_path])
         if self.revision:
             args.extend(["--revision", self.revision])
-        if self.variant:
-            args.extend(["--variant", self.variant]) 
+        if self.version:
+            args.extend(["--variant", self.version]) 
         if self.cache_dir:
             args.extend(["--cache_dir", self.cache_dir])
 

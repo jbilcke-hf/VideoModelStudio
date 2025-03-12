@@ -21,6 +21,7 @@ from vms.config import TRAINING_VIDEOS_PATH, STAGING_PATH, PRELOAD_CAPTIONING_MO
 from vms.utils import extract_scene_info, is_image_file, is_video_file, copy_files_to_training_dir, prepare_finetrainers_dataset
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 @dataclass
 class CaptioningProgress:

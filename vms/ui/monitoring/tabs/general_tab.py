@@ -17,7 +17,7 @@ from vms.config import STORAGE_PATH
 from vms.ui.monitoring.utils import get_folder_size, human_readable_size
 
 logger = logging.getLogger(__name__)
-
+logger.setLevel(logging.INFO)
 
 class GeneralTab(BaseTab):
     """Monitor tab for general system resource monitoring"""

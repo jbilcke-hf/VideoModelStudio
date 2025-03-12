@@ -16,6 +16,7 @@ from vms.config import TRAINING_PATH, STORAGE_PATH, TRAINING_VIDEOS_PATH, VIDEOS
 from vms.utils import remove_black_bars, extract_scene_info, is_video_file, is_image_file, add_prefix_to_caption
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 class SplittingService:
     def __init__(self):
