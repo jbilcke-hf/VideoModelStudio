@@ -90,25 +90,37 @@ class ImportTab(BaseTab):
         self.youtube_tab.connect_events()
         self.hub_tab.connect_events()
     
-    def on_import_success(self, enable_splitting, enable_automatic_content_captioning, prompt_prefix):
+    def on_import_success(
+        self,
+        enable_splitting: bool,
+        enable_automatic_content_captioning: bool,
+        prompt_prefix: str
+    ):
         """Handle successful import of files"""
+        #print(f"on_import_success(self, enable_splitting={enable_splitting}, enable_automatic_content_captioning={enable_automatic_content_captioning}, prompt_prefix={prompt_prefix})")
         # If splitting is disabled, we need to directly move videos to staging
-        if not enable_splitting:
-            # Copy files without splitting
-            self._start_copy_to_staging_bg()
-            msg = "Copying videos to staging directory without splitting..."
-        else:
+        if enable_splitting:
+            #print("on_import_success: -> splitting enabled!")
             # Start scene detection if not already running and there are videos to process
             if not self.app.splitting.is_processing():
+                #print("on_import_success: -> calling self._start_scene_detection_bg(enable_splitting)")
                 # Start the scene detection in a separate thread
                 self._start_scene_detection_bg(enable_splitting)
                 msg = "Starting automatic scene detection..."
             else:
                 msg = "Scene detection already running..."
 
-        # Copy files to training directory
-        self.app.tabs["caption_tab"].copy_files_to_training_dir(prompt_prefix)
-        
+            # Copy files to training directory
+            self.app.tabs["caption_tab"].copy_files_to_training_dir(prompt_prefix)
+        else:
+            #print("on_import_success: -> splitting NOT enabled")
+            # Copy files without splitting
+            self._start_copy_to_staging_bg()
+            msg = "Copying videos to staging directory without splitting..."
+            
+            # Also immediately copy to training directory
+            self.app.tabs["caption_tab"].copy_files_to_training_dir(prompt_prefix)
+
         # Start auto-captioning if enabled
         if enable_automatic_content_captioning:
             self._start_captioning_bg(DEFAULT_CAPTIONING_BOT_INSTRUCTIONS, prompt_prefix)
@@ -122,8 +134,9 @@ class ImportTab(BaseTab):
             logger.warning("Cannot switch tabs - project_tabs_component not available")
             return None, msg
     
-    def _start_scene_detection_bg(self, enable_splitting):
+    def _start_scene_detection_bg(self, enable_splitting: bool):
         """Start scene detection in a background thread"""
+        print(f"_start_scene_detection_bg(enable_splitting={enable_splitting})")
         def run_async_in_thread():
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
@@ -207,11 +220,13 @@ class ImportTab(BaseTab):
         thread.daemon = True
         thread.start()
         
-    async def update_titles_after_import(self, enable_splitting, enable_automatic_content_captioning, prompt_prefix):
+    async def update_titles_after_import(self, enable_splitting: bool, enable_automatic_content_captioning: bool, prompt_prefix: str):
         """Handle post-import updates including titles"""
         # Call the non-async version since we need to return immediately for the UI
         tabs, status_msg = self.on_import_success(
-            enable_splitting, enable_automatic_content_captioning, prompt_prefix
+            enable_splitting,
+            enable_automatic_content_captioning,
+            prompt_prefix
         )
         
         # Get updated titles

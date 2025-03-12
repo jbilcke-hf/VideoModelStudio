@@ -28,32 +28,37 @@ class ImportingService:
         self.youtube_handler = YouTubeDownloader()
         self.hub_browser = HubDatasetBrowser(self.hf_api)
     
-    def process_uploaded_files(self, file_paths: List[str]) -> str:
+    def process_uploaded_files(self, file_paths: List[str], enable_splitting: bool) -> str:
         """Process uploaded file (ZIP, TAR, MP4, or image)
         
         Args:
             file_paths: File paths to the uploaded files from Gradio
+            enable_splitting: Whether to enable automatic video splitting
                 
         Returns:
             Status message string
         """
+        print(f"process_uploaded_files(...,  enable_splitting = { enable_splitting})")
         if not file_paths or len(file_paths) == 0:
             logger.warning("No files provided to process_uploaded_files")
             return "No files provided"
         
-        return self.file_handler.process_uploaded_files(file_paths)
+        print(f"process_uploaded_files(..., enable_splitting = {enable_splitting:})")
+        print(f"process_uploaded_files: calling self.file_handler.process_uploaded_files")
+        return self.file_handler.process_uploaded_files(file_paths, enable_splitting)
     
-    def download_youtube_video(self, url: str, progress=None) -> str:
+    def download_youtube_video(self, url: str, enable_splitting: bool, progress=None) -> str:
         """Download a video from YouTube
         
         Args:
             url: YouTube video URL
+            enable_splitting: Whether to enable automatic video splitting
             progress: Optional Gradio progress indicator
             
         Returns:
             Status message string
         """
-        return self.youtube_handler.download_video(url, progress)
+        return self.youtube_handler.download_video(url, enable_splitting, progress)
     
     def search_datasets(self, query: str) -> List[List[str]]:
         """Search for datasets on the Hugging Face Hub
@@ -80,7 +85,7 @@ class ImportingService:
     async def download_dataset(
         self, 
         dataset_id: str, 
-        enable_splitting: bool = True,
+        enable_splitting: bool,
         progress_callback: Optional[Callable] = None
     ) -> Tuple[str, str]:
         """Download a dataset and process its video/image content
@@ -99,7 +104,7 @@ class ImportingService:
         self, 
         dataset_id: str, 
         file_type: str, 
-        enable_splitting: bool = True,
+        enable_splitting: bool,
         progress_callback: Optional[Callable] = None
     ) -> str:
         """Download a group of files (videos or WebDatasets)

@@ -83,8 +83,8 @@ class YouTubeTab(BaseTab):
             
         # YouTube download event
         download_event = self.components["youtube_download_btn"].click(
-            fn=self.app.importing.download_youtube_video,
-            inputs=[self.components["youtube_url"]],
+            fn=self.download_youtube_with_splitting,
+            inputs=[self.components["youtube_url"], self.components["enable_automatic_video_split"]],
             outputs=[self.components["import_status"]]
         )
         
@@ -107,3 +107,7 @@ class YouTubeTab(BaseTab):
             except (AttributeError, KeyError) as e:
                 logger.error(f"Error connecting success handler in YouTubeTab: {str(e)}")
                 # Continue without the success handler
+                
+    def download_youtube_with_splitting(self, url, enable_splitting):
+        """Download YouTube video with splitting option"""
+        return self.app.importing.download_youtube_video(url, enable_splitting, gr.Progress())

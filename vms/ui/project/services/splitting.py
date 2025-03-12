@@ -63,7 +63,7 @@ class SplittingService:
         """Process a single video file to detect and split scenes"""
         try:
             self._processing_status[video_path.name] = f'Processing video "{video_path.name}"...'
-            
+            print(f'Going to split scenes for video "{video_path.name}"...')
             parent_caption_path = video_path.with_suffix('.txt')
             # Create output path for split videos
             base_name, _ = extract_scene_info(video_path.name)
@@ -180,6 +180,7 @@ class SplittingService:
 
     async def start_processing(self, enable_splitting: bool) -> None:
         """Start background processing of unprocessed videos"""
+        #print(f"start_processing(enable_splitting={enable_splitting}), self.processing = {self.processing}")
         if self.processing:
             return
             
@@ -188,6 +189,8 @@ class SplittingService:
             # Process each video
             for video_file in VIDEOS_TO_SPLIT_PATH.glob("*.mp4"):
                 self._current_file = video_file.name
+                #print(f"calling await self.process_video(video_file, {enable_splitting})")
+        
                 await self.process_video(video_file, enable_splitting)
                     
         finally:

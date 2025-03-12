@@ -396,11 +396,14 @@ class AppUI:
                 model_version_val = available_model_versions[0]
                 logger.info(f"Using first available model version: {model_version_val}")
             
-            # IMPORTANT: Update the dropdown choices directly in the UI component
-            # This is essential to avoid the error when loading the UI
+            # IMPORTANT: Create a new list of simple strings for the dropdown choices
+            # This ensures each choice is a single string, not a tuple or other structure
+            simple_choices = [str(version) for version in available_model_versions]
+            
+            # Update the dropdown choices directly in the UI component
             try:
-                self.project_tabs["train_tab"].components["model_version"].choices = available_model_versions
-                logger.info(f"Updated model_version dropdown choices: {len(available_model_versions)} options")
+                self.project_tabs["train_tab"].components["model_version"].choices = simple_choices
+                logger.info(f"Updated model_version dropdown choices: {len(simple_choices)} options")
             except Exception as e:
                 logger.error(f"Error updating model_version dropdown: {str(e)}")
         else:
@@ -410,7 +413,7 @@ class AppUI:
                 self.project_tabs["train_tab"].components["model_version"].choices = []
             except Exception as e:
                 logger.error(f"Error setting empty model_version choices: {str(e)}")
-                    
+            
         # Ensure training_type is a valid display name
         training_type_val = ui_state.get("training_type", list(TRAINING_TYPES.keys())[0])
         if training_type_val not in TRAINING_TYPES:

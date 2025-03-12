@@ -17,11 +17,12 @@ logger = logging.getLogger(__name__)
 class YouTubeDownloader:
     """Handles downloading videos from YouTube"""
     
-    def download_video(self, url: str, progress: Optional[Callable] = None) -> str:
+    def download_video(self, url: str, enable_splitting: bool, progress: Optional[Callable] = None) -> str:
         """Download a video from YouTube
         
         Args:
             url: YouTube video URL
+            enable_splitting: Whether to enable automatic video splitting
             progress: Optional Gradio progress indicator
             
         Returns:
@@ -40,7 +41,10 @@ class YouTubeDownloader:
                 if progress else None)
             
             video_id = yt.video_id
-            output_path = VIDEOS_TO_SPLIT_PATH / f"{video_id}.mp4"
+            
+            # Choose target directory based on auto-splitting setting
+            target_dir = VIDEOS_TO_SPLIT_PATH if enable_splitting else STAGING_PATH
+            output_path = target_dir / f"{video_id}.mp4"
             
             # Download highest quality progressive MP4
             if progress:
@@ -58,7 +62,7 @@ class YouTubeDownloader:
                 logger.info("Starting YouTube video download...")
                 progress(0, desc="Starting download...")
             
-            video.download(output_path=str(VIDEOS_TO_SPLIT_PATH), filename=f"{video_id}.mp4")
+            video.download(output_path=str(target_dir), filename=f"{video_id}.mp4")
             
             # Update UI
             if progress:

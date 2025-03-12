@@ -168,7 +168,7 @@ class HubDatasetBrowser:
         self, 
         dataset_id: str, 
         file_type: str, 
-        enable_splitting: bool = True,
+        enable_splitting: bool,
         progress_callback: Optional[Callable] = None
     ) -> str:
         """Download all files of a specific type from the dataset
@@ -328,7 +328,7 @@ class HubDatasetBrowser:
     async def download_dataset(
         self, 
         dataset_id: str, 
-        enable_splitting: bool = True,
+        enable_splitting: bool,
         progress_callback: Optional[Callable] = None
     ) -> Tuple[str, str]:
         """Download a dataset and process its video/image content
