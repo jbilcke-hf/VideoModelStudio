@@ -28,6 +28,10 @@ VideoModelStudio is 100% open-source project, I develop and maintain it during b
 <a href="https://www.buymeacoffee.com/flngr" target="_blank"><img src="https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png" alt="Buy Me A Coffee" style="height: 41px !important;width: 174px !important;box-shadow: 0px 3px 2px 0px rgba(190, 190, 190, 0.5) !important;-webkit-box-shadow: 0px 3px 2px 0px rgba(190, 190, 190, 0.5) !important;" ></a>
 
 ## News
+- 🔥 **2025-03-12**: VMS now officially supports Wan!
+- 🔥 **2025-03-11**: I have added a tab to preview a model!
+- 🔥 **2025-03-10**: Various small fixes and improvements
+- 🔥 **2025-03-09**: I have added a basic CPU/RAM monitor (no GPU yet)
 - 🔥 **2025-03-02**: Made some fixes to improve Finetrainer reliability when working with big datasets
 - 🔥 **2025-02-18**: I am working to add better recovery in case of a failed run (this is still in beta)
 - 🔥 **2025-02-18**: I have added persistence of UI settings. So if you reload Gradio, you won't lose your settings!
