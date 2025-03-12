@@ -298,7 +298,7 @@ class PreviewTab(BaseTab):
         # Update model_version choices when model_type changes or tab is selected
         if hasattr(self.app, 'tabs_component') and self.app.tabs_component is not None:
             self.app.tabs_component.select(
-                fn=self.sync_model_type_and_verions,
+                fn=self.sync_model_type_and_versions,
                 inputs=[],
                 outputs=[
                     self.components["model_type"],
@@ -391,7 +391,7 @@ class PreviewTab(BaseTab):
             self.components["conditioning_image"]: gr.Image(visible=show_conditioning_image)
         }
     
-    def sync_model_type_and_verions(self) -> Tuple[str, str]:
+    def sync_model_type_and_versions(self) -> Tuple[str, str]:
         """Sync model type with training tab when preview tab is selected and update model version choices"""
         model_type = self.get_default_model_type()
         model_version = ""
@@ -401,19 +401,15 @@ class PreviewTab(BaseTab):
         preview_state = ui_state.get("preview", {})
         model_version = preview_state.get("model_version", "")
         
+        # If no model version specified or invalid, use default
         if not model_version:
-            # Format it as a display choice
+            # Get the internal model type
             internal_type = MODEL_TYPES.get(model_type)
             if internal_type and internal_type in MODEL_VERSIONS:
-                first_version = next(iter(MODEL_VERSIONS[internal_type].keys()), "")
-                if first_version:
-                    model_version_info = MODEL_VERSIONS[internal_type][first_version]
-                    model_version = f"{first_version} - {model_version_info.get('name', '')}"
+                versions = list(MODEL_VERSIONS[internal_type].keys())
+                if versions:
+                    model_version = versions[0]
         
-        # If we couldn't get it, use default
-        if not model_version:
-            model_version = self.get_default_model_version(model_type)
-            
         return model_type, model_version
     
     def update_resolution(self, preset: str) -> Tuple[int, int, float]:

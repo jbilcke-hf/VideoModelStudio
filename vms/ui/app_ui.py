@@ -392,7 +392,7 @@ class AppUI:
                 versions = list(MODEL_VERSIONS.get(model_internal_type, {}).keys())
                 if versions:
                     model_version_val = versions[0]
-
+                    
         # Ensure training_type is a valid display name
         training_type_val = ui_state.get("training_type", list(TRAINING_TYPES.keys())[0])
         if training_type_val not in TRAINING_TYPES:
