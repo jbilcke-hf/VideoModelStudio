@@ -21,7 +21,7 @@ class CaptionTab(BaseTab):
     def __init__(self, app_state):
         super().__init__(app_state)
         self.id = "caption_tab"
-        self.title = "3️⃣  Caption"
+        self.title = "2️⃣ Caption"
         self._should_stop_captioning = False
     
     def create(self, parent=None) -> gr.TabItem:

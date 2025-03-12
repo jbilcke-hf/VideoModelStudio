@@ -22,7 +22,7 @@ class ManageTab(BaseTab):
     def __init__(self, app_state):
         super().__init__(app_state)
         self.id = "manage_tab"
-        self.title = "6️⃣  Storage"
+        self.title = "5️⃣ Storage"
     
     def create(self, parent=None) -> gr.TabItem:
         """Create the Manage tab UI components"""
@@ -108,11 +108,9 @@ class ManageTab(BaseTab):
             fn=self.handle_global_stop,
             outputs=[
                 self.components["global_status"],
-                self.app.tabs["split_tab"].components["video_list"],
                 self.app.tabs["caption_tab"].components["training_dataset"],
                 self.app.tabs["train_tab"].components["status_box"],
                 self.app.tabs["train_tab"].components["log_box"],
-                self.app.tabs["split_tab"].components["detect_status"],
                 self.app.tabs["import_tab"].components["import_status"],
                 self.app.tabs["caption_tab"].components["preview_status"]
             ]
@@ -169,11 +167,9 @@ class ManageTab(BaseTab):
         
         return {
             self.components["global_status"]: gr.update(value=full_status, visible=True),
-            self.app.tabs["split_tab"].components["video_list"]: videos,
             self.app.tabs["caption_tab"].components["training_dataset"]: clips,
             self.app.tabs["train_tab"].components["status_box"]: "Training stopped and data cleared",
             self.app.tabs["train_tab"].components["log_box"]: "",
-            self.app.tabs["split_tab"].components["detect_status"]: "Scene detection stopped",
             self.app.tabs["import_tab"].components["import_status"]: "All data cleared",
             self.app.tabs["caption_tab"].components["preview_status"]: "Captioning stopped"
         }

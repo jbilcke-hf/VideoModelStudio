@@ -23,7 +23,7 @@ class PreviewTab(BaseTab):
     def __init__(self, app_state):
         super().__init__(app_state)
         self.id = "preview_tab"
-        self.title = "5️⃣  Preview"
+        self.title = "4️⃣ Preview"
          
     def create(self, parent=None) -> gr.TabItem:
         """Create the Preview tab UI components"""
@@ -193,26 +193,31 @@ class PreviewTab(BaseTab):
         """Get model version choices based on model type"""
         # Convert UI display name to internal name
         internal_type = MODEL_TYPES.get(model_type)
-        if not internal_type:
+        if not internal_type or internal_type not in MODEL_VERSIONS:
+            logger.warning(f"No model versions found for {model_type} (internal type: {internal_type})")
             return []
             
-        # Get versions from preview service
-        versions = self.app.previewing.get_model_versions(internal_type)
-        if not versions:
-            return []
+        # Return just the model IDs as a list of simple strings
+        version_ids = list(MODEL_VERSIONS.get(internal_type, {}).keys())
+        logger.info(f"Found {len(version_ids)} versions for {model_type}: {version_ids}")
+        return version_ids
             
-        # Format choices with display name and description
-        choices = []
-        for model_id, info in versions.items():
-            choices.append(f"{model_id} - {info.get('name', '')}")
-            
-        return choices
-    
     def get_default_model_version(self, model_type: str) -> str:
-        """Get default model version for the model type"""
-        choices = self.get_model_version_choices(model_type)
-        if choices:
-            return choices[0]
+        """Get default model version for the given model type"""
+        # Convert UI display name to internal name
+        internal_type = MODEL_TYPES.get(model_type)
+        logger.debug(f"get_default_model_version({model_type}) = {internal_type}")
+        
+        if not internal_type or internal_type not in MODEL_VERSIONS:
+            logger.warning(f"No valid model versions found for {model_type}")
+            return ""
+            
+        # Get the first version available for this model type
+        versions = list(MODEL_VERSIONS.get(internal_type, {}).keys())
+        if versions:
+            default_version = versions[0]
+            logger.debug(f"Default version for {model_type}: {default_version}")
+            return default_version
         return ""
 
     def get_default_model_type(self) -> str:

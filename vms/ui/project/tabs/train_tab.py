@@ -35,7 +35,7 @@ class TrainTab(BaseTab):
     def __init__(self, app_state):
         super().__init__(app_state)
         self.id = "train_tab"
-        self.title = "4️⃣  Train"
+        self.title = "3️⃣ Train"
     
     def create(self, parent=None) -> gr.TabItem:
         """Create the Train tab UI components"""
@@ -58,23 +58,46 @@ class TrainTab(BaseTab):
                         with gr.Column():
                             # Get the default model type from the first preset
                             default_model_type = list(MODEL_TYPES.keys())[0]
-                            
+
                             self.components["model_type"] = gr.Dropdown(
                                 choices=list(MODEL_TYPES.keys()),
                                 label="Model Type",
                                 value=default_model_type,
                                 interactive=True
                             )
-                            
+
                             # Get model versions for the default model type
                             default_model_versions = self.get_model_version_choices(default_model_type)
                             default_model_version = self.get_default_model_version(default_model_type)
-                            print(f"default_model_version(default_model_type) = {default_model_version}")
+
+                            # Ensure default_model_versions is not empty
+                            if not default_model_versions:
+                                # If no versions found for default model, use a fallback
+                                internal_type = MODEL_TYPES.get(default_model_type)
+                                if internal_type in MODEL_VERSIONS:
+                                    default_model_versions = list(MODEL_VERSIONS[internal_type].keys())
+                                else:
+                                    # Last resort - collect all available versions from all models
+                                    default_model_versions = []
+                                    for model_versions in MODEL_VERSIONS.values():
+                                        default_model_versions.extend(list(model_versions.keys()))
+                                    
+                                # If still empty, provide a placeholder
+                                if not default_model_versions:
+                                    default_model_versions = ["-- No versions available --"]
+                                    
+                                # Set default version to first in list if available
+                                if default_model_versions:
+                                    default_model_version = default_model_versions[0]
+                                else:
+                                    default_model_version = ""
+
                             self.components["model_version"] = gr.Dropdown(
                                 choices=default_model_versions,
                                 label="Model Version",
                                 value=default_model_version,
-                                interactive=True
+                                interactive=True,
+                                allow_custom_value=True  # Add this to avoid errors with custom values
                             )
                             
                             self.components["training_type"] = gr.Dropdown(
@@ -428,15 +451,38 @@ class TrainTab(BaseTab):
     
     def update_model_versions(self, model_type: str) -> Dict:
         """Update model version choices based on selected model type"""
-        model_versions = self.get_model_version_choices(model_type)
-        default_version = self.get_default_model_version(model_type)
-        #print(f"update_model_versions({model_type}): default_version = {default_version}")
-        # Update UI state with proper model_type first (add this line)
-        self.app.update_ui_state(model_type=model_type)
-        
-        # Update the model_version dropdown with new choices and default value
-        return gr.Dropdown(choices=model_versions, value=default_version)
-
+        try:
+            # Get version choices for this model type
+            model_versions = self.get_model_version_choices(model_type)
+            
+            # Get default version
+            default_version = self.get_default_model_version(model_type)
+            logger.info(f"update_model_versions({model_type}): default_version = {default_version}, available versions: {model_versions}")
+            
+            # Update UI state with proper model_type first
+            self.app.update_ui_state(model_type=model_type)
+            
+            # Create a new dropdown with the updated choices
+            if not model_versions:
+                logger.warning(f"No model versions available for {model_type}, using empty list")
+                # Return empty dropdown to avoid errors
+                return gr.Dropdown(choices=[], value=None)
+                
+            # Ensure default_version is in model_versions
+            if default_version not in model_versions and model_versions:
+                default_version = model_versions[0]
+                logger.info(f"Default version not in choices, using first available: {default_version}")
+            
+            # Return the updated dropdown
+            logger.info(f"Returning dropdown with {len(model_versions)} choices")
+            return gr.Dropdown(choices=model_versions, value=default_version)
+        except Exception as e:
+            # Log any exceptions for debugging
+            logger.error(f"Error in update_model_versions: {str(e)}")
+            # Return empty dropdown to avoid errors
+            return gr.Dropdown(choices=[], value=None)
+            
+    
     def handle_training_start(
         self, preset, model_type, model_version, training_type, 
         lora_rank, lora_alpha, train_steps, batch_size, learning_rate, 
@@ -509,26 +555,30 @@ class TrainTab(BaseTab):
         # Convert UI display name to internal name
         internal_type = MODEL_TYPES.get(model_type)
         if not internal_type or internal_type not in MODEL_VERSIONS:
+            logger.warning(f"No model versions found for {model_type} (internal type: {internal_type})")
             return []
             
-        # Return just the model IDs without formatting
-        return list(MODEL_VERSIONS.get(internal_type, {}).keys())
+        # Return just the model IDs as a list of simple strings
+        version_ids = list(MODEL_VERSIONS.get(internal_type, {}).keys())
+        logger.info(f"Found {len(version_ids)} versions for {model_type}: {version_ids}")
+        return version_ids
 
-    
     def get_default_model_version(self, model_type: str) -> str:
         """Get default model version for the given model type"""
         # Convert UI display name to internal name
         internal_type = MODEL_TYPES.get(model_type)
-        #print(f"get_default_model_version({model_type}) = {internal_type}")
+        logger.debug(f"get_default_model_version({model_type}) = {internal_type}")
+        
         if not internal_type or internal_type not in MODEL_VERSIONS:
+            logger.warning(f"No valid model versions found for {model_type}")
             return ""
             
         # Get the first version available for this model type
-        versions = MODEL_VERSIONS.get(internal_type, {})
+        versions = list(MODEL_VERSIONS.get(internal_type, {}).keys())
         if versions:
-            model_versions = list(versions.keys())
-            if model_versions:
-                return model_versions[0]
+            default_version = versions[0]
+            logger.debug(f"Default version for {model_type}: {default_version}")
+            return default_version
         return ""
    
     def update_model_info(self, model_type: str, training_type: str) -> Dict:
@@ -698,7 +748,19 @@ class TrainTab(BaseTab):
         # Get the appropriate model version for the selected model type
         model_versions = self.get_model_version_choices(model_display_name)
         default_model_version = self.get_default_model_version(model_display_name)
-        
+
+        # Create the model version dropdown update
+        model_version_update = gr.Dropdown(choices=model_versions, value=default_model_version)
+
+        # Ensure we have valid choices and values
+        if not model_versions:
+            logger.warning(f"No versions found for {model_display_name}, using empty list")
+            model_versions = []
+            default_model_version = None
+        elif default_model_version not in model_versions and model_versions:
+            default_model_version = model_versions[0]
+            logger.info(f"Reset default version to first available: {default_model_version}")
+
         # Return values in the same order as the output components
         return (
             model_display_name,
@@ -714,7 +776,7 @@ class TrainTab(BaseTab):
             num_gpus_val,
             precomputation_items_val,
             lr_warmup_steps_val,
-            gr.Dropdown(choices=model_versions, value=default_model_version)
+            model_version_update,
         )
 
 

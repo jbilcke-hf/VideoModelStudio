@@ -124,6 +124,14 @@ class HubTab(BaseTab):
             ]
         )
         
+        # Check if we have access to project_tabs_component
+        if hasattr(self.app, "project_tabs_component"):
+            tabs_component = self.app.project_tabs_component
+        else:
+            # Fallback to prevent errors
+            logger.warning("project_tabs_component not found in app, using None for tab switching")
+            tabs_component = None
+        
         # Download videos button
         self.components["download_videos_btn"].click(
             fn=self.set_file_type_and_return,
@@ -141,6 +149,17 @@ class HubTab(BaseTab):
                 self.components["download_videos_btn"],
                 self.components["download_webdataset_btn"],
                 self.components["download_in_progress"]
+            ]
+        ).success(
+            fn=self.app.tabs["import_tab"].on_import_success,
+            inputs=[
+                self.components["enable_automatic_video_split"],
+                self.components["enable_automatic_content_captioning"],
+                self.app.tabs["caption_tab"].components["custom_prompt_prefix"]
+            ],
+            outputs=[
+                tabs_component,
+                self.components["status_output"]
             ]
         )
         
@@ -161,6 +180,17 @@ class HubTab(BaseTab):
                 self.components["download_videos_btn"],
                 self.components["download_webdataset_btn"],
                 self.components["download_in_progress"]
+            ]
+        ).success(
+            fn=self.app.tabs["import_tab"].on_import_success,
+            inputs=[
+                self.components["enable_automatic_video_split"],
+                self.components["enable_automatic_content_captioning"],
+                self.app.tabs["caption_tab"].components["custom_prompt_prefix"]
+            ],
+            outputs=[
+                tabs_component,
+                self.components["status_output"]
             ]
         )
 
