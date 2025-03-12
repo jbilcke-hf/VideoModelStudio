@@ -162,7 +162,6 @@ class ManageTab(BaseTab):
         full_status = f"{status}\n\nDetails:\n{details}"
         
         # Get fresh lists after cleanup
-        videos = self.app.tabs["split_tab"].list_unprocessed_videos()
         clips = self.app.tabs["caption_tab"].list_training_files_to_caption()
         
         return {
