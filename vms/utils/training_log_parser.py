@@ -21,10 +21,11 @@ class TrainingState:
     memory_reserved: float = 0.0
     start_time: Optional[datetime] = None
     last_step_time: Optional[datetime] = None
-    estimated_remaining: Optional[timedelta] = None
+    estimated_remaining: Optional[str] = None
     error_message: Optional[str] = None
     initialization_stage: str = ""
     download_progress: float = 0.0
+    elapsed_time: str = "0:00:00"
     
     # New fields for current task tracking
     current_task: str = ""
@@ -50,12 +51,8 @@ class TrainingState:
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert state to dictionary for UI updates"""
-        # Calculate elapsed time only if training is active and we have a start time
-        if self.start_time and self.status in ["training", "initializing"]:
-            elapsed = str(datetime.now() - self.start_time)
-        else:
-            # Use the last known elapsed time or show 0
-            elapsed = "0:00:00" if not self.last_step_time else str(self.last_step_time - self.start_time if self.start_time else "0:00:00")
+        # Use the stored elapsed time directly if it exists
+        elapsed = self.elapsed_time
         
         # Use precomputed remaining time from logs if available
         remaining = str(self.estimated_remaining) if self.estimated_remaining else "calculating..."
@@ -196,63 +193,81 @@ class TrainingLogParser:
                 if len(self.state.recent_progress_lines) > self.max_recent_lines:
                     self.state.recent_progress_lines.pop(0)
                 
+                # Parse the Training steps line for additional information
+                if "Training steps:" in line:
+                    # Set status to training if we see this
+                    self.state.status = "training"
+                    
+                    if not self.state.start_time:
+                        self.state.start_time = datetime.now()
+
+                    # Extract step numbers from the format: Training steps:   4%|▍         | 44/1000 [41:57<17:22:32, 65.43s/it]
+                    steps_match = re.search(r"\|\s*(\d+)/(\d+)", line)
+                    if steps_match:
+                        self.state.current_step = int(steps_match.group(1))
+                        self.state.total_steps = int(steps_match.group(2))
+                    
+                    # Extract elapsed time - Format example: [41:57<17:22:32, 65.43s/it]
+                    elapsed_match = re.search(r"\[(\d+:\d+)(:\d+)?<", line)
+                    if elapsed_match:
+                        if elapsed_match.group(2):  # has hours:minutes:seconds format
+                            self.state.elapsed_time = elapsed_match.group(1) + elapsed_match.group(2)
+                        else:  # has minutes:seconds format
+                            self.state.elapsed_time = elapsed_match.group(1)
+                    
+                    # Extract remaining time - Format example: [41:57<17:22:32, 65.43s/it]
+                    remaining_match = re.search(r"<([\d:]+)", line)
+                    if remaining_match:
+                        self.state.estimated_remaining = remaining_match.group(1)
+                    
+                    # Extract metrics with different patterns
+                    # Pattern 1: grad_norm=0.113, global_avg_loss=0.15, global_max_loss=0.15
+                    grad_norm_match = re.search(r"grad_norm=([0-9.e-]+)", line)
+                    if grad_norm_match:
+                        self.state.grad_norm = float(grad_norm_match.group(1))
+                    
+                    # Try global_avg_loss as the main loss metric
+                    loss_match = re.search(r"global_avg_loss=([0-9.e-]+)", line)
+                    if loss_match:
+                        self.state.step_loss = float(loss_match.group(1))
+                    elif "step_loss=" in line:
+                        # Fall back to step_loss if global_avg_loss not found
+                        loss_match = re.search(r"step_loss=([0-9.e-]+)", line)
+                        if loss_match:
+                            self.state.step_loss = float(loss_match.group(1))
+                    
+                    # Extract learning rate if available
+                    lr_match = re.search(r"lr=([0-9.e-]+)", line)
+                    if lr_match:
+                        self.state.learning_rate = float(lr_match.group(1))
+                    
+                    # Update last processing time
+                    self.state.last_step_time = datetime.now()
+                
                 # Return updated state
                 return self.state.to_dict()
-
-            # Training step progress line example:
-            # Training steps:   1%|▏         | 1/70 [00:14<16:11, 14.08s/it, grad_norm=0.00789, step_loss=0.555, lr=3e-7]
             
+            # Parse "Starting training step" lines to extract step/total info if not already parsed
+            step_match = re.search(r"Starting training step \((\d+)/(\d+)\)", line)
+            if step_match:
+                current_step = int(step_match.group(1))
+                total_steps = int(step_match.group(2))
+                
+                # Only update if we don't already have a value or if this is more recent
+                if self.state.total_steps == 0 or current_step > self.state.current_step:
+                    self.state.current_step = current_step
+                    self.state.total_steps = total_steps
+                    self.state.status = "training"  # Ensure status is set to training
+                    logger.info(f"Updated training step: {current_step}/{total_steps}")
+                    return self.state.to_dict()
+
             if ("Started training" in line) or ("Starting training" in line):
                 self.state.status = "training"
-            
-            # Check for "Training steps:" which contains the progress information
-            if "Training steps:" in line:
-                # Set status to training if we see this
-                self.state.status = "training"
-                
                 if not self.state.start_time:
                     self.state.start_time = datetime.now()
-
-                # Extract step numbers
-                steps_match = re.search(r"(\d+)/(\d+)", line)
-                if steps_match:
-                    self.state.current_step = int(steps_match.group(1))
-                    self.state.total_steps = int(steps_match.group(2))
-
-                # Extract metrics
-                for pattern, attr in [
-                    (r"step_loss=([0-9.e-]+)", "step_loss"),
-                    (r"lr=([0-9.e-]+)", "learning_rate"),
-                    (r"grad_norm=([0-9.e-]+)", "grad_norm")
-                ]:
-                    match = re.search(pattern, line)
-                    if match:
-                        setattr(self.state, attr, float(match.group(1)))
-
-                # Extract time remaining directly from the log
-                # Format: [MM:SS<M:SS:SS, SS.SSs/it]
-                time_remaining_match = re.search(r"<(\d+:\d+:\d+)", line)
-                if time_remaining_match:
-                    remaining_str = time_remaining_match.group(1)
-                    # Store the string directly - no need to parse it
-                    self.state.estimated_remaining = remaining_str
-                
-                # If no direct time estimate, look for hour:min format
-                if not time_remaining_match:
-                    hour_min_match = re.search(r"<(\d+h\s*\d+m)", line)
-                    if hour_min_match:
-                        self.state.estimated_remaining = hour_min_match.group(1)
-
-                # Update last processing time
-                self.state.last_step_time = datetime.now()
-                
-                logger.info(f"Updated training state: step={self.state.current_step}/{self.state.total_steps}, loss={self.state.step_loss}")
                 return self.state.to_dict()
 
             # Epoch information
-            # there is an issue with how epoch is reported because we display:
-            # Progress: 96.9%, Step: 872/900, Epoch: 12/50
-            # we should probably just show the steps
             epoch_match = re.search(r"Starting epoch \((\d+)/(\d+)\)", line)
             if epoch_match:
                 self.state.current_epoch = int(epoch_match.group(1))
