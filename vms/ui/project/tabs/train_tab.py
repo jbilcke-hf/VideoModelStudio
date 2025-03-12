@@ -175,7 +175,7 @@ class TrainTab(BaseTab):
                             value=DEFAULT_NB_LR_WARMUP_STEPS,
                             minimum=0,
                             precision=0,
-                            info="Number of warmup steps (typically 20-40% of total training steps)"
+                            info="Number of warmup steps (typically 20-40% of total training steps). This helps reducing the impact of early training examples as well as giving time to optimizers to compute accurate statistics."
                         )
                 with gr.Column():
                     with gr.Row():
