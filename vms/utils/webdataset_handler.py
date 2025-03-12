@@ -41,7 +41,9 @@ def process_webdataset_shard(
     """
     video_count = 0
     image_count = 0
-    
+
+    print(f"videos_output_dir = {videos_output_dir}")
+    print(f"staging_output_dir = {staging_output_dir}")
     try:
         # Dictionary to store grouped files by prefix
         grouped_files = {}

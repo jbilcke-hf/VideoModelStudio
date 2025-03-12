@@ -62,11 +62,22 @@ class UploadTab(BaseTab):
             logger.warning("import_status component is not set in UploadTab")
             return
         
-        # File upload event
+        # File upload event with enable_splitting parameter
         upload_event = self.components["files"].upload(
-            fn=lambda x: self.app.importing.process_uploaded_files(x),
-            inputs=[self.components["files"]],
+            fn=self.app.importing.process_uploaded_files,
+            inputs=[self.components["files"], self.components["enable_automatic_video_split"]],
             outputs=[self.components["import_status"]]
+        ).success(
+            fn=self.app.tabs["import_tab"].on_import_success,
+            inputs=[
+                self.components["enable_automatic_video_split"],
+                self.components["enable_automatic_content_captioning"],
+                self.app.tabs["caption_tab"].components["custom_prompt_prefix"]
+            ],
+            outputs=[
+                self.app.project_tabs_component,
+                self.components["import_status"]
+            ]
         )
         
         # Only add success handler if all required components exist

@@ -200,8 +200,10 @@ class PreviewTab(BaseTab):
         # Return just the model IDs as a list of simple strings
         version_ids = list(MODEL_VERSIONS.get(internal_type, {}).keys())
         logger.info(f"Found {len(version_ids)} versions for {model_type}: {version_ids}")
-        return version_ids
-            
+        
+        # Ensure they're all strings
+        return [str(version) for version in version_ids]
+    
     def get_default_model_version(self, model_type: str) -> str:
         """Get default model version for the given model type"""
         # Convert UI display name to internal name
