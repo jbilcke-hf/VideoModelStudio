@@ -74,6 +74,13 @@ class YouTubeTab(BaseTab):
         except (AttributeError, KeyError):
             logger.warning("Could not access custom_prompt_prefix component")
             
+        # Check if we have access to project_tabs_component
+        if hasattr(self.app, "project_tabs_component"):
+            tabs_component = self.app.project_tabs_component
+        else:
+            logger.warning("project_tabs_component not found in app, using None for tab switching")
+            tabs_component = None
+            
         # YouTube download event
         download_event = self.components["youtube_download_btn"].click(
             fn=self.app.importing.download_youtube_video,
@@ -93,9 +100,8 @@ class YouTubeTab(BaseTab):
                         custom_prompt_prefix
                     ],
                     outputs=[
-                        self.app.tabs_component,
-                        self.app.tabs["split_tab"].components["video_list"],
-                        self.app.tabs["split_tab"].components["detect_status"]
+                        tabs_component,
+                        self.components["import_status"]
                     ]
                 )
             except (AttributeError, KeyError) as e:

@@ -70,16 +70,17 @@ class UploadTab(BaseTab):
         )
         
         # Only add success handler if all required components exist
-        if hasattr(self.app.tabs, "import_tab") and hasattr(self.app.tabs, "split_tab") and \
-           hasattr(self.app.tabs, "caption_tab") and hasattr(self.app.tabs, "train_tab"):
+        if hasattr(self.app.tabs, "import_tab") and hasattr(self.app.tabs, "caption_tab") and hasattr(self.app.tabs, "train_tab"):
             
             # Get required components for success handler
             try:
                 # If the components are missing, this will raise an AttributeError
-                tabs_component = self.app.tabs_component
-                video_list = self.app.tabs["split_tab"].components["video_list"]
-                detect_status = self.app.tabs["split_tab"].components["detect_status"]
-                split_title = self.app.tabs["split_tab"].components["split_title"]
+                if hasattr(self.app, "project_tabs_component"):
+                    tabs_component = self.app.project_tabs_component
+                else:
+                    logger.warning("project_tabs_component not found in app, using None for tab switching")
+                    tabs_component = None
+                    
                 caption_title = self.app.tabs["caption_tab"].components["caption_title"]
                 train_title = self.app.tabs["train_tab"].components["train_title"]
                 custom_prompt_prefix = self.app.tabs["caption_tab"].components["custom_prompt_prefix"]
@@ -94,9 +95,7 @@ class UploadTab(BaseTab):
                     ],
                     outputs=[
                         tabs_component,
-                        video_list,
-                        detect_status,
-                        split_title,
+                        self.components["import_status"],
                         caption_title,
                         train_title
                     ]

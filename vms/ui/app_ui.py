@@ -32,7 +32,7 @@ from vms.ui.project.services import (
     TrainingService, CaptioningService, SplittingService, ImportingService, PreviewingService
 )
 from vms.ui.project.tabs import (
-    ImportTab, SplitTab, CaptionTab, TrainTab, PreviewTab, ManageTab
+    ImportTab, CaptionTab, TrainTab, PreviewTab, ManageTab
 )
 
 from vms.ui.monitoring.services import (
@@ -164,7 +164,6 @@ class AppUI:
                                 
                                 # Initialize project tab objects
                                 self.project_tabs["import_tab"] = ImportTab(self)
-                                self.project_tabs["split_tab"] = SplitTab(self)
                                 self.project_tabs["caption_tab"] = CaptionTab(self)
                                 self.project_tabs["train_tab"] = TrainTab(self)
                                 self.project_tabs["preview_tab"] = PreviewTab(self)
@@ -213,7 +212,6 @@ class AppUI:
             app.load(
                 fn=self.initialize_app_state,
                 outputs=[
-                    self.project_tabs["split_tab"].components["video_list"],
                     self.project_tabs["caption_tab"].components["training_dataset"],
                     self.project_tabs["train_tab"].components["start_btn"],
                     self.project_tabs["train_tab"].components["stop_btn"],
@@ -273,7 +271,6 @@ class AppUI:
         dataset_timer.tick(
             fn=self.refresh_dataset,
             outputs=[
-                self.project_tabs["split_tab"].components["video_list"],
                 self.project_tabs["caption_tab"].components["training_dataset"]
             ]
         )
@@ -283,7 +280,6 @@ class AppUI:
         titles_timer.tick(
             fn=self.update_titles,
             outputs=[
-                self.project_tabs["split_tab"].components["split_title"],
                 self.project_tabs["caption_tab"].components["caption_title"],
                 self.project_tabs["train_tab"].components["train_title"]
             ]
@@ -292,7 +288,6 @@ class AppUI:
     def initialize_app_state(self):
         """Initialize all app state in one function to ensure correct output count"""
         # Get dataset info
-        video_list = self.project_tabs["split_tab"].list_unprocessed_videos()
         training_dataset = self.project_tabs["caption_tab"].list_training_files_to_caption()
         
         # Get button states based on recovery status
@@ -381,17 +376,40 @@ class AppUI:
         
         # Get model_version value
         model_version_val = ""
+
         # First get the internal model type for the currently selected model
         model_internal_type = MODEL_TYPES.get(model_type_val)
+        logger.info(f"Initializing model version for model_type: {model_type_val} (internal: {model_internal_type})")
+
         if model_internal_type and model_internal_type in MODEL_VERSIONS:
-            # If there's a saved model_version and it's valid for this model type
-            if "model_version" in ui_state and ui_state["model_version"] in MODEL_VERSIONS.get(model_internal_type, {}):
+            # Get available versions for this model type as simple strings
+            available_model_versions = list(MODEL_VERSIONS.get(model_internal_type, {}).keys())
+            
+            # Log for debugging
+            logger.info(f"Available versions: {available_model_versions}")
+            
+            # Set model_version_val to saved value if valid, otherwise first available
+            if "model_version" in ui_state and ui_state["model_version"] in available_model_versions:
                 model_version_val = ui_state["model_version"]
-            else:
-                # Otherwise use the first available version
-                versions = list(MODEL_VERSIONS.get(model_internal_type, {}).keys())
-                if versions:
-                    model_version_val = versions[0]
+                logger.info(f"Using saved model version: {model_version_val}")
+            elif available_model_versions:
+                model_version_val = available_model_versions[0]
+                logger.info(f"Using first available model version: {model_version_val}")
+            
+            # IMPORTANT: Update the dropdown choices directly in the UI component
+            # This is essential to avoid the error when loading the UI
+            try:
+                self.project_tabs["train_tab"].components["model_version"].choices = available_model_versions
+                logger.info(f"Updated model_version dropdown choices: {len(available_model_versions)} options")
+            except Exception as e:
+                logger.error(f"Error updating model_version dropdown: {str(e)}")
+        else:
+            logger.warning(f"No versions available for model type: {model_type_val}")
+            # Set empty choices to avoid errors
+            try:
+                self.project_tabs["train_tab"].components["model_version"].choices = []
+            except Exception as e:
+                logger.error(f"Error setting empty model_version choices: {str(e)}")
                     
         # Ensure training_type is a valid display name
         training_type_val = ui_state.get("training_type", list(TRAINING_TYPES.keys())[0])
@@ -444,7 +462,6 @@ class AppUI:
         
         # Return all values in the exact order expected by outputs
         return (
-            video_list, 
             training_dataset,
             start_btn, 
             stop_btn, 
@@ -464,7 +481,7 @@ class AppUI:
             precomputation_items_val,
             lr_warmup_steps_val
         )
-
+    
     def initialize_ui_from_state(self):
         """Initialize UI components from saved state"""
         ui_state = self.load_ui_values()
@@ -558,12 +575,6 @@ class AppUI:
         Returns:
             Dict of Gradio updates
         """
-        # Count files for splitting
-        split_videos, _, split_size = count_media_files(VIDEOS_TO_SPLIT_PATH)
-        split_title = format_media_title(
-            "split", split_videos, 0, split_size
-        )
-        
         # Count files for captioning
         caption_videos, caption_images, caption_size = count_media_files(STAGING_PATH)
         caption_title = format_media_title(
@@ -577,17 +588,14 @@ class AppUI:
         )
         
         return (
-            gr.Markdown(value=split_title),
             gr.Markdown(value=caption_title),
             gr.Markdown(value=f"{train_title} available for training")
         )
     
     def refresh_dataset(self):
         """Refresh all dynamic lists and training state"""
-        video_list = self.project_tabs["split_tab"].list_unprocessed_videos()
         training_dataset = self.project_tabs["caption_tab"].list_training_files_to_caption()
 
         return (
-            video_list,
             training_dataset
         )
