@@ -5,12 +5,15 @@ Train tab for Video Model Studio UI with improved task progress display
 import gradio as gr
 import logging
 import os
+import json
 from typing import Dict, Any, List, Optional, Tuple
 from pathlib import Path
 
 from vms.utils import BaseTab
 from vms.config import (
-    TRAINING_PRESETS, OUTPUT_PATH, MODEL_TYPES, ASK_USER_TO_DUPLICATE_SPACE, SMALL_TRAINING_BUCKETS, TRAINING_TYPES,
+    OUTPUT_PATH, ASK_USER_TO_DUPLICATE_SPACE,
+    SMALL_TRAINING_BUCKETS,
+    TRAINING_PRESETS, TRAINING_TYPES, MODEL_TYPES, MODEL_VERSIONS,
     DEFAULT_NB_TRAINING_STEPS, DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
     DEFAULT_BATCH_SIZE, DEFAULT_CAPTION_DROPOUT_P,
     DEFAULT_LEARNING_RATE,
@@ -53,12 +56,27 @@ class TrainTab(BaseTab):
 
                     with gr.Row():
                         with gr.Column():
+                            # Get the default model type from the first preset
+                            default_model_type = list(MODEL_TYPES.keys())[0]
+                            
                             self.components["model_type"] = gr.Dropdown(
                                 choices=list(MODEL_TYPES.keys()),
                                 label="Model Type",
-                                value=list(MODEL_TYPES.keys())[0]
+                                value=default_model_type,
+                                interactive=True
                             )
-                        with gr.Column():
+                            
+                            # Get model versions for the default model type
+                            default_model_versions = self.get_model_version_choices(default_model_type)
+                            default_model_version = self.get_default_model_version(default_model_type)
+                            
+                            self.components["model_version"] = gr.Dropdown(
+                                choices=default_model_versions,
+                                label="Model Version",
+                                value=default_model_version,
+                                interactive=True
+                            )
+                            
                             self.components["training_type"] = gr.Dropdown(
                                 choices=list(TRAINING_TYPES.keys()),
                                 label="Training Type",
@@ -198,45 +216,36 @@ class TrainTab(BaseTab):
     
     def connect_events(self) -> None:
         """Connect event handlers to UI components"""
-        # Model type change event
-        def update_model_info(model, training_type):
-            params = self.get_default_params(MODEL_TYPES[model], TRAINING_TYPES[training_type])
-            info = self.get_model_info(model, training_type)
-            show_lora_params = training_type == list(TRAINING_TYPES.keys())[0]  # Show if LoRA Finetune
-            
-            return {
-                self.components["model_info"]: info,
-                self.components["train_steps"]: params["train_steps"],
-                self.components["batch_size"]: params["batch_size"],
-                self.components["learning_rate"]: params["learning_rate"],
-                self.components["save_iterations"]: params["save_iterations"],
-                self.components["lora_params_row"]: gr.Row(visible=show_lora_params)
-            }
-            
+        # Model type change event - Update model version dropdown choices
         self.components["model_type"].change(
+            fn=self.update_model_versions,
+            inputs=[self.components["model_type"]],
+            outputs=[self.components["model_version"]]
+        ).then(
             fn=lambda v: self.app.update_ui_state(model_type=v),
             inputs=[self.components["model_type"]],
             outputs=[]
         ).then(
-            fn=update_model_info,
+            # Use get_model_info instead of update_model_info
+            fn=self.get_model_info,
             inputs=[self.components["model_type"], self.components["training_type"]],
-            outputs=[
-                self.components["model_info"],
-                self.components["train_steps"],
-                self.components["batch_size"],
-                self.components["learning_rate"],
-                self.components["save_iterations"],
-                self.components["lora_params_row"]
-            ]
+            outputs=[self.components["model_info"]]
         )
         
+        # Model version change event
+        self.components["model_version"].change(
+            fn=lambda v: self.app.update_ui_state(model_version=v),
+            inputs=[self.components["model_version"]],
+            outputs=[]
+        )
+            
         # Training type change event
         self.components["training_type"].change(
             fn=lambda v: self.app.update_ui_state(training_type=v),
             inputs=[self.components["training_type"]],
             outputs=[]
         ).then(
-            fn=update_model_info,
+            fn=self.update_model_info,
             inputs=[self.components["model_type"], self.components["training_type"]],
             outputs=[
                 self.components["model_info"],
@@ -247,7 +256,6 @@ class TrainTab(BaseTab):
                 self.components["lora_params_row"]
             ]
         )
-
 
         # Add in the connect_events() method:
         self.components["num_gpus"].change(
@@ -326,7 +334,9 @@ class TrainTab(BaseTab):
                 self.components["lora_params_row"],
                 self.components["num_gpus"],
                 self.components["precomputation_items"],
-                self.components["lr_warmup_steps"]
+                self.components["lr_warmup_steps"],
+                # Add model_version to the outputs
+                self.components["model_version"]
             ]
         )
         
@@ -336,6 +346,7 @@ class TrainTab(BaseTab):
             inputs=[
                 self.components["training_preset"],
                 self.components["model_type"],
+                self.components["model_version"],  # Add model_version to the inputs
                 self.components["training_type"],
                 self.components["lora_rank"],
                 self.components["lora_alpha"],
@@ -383,9 +394,19 @@ class TrainTab(BaseTab):
             fn=lambda: self.app.training.delete_all_checkpoints(),
             outputs=[self.components["status_box"]]
         )
+    
+    def update_model_versions(self, model_type: str) -> Dict:
+        """Update model version choices based on selected model type"""
+        model_versions = self.get_model_version_choices(model_type)
+        default_version = self.get_default_model_version(model_type)
+        
+        # Update the model_version dropdown with new choices and default value
+        return gr.Dropdown(choices=model_versions, value=default_version)
         
     def handle_training_start(
-        self, preset, model_type, training_type, lora_rank, lora_alpha, train_steps, batch_size, learning_rate, save_iterations, repo_id, progress=gr.Progress()
+        self, preset, model_type, model_version, training_type, 
+        lora_rank, lora_alpha, train_steps, batch_size, learning_rate, 
+        save_iterations, repo_id, progress=gr.Progress()
     ):
         """Handle training start with proper log parser reset and checkpoint detection"""
         # Safely reset log parser if it exists
@@ -396,9 +417,6 @@ class TrainTab(BaseTab):
             from ..utils import TrainingLogParser
             self.app.log_parser = TrainingLogParser()
             
-        # Initialize progress
-        #progress(0, desc="Initializing training")
-        
         # Check for latest checkpoint
         checkpoints = list(OUTPUT_PATH.glob("checkpoint-*"))
         resume_from = None
@@ -408,10 +426,6 @@ class TrainTab(BaseTab):
             latest_checkpoint = max(checkpoints, key=os.path.getmtime)
             resume_from = str(latest_checkpoint)
             logger.info(f"Found checkpoint at {resume_from}, will resume training")
-            #progress(0.05, desc=f"Resuming from checkpoint {Path(resume_from).name}")
-        else:
-            #progress(0.05, desc="Starting new training run")
-            pass
         
         # Convert model_type display name to internal name
         model_internal_type = MODEL_TYPES.get(model_type)
@@ -432,9 +446,6 @@ class TrainTab(BaseTab):
         precomputation_items = int(self.components["precomputation_items"].value)
         lr_warmup_steps = int(self.components["lr_warmup_steps"].value)
         
-        # Progress update
-        #progress(0.1, desc="Preparing dataset")
-        
         # Start training (it will automatically use the checkpoint if provided)
         try:
             return self.app.training.start_training(
@@ -448,6 +459,7 @@ class TrainTab(BaseTab):
                 repo_id,
                 preset_name=preset,
                 training_type=training_internal_type,
+                model_version=model_version,  # Pass the model version from dropdown
                 resume_from_checkpoint=resume_from,
                 num_gpus=num_gpus,
                 precomputation_items=precomputation_items,
@@ -457,6 +469,52 @@ class TrainTab(BaseTab):
         except Exception as e:
             logger.exception("Error starting training")
             return f"Error starting training: {str(e)}", f"Exception: {str(e)}\n\nCheck the logs for more details."
+
+    def get_model_version_choices(self, model_type: str) -> List[str]:
+        """Get model version choices based on model type"""
+        # Convert UI display name to internal name
+        internal_type = MODEL_TYPES.get(model_type)
+        if not internal_type or internal_type not in MODEL_VERSIONS:
+            return []
+            
+        # Get versions and return them as choices
+        versions = MODEL_VERSIONS.get(internal_type, {})
+        return list(versions.keys())
+    
+    def get_default_model_version(self, model_type: str) -> str:
+        """Get default model version for the given model type"""
+        # Convert UI display name to internal name
+        internal_type = MODEL_TYPES.get(model_type)
+        if not internal_type or internal_type not in MODEL_VERSIONS:
+            return ""
+            
+        # Get the first version available for this model type
+        versions = MODEL_VERSIONS.get(internal_type, {})
+        if versions:
+            return next(iter(versions.keys()))
+            
+        return ""
+   
+    def update_model_info(self, model_type: str, training_type: str) -> Dict:
+        """Update model info and related UI components based on model type and training type"""
+        # Get model info text
+        model_info = self.get_model_info(model_type, training_type)
+        
+        # Get default parameters for this model type and training type
+        params = self.get_default_params(MODEL_TYPES.get(model_type), TRAINING_TYPES.get(training_type))
+        
+        # Check if LoRA params should be visible
+        show_lora_params = training_type == "LoRA Finetune"
+        
+        # Return updates for UI components
+        return {
+            self.components["model_info"]: model_info,
+            self.components["train_steps"]: params["train_steps"],
+            self.components["batch_size"]: params["batch_size"],
+            self.components["learning_rate"]: params["learning_rate"],
+            self.components["save_iterations"]: params["save_iterations"],
+            self.components["lora_params_row"]: gr.Row(visible=show_lora_params)
+        }
 
     def get_model_info(self, model_type: str, training_type: str) -> str:
         """Get information about the selected model type and training method"""
@@ -483,14 +541,14 @@ class TrainTab(BaseTab):
             else:
                 return base_info + "\n- Required VRAM: ~21GB minimum\n- Full model size: ~8GB"
                 
-        elif model_type == "Wan-2.1-T2V":
-            base_info = """### Wan-2.1-T2V
-    - Recommended batch size: ?
-    - Typical training time: ? hours
+        elif model_type == "Wan":
+            base_info = """### Wan
+    - Recommended batch size: 1-4
+    - Typical training time: 1-3 hours
     - Default resolution: 49x512x768"""
             
             if training_type == "LoRA Finetune":
-                return base_info + "\n- Required VRAM: ?GB minimum\n- Default LoRA rank: 32 (~120 MB)"
+                return base_info + "\n- Required VRAM: ~16GB minimum\n- Default LoRA rank: 32 (~120 MB)"
             else:
                 return base_info + "\n- **Full finetune not recommended due to VRAM requirements**"
         
@@ -601,6 +659,10 @@ class TrainTab(BaseTab):
         precomputation_items_val = current_state.get("precomputation_items") if current_state.get("precomputation_items") != preset.get("precomputation_items", DEFAULT_PRECOMPUTATION_ITEMS) else preset.get("precomputation_items", DEFAULT_PRECOMPUTATION_ITEMS)
         lr_warmup_steps_val = current_state.get("lr_warmup_steps") if current_state.get("lr_warmup_steps") != preset.get("lr_warmup_steps", DEFAULT_NB_LR_WARMUP_STEPS) else preset.get("lr_warmup_steps", DEFAULT_NB_LR_WARMUP_STEPS)
         
+        # Get the appropriate model version for the selected model type
+        model_versions = self.get_model_version_choices(model_display_name)
+        default_model_version = self.get_default_model_version(model_display_name)
+        
         # Return values in the same order as the output components
         return (
             model_display_name,
@@ -615,9 +677,11 @@ class TrainTab(BaseTab):
             gr.Row(visible=show_lora_params),
             num_gpus_val,
             precomputation_items_val,
-            lr_warmup_steps_val
+            lr_warmup_steps_val,
+            gr.Dropdown(choices=model_versions, value=default_model_version)
         )
-    
+
+
     def get_latest_status_message_and_logs(self) -> Tuple[str, str, str]:
         """Get latest status message, log content, and status code in a safer way"""
         state = self.app.training.get_status()

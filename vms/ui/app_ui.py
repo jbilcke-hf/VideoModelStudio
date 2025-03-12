@@ -8,7 +8,7 @@ from typing import Any, Optional, Dict, List, Union, Tuple
 from vms.config import (
     STORAGE_PATH, VIDEOS_TO_SPLIT_PATH, STAGING_PATH, OUTPUT_PATH,
     TRAINING_PATH, LOG_FILE_PATH, TRAINING_PRESETS, TRAINING_VIDEOS_PATH, MODEL_PATH, OUTPUT_PATH,
-    MODEL_TYPES, SMALL_TRAINING_BUCKETS, TRAINING_TYPES,
+    MODEL_TYPES, SMALL_TRAINING_BUCKETS, TRAINING_TYPES, MODEL_VERSIONS,
     DEFAULT_NB_TRAINING_STEPS, DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
     DEFAULT_BATCH_SIZE, DEFAULT_CAPTION_DROPOUT_P,
     DEFAULT_LEARNING_RATE,
@@ -220,6 +220,7 @@ class AppUI:
                     self.project_tabs["train_tab"].components["pause_resume_btn"],
                     self.project_tabs["train_tab"].components["training_preset"],
                     self.project_tabs["train_tab"].components["model_type"],
+                    self.project_tabs["train_tab"].components["model_version"],
                     self.project_tabs["train_tab"].components["training_type"],
                     self.project_tabs["train_tab"].components["lora_rank"],
                     self.project_tabs["train_tab"].components["lora_alpha"],
@@ -378,6 +379,20 @@ class AppUI:
                 model_type_val = list(MODEL_TYPES.keys())[0]
                 logger.warning(f"Invalid model type '{model_type_val}', using default: {model_type_val}")
         
+        # Get model_version value
+        model_version_val = ""
+        # First get the internal model type for the currently selected model
+        model_internal_type = MODEL_TYPES.get(model_type_val)
+        if model_internal_type and model_internal_type in MODEL_VERSIONS:
+            # If there's a saved model_version and it's valid for this model type
+            if "model_version" in ui_state and ui_state["model_version"] in MODEL_VERSIONS.get(model_internal_type, {}):
+                model_version_val = ui_state["model_version"]
+            else:
+                # Otherwise use the first available version
+                versions = list(MODEL_VERSIONS.get(model_internal_type, {}).keys())
+                if versions:
+                    model_version_val = versions[0]
+
         # Ensure training_type is a valid display name
         training_type_val = ui_state.get("training_type", list(TRAINING_TYPES.keys())[0])
         if training_type_val not in TRAINING_TYPES:
@@ -436,6 +451,7 @@ class AppUI:
             delete_checkpoints_btn,
             training_preset, 
             model_type_val,
+            model_version_val,
             training_type_val,
             lora_rank_val, 
             lora_alpha_val,
@@ -453,10 +469,22 @@ class AppUI:
         """Initialize UI components from saved state"""
         ui_state = self.load_ui_values()
         
+        # Get model type and determine the default model version if not specified
+        model_type = ui_state.get("model_type", list(MODEL_TYPES.keys())[0])
+        model_internal_type = MODEL_TYPES.get(model_type)
+        
+        # Get model_version, defaulting to first available version if not set
+        model_version = ui_state.get("model_version", "")
+        if not model_version and model_internal_type and model_internal_type in MODEL_VERSIONS:
+            versions = list(MODEL_VERSIONS.get(model_internal_type, {}).keys())
+            if versions:
+                model_version = versions[0]
+                
         # Return values in order matching the outputs in app.load
         return (
             ui_state.get("training_preset", list(TRAINING_PRESETS.keys())[0]),
-            ui_state.get("model_type", list(MODEL_TYPES.keys())[0]),
+            model_type,
+            model_version,
             ui_state.get("training_type", list(TRAINING_TYPES.keys())[0]),
             ui_state.get("lora_rank", DEFAULT_LORA_RANK_STR),
             ui_state.get("lora_alpha", DEFAULT_LORA_ALPHA_STR),

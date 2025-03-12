@@ -23,7 +23,7 @@ from huggingface_hub import upload_folder, create_repo
 from vms.config import (
     TrainingConfig, TRAINING_PRESETS, LOG_FILE_PATH, TRAINING_VIDEOS_PATH, 
     STORAGE_PATH, TRAINING_PATH, MODEL_PATH, OUTPUT_PATH, HF_API_TOKEN, 
-    MODEL_TYPES, TRAINING_TYPES,
+    MODEL_TYPES, TRAINING_TYPES, MODEL_VERSIONS,
     DEFAULT_NB_TRAINING_STEPS, DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
     DEFAULT_BATCH_SIZE, DEFAULT_CAPTION_DROPOUT_P,
     DEFAULT_LEARNING_RATE,
@@ -50,6 +50,7 @@ from vms.utils import (
 )
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 class TrainingService:
     def __init__(self, app=None):
@@ -134,6 +135,7 @@ class TrainingService:
         validated_values = {}
         default_state = {
             "model_type": list(MODEL_TYPES.keys())[0],
+            "model_version": "",
             "training_type": list(TRAINING_TYPES.keys())[0],
             "lora_rank": DEFAULT_LORA_RANK_STR,
             "lora_alpha": DEFAULT_LORA_ALPHA_STR, 
@@ -213,6 +215,7 @@ class TrainingService:
         ui_state_file = OUTPUT_PATH / "ui_state.json"
         default_state = {
             "model_type": list(MODEL_TYPES.keys())[0],
+            "model_version": "",
             "training_type": list(TRAINING_TYPES.keys())[0],
             "lora_rank": DEFAULT_LORA_RANK_STR,
             "lora_alpha": DEFAULT_LORA_ALPHA_STR, 
@@ -255,7 +258,7 @@ class TrainingService:
                 if "model_type" in saved_state and " (LoRA)" in saved_state["model_type"]:
                     saved_state["model_type"] = saved_state["model_type"].replace(" (LoRA)", "")
                     logger.info(f"Removed (LoRA) suffix from saved model type: {saved_state['model_type']}")
-                
+
                 # Convert numeric values to appropriate types
                 if "train_steps" in saved_state:
                     try:
@@ -302,6 +305,18 @@ class TrainingService:
                     if not model_found:
                         merged_state["model_type"] = default_state["model_type"]
                         logger.warning(f"Invalid model type in saved state, using default")
+                            
+                # Validate model_version is appropriate for model_type
+                if "model_type" in merged_state and "model_version" in merged_state:
+                    model_internal_type = MODEL_TYPES.get(merged_state["model_type"])
+                    if model_internal_type:
+                        valid_versions = MODEL_VERSIONS.get(model_internal_type, {}).keys()
+                        if merged_state["model_version"] not in valid_versions:
+                            # Set to default for this model type
+                            from vms.ui.project.tabs.train_tab import TrainTab
+                            train_tab = TrainTab(None)  # Temporary instance just for the helper method
+                            merged_state["model_version"] = train_tab.get_default_model_version(saved_state["model_type"])
+                            logger.warning(f"Invalid model version for {merged_state['model_type']}, using default")
                 
                 # Validate training_type is in available choices
                 if merged_state["training_type"] not in TRAINING_TYPES:
@@ -545,6 +560,7 @@ class TrainingService:
         repo_id: str,
         preset_name: str,
         training_type: str = DEFAULT_TRAINING_TYPE,
+        model_version: str = "",
         resume_from_checkpoint: Optional[str] = None,
         num_gpus: int = DEFAULT_NUM_GPUS,
         precomputation_items: int = DEFAULT_PRECOMPUTATION_ITEMS,
@@ -869,6 +885,7 @@ class TrainingService:
             # Save session info including repo_id for later hub upload
             self.save_session({
                 "model_type": model_type,
+                "model_version": model_version,
                 "training_type": training_type,
                 "lora_rank": lora_rank,
                 "lora_alpha": lora_alpha,
@@ -1039,6 +1056,7 @@ class TrainingService:
                     last_session = {
                         "params": {
                             "model_type": MODEL_TYPES.get(ui_state.get("model_type", list(MODEL_TYPES.keys())[0])),
+                            "model_version":  ui_state.get("model_version", ""),
                             "training_type": TRAINING_TYPES.get(ui_state.get("training_type", list(TRAINING_TYPES.keys())[0])),
                             "lora_rank": ui_state.get("lora_rank", DEFAULT_LORA_RANK_STR),
                             "lora_alpha": ui_state.get("lora_alpha", DEFAULT_LORA_ALPHA_STR),
@@ -1102,8 +1120,9 @@ class TrainingService:
             # Add UI updates to restore the training parameters in the UI
             # This shows the user what values are being used for the resumed training
             ui_updates.update({
-                "model_type": model_type_display,  # Use the display name for the UI dropdown
-                "training_type": training_type_display,  # Use the display name for training type
+                "model_type": model_type_display,
+                "model_version": params.get('model_version', ''),
+                "training_type": training_type_display,
                 "lora_rank": params.get('lora_rank', DEFAULT_LORA_RANK_STR),
                 "lora_alpha": params.get('lora_alpha', DEFAULT_LORA_ALPHA_STR),
                 "train_steps": params.get('train_steps', DEFAULT_NB_TRAINING_STEPS),
@@ -1122,19 +1141,19 @@ class TrainingService:
                     # Use the internal model_type for the actual training
                     # But keep model_type_display for the UI
                     result = self.start_training(
-                        model_type=model_type_internal,
+                        model_type=model_internal_type,
                         lora_rank=params.get('lora_rank', DEFAULT_LORA_RANK_STR),
                         lora_alpha=params.get('lora_alpha', DEFAULT_LORA_ALPHA_STR),
                         train_size=params.get('train_steps', DEFAULT_NB_TRAINING_STEPS),
                         batch_size=params.get('batch_size', DEFAULT_BATCH_SIZE),
                         learning_rate=params.get('learning_rate', DEFAULT_LEARNING_RATE),
                         save_iterations=params.get('save_iterations', DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS),
+                        model_version=params.get('model_version', ''),
                         repo_id=params.get('repo_id', ''),
                         preset_name=params.get('preset_name', list(TRAINING_PRESETS.keys())[0]),
                         training_type=training_type_internal,
                         resume_from_checkpoint=str(latest_checkpoint)
                     )
-                    
                     # Set buttons for active training
                     ui_updates.update({
                         "start_btn": {"interactive": False, "variant": "secondary", "value": "Continue Training"},
@@ -1142,7 +1161,7 @@ class TrainingService:
                         "delete_checkpoints_btn": {"interactive": False, "variant": "stop", "value": "Delete All Checkpoints"},
                         "pause_resume_btn": {"interactive": False, "variant": "secondary", "visible": False}
                     })
-                    
+
                     return {
                         "status": "recovered", 
                         "message": f"Training resumed from checkpoint {checkpoint_step}",

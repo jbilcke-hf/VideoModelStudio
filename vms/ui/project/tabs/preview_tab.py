@@ -4,16 +4,18 @@ Preview tab for Video Model Studio UI
 
 import gradio as gr
 import logging
+import json
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
 import time
 
 from vms.utils import BaseTab
 from vms.config import (
-    MODEL_TYPES, DEFAULT_PROMPT_PREFIX
+    OUTPUT_PATH, MODEL_TYPES, DEFAULT_PROMPT_PREFIX, MODEL_VERSIONS
 )
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 class PreviewTab(BaseTab):
     """Preview tab for testing trained models"""
@@ -49,25 +51,35 @@ class PreviewTab(BaseTab):
                         placeholder="Prefix to add to all prompts",
                         value=DEFAULT_PROMPT_PREFIX
                     )
+
+                    self.components["seed"] = gr.Slider(
+                        label="Generation Seed (-1 for random)",
+                        minimum=-1,
+                        maximum=2147483647,  # 2^31 - 1
+                        step=1,
+                        value=-1,
+                        info="Set to -1 for random seed or specific value for reproducible results"
+                    )
                     
                     with gr.Row():
                         # Get the currently selected model type from training tab if possible
                         default_model = self.get_default_model_type()
                         
-                        # Make model_type read-only (disabled), as it must match what was trained
-                        self.components["model_type"] = gr.Dropdown(
-                            choices=list(MODEL_TYPES.keys()),
-                            label="Model Type (from training)",
-                            value=default_model,
-                            interactive=False
-                        )
-                        
-                        # Add model variant selection based on model type
-                        self.components["model_variant"] = gr.Dropdown(
-                            label="Model Variant",
-                            choices=self.get_variant_choices(default_model),
-                            value=self.get_default_variant(default_model)
-                        )
+                        with gr.Column():
+                            # Make model_type read-only (disabled), as it must match what was trained
+                            self.components["model_type"] = gr.Dropdown(
+                                choices=list(MODEL_TYPES.keys()),
+                                label="Model Type (from training)",
+                                value=default_model,
+                                interactive=False
+                            )
+                            
+                            # Add model version selection based on model type
+                            self.components["model_version"] = gr.Dropdown(
+                                label="Model Version",
+                                choices=self.get_model_version_choices(default_model),
+                                value=self.get_default_model_version(default_model)
+                            )
                     
                     # Add image input for image-to-video models
                     self.components["conditioning_image"] = gr.Image(
@@ -177,36 +189,55 @@ class PreviewTab(BaseTab):
         
         return tab
     
-    def get_variant_choices(self, model_type: str) -> List[str]:
-        """Get model variant choices based on model type"""
+    def get_model_version_choices(self, model_type: str) -> List[str]:
+        """Get model version choices based on model type"""
         # Convert UI display name to internal name
         internal_type = MODEL_TYPES.get(model_type)
         if not internal_type:
             return []
             
-        # Get variants from preview service
-        variants = self.app.previewing.get_model_variants(internal_type)
-        if not variants:
+        # Get versions from preview service
+        versions = self.app.previewing.get_model_versions(internal_type)
+        if not versions:
             return []
             
         # Format choices with display name and description
         choices = []
-        for model_id, info in variants.items():
+        for model_id, info in versions.items():
             choices.append(f"{model_id} - {info.get('name', '')}")
             
         return choices
     
-    def get_default_variant(self, model_type: str) -> str:
-        """Get default model variant for the model type"""
-        choices = self.get_variant_choices(model_type)
+    def get_default_model_version(self, model_type: str) -> str:
+        """Get default model version for the model type"""
+        choices = self.get_model_version_choices(model_type)
         if choices:
             return choices[0]
         return ""
-    
+
     def get_default_model_type(self) -> str:
-        """Get the currently selected model type from training tab"""
+        """Get the model type from the latest training session"""
         try:
-            # Try to get the model type from UI state
+            # First check the session.json which contains the actual training data
+            session_file = OUTPUT_PATH / "session.json"
+            if session_file.exists():
+                with open(session_file, 'r') as f:
+                    session_data = json.load(f)
+                    
+                # Get the internal model type from the session parameters
+                if "params" in session_data and "model_type" in session_data["params"]:
+                    internal_model_type = session_data["params"]["model_type"]
+                    
+                    # Convert internal model type to display name
+                    for display_name, internal_name in MODEL_TYPES.items():
+                        if internal_name == internal_model_type:
+                            logger.info(f"Using model type '{display_name}' from session file")
+                            return display_name
+                        
+                    # If we couldn't map it, log a warning
+                    logger.warning(f"Could not map internal model type '{internal_model_type}' to a display name")
+                    
+            # If we couldn't get it from session.json, try to get it from UI state
             ui_state = self.app.training.load_ui_state()
             model_type = ui_state.get("model_type")
             
@@ -214,7 +245,7 @@ class PreviewTab(BaseTab):
             if model_type in MODEL_TYPES:
                 return model_type
             
-            # If we couldn't get a valid model type, try to get it from the training tab directly
+            # If we still couldn't get a valid model type, try to get it from the training tab
             if hasattr(self.app, 'tabs') and 'train_tab' in self.app.tabs:
                 train_tab = self.app.tabs['train_tab']
                 if hasattr(train_tab, 'components') and 'model_type' in train_tab.components:
@@ -225,31 +256,31 @@ class PreviewTab(BaseTab):
             # Fallback to first model type
             return list(MODEL_TYPES.keys())[0]
         except Exception as e:
-            logger.warning(f"Failed to get default model type: {e}")
+            logger.warning(f"Failed to get default model type from session: {e}")
             return list(MODEL_TYPES.keys())[0]
     
-    def extract_model_id(self, variant_choice: str) -> str:
-        """Extract model ID from variant choice string"""
-        if " - " in variant_choice:
-            return variant_choice.split(" - ")[0].strip()
-        return variant_choice
+    def extract_model_id(self, model_version_choice: str) -> str:
+        """Extract model ID from model version choice string"""
+        if " - " in model_version_choice:
+            return model_version_choice.split(" - ")[0].strip()
+        return model_version_choice
     
-    def get_variant_type(self, model_type: str, model_variant: str) -> str:
-        """Get the variant type (text-to-video or image-to-video)"""
+    def get_model_version_type(self, model_type: str, model_version: str) -> str:
+        """Get the model version type (text-to-video or image-to-video)"""
         # Convert UI display name to internal name
         internal_type = MODEL_TYPES.get(model_type)
         if not internal_type:
             return "text-to-video"
             
-        # Extract model_id from variant choice
-        model_id = self.extract_model_id(model_variant)
+        # Extract model_id from model version choice
+        model_id = self.extract_model_id(model_version)
             
-        # Get variants from preview service
-        variants = self.app.previewing.get_model_variants(internal_type)
-        variant_info = variants.get(model_id, {})
+        # Get versions from preview service
+        versions = self.app.previewing.get_model_versions(internal_type)
+        model_version_info = versions.get(model_id, {})
         
-        # Return the variant type or default to text-to-video
-        return variant_info.get("type", "text-to-video")
+        # Return the model version type or default to text-to-video
+        return model_version_info.get("type", "text-to-video")
     
     def connect_events(self) -> None:
         """Connect event handlers to UI components"""
@@ -264,23 +295,23 @@ class PreviewTab(BaseTab):
             ]
         )
         
-        # Update model_variant choices when model_type changes or tab is selected
+        # Update model_version choices when model_type changes or tab is selected
         if hasattr(self.app, 'tabs_component') and self.app.tabs_component is not None:
             self.app.tabs_component.select(
-                fn=self.sync_model_type_and_variants,
+                fn=self.sync_model_type_and_verions,
                 inputs=[],
                 outputs=[
                     self.components["model_type"],
-                    self.components["model_variant"]
+                    self.components["model_version"]
                 ]
             )
         
-        # Update variant-specific UI elements when variant changes
-        self.components["model_variant"].change(
-            fn=self.update_variant_ui,
+        # Update model version-specific UI elements when version changes
+        self.components["model_version"].change(
+            fn=self.update_model_version_ui,
             inputs=[
                 self.components["model_type"],
-                self.components["model_variant"]
+                self.components["model_version"]
             ],
             outputs=[
                 self.components["conditioning_image"]
@@ -305,13 +336,13 @@ class PreviewTab(BaseTab):
                     self.components["lora_weight"],
                     self.components["inference_steps"],
                     self.components["enable_cpu_offload"],
-                    self.components["model_variant"]
+                    self.components["model_version"]
                 ]
             )
         
         # Save preview UI state when values change
         for component_name in [
-            "prompt", "negative_prompt", "prompt_prefix", "model_variant", "resolution_preset",
+            "prompt", "negative_prompt", "prompt_prefix", "model_version", "resolution_preset",
             "width", "height", "num_frames", "fps", "guidance_scale", "flow_shift",
             "lora_weight", "inference_steps", "enable_cpu_offload"
         ]:
@@ -327,7 +358,7 @@ class PreviewTab(BaseTab):
             fn=self.generate_video,
             inputs=[
                 self.components["model_type"],
-                self.components["model_variant"],
+                self.components["model_version"],
                 self.components["prompt"],
                 self.components["negative_prompt"],
                 self.components["prompt_prefix"],
@@ -349,22 +380,41 @@ class PreviewTab(BaseTab):
             ]
         )
     
-    def update_variant_ui(self, model_type: str, model_variant: str) -> Dict[str, Any]:
-        """Update UI based on the selected model variant"""
-        variant_type = self.get_variant_type(model_type, model_variant)
+    def update_model_version_ui(self, model_type: str, model_version: str) -> Dict[str, Any]:
+        """Update UI based on the selected model version"""
+        model_version_type = self.get_model_version_type(model_type, model_version)
         
         # Show conditioning image input only for image-to-video models
-        show_conditioning_image = variant_type == "image-to-video"
+        show_conditioning_image = model_version_type == "image-to-video"
         
         return {
             self.components["conditioning_image"]: gr.Image(visible=show_conditioning_image)
         }
     
-    def sync_model_type_and_variants(self) -> Tuple[str, str]:
-        """Sync model type with training tab when preview tab is selected and update variant choices"""
+    def sync_model_type_and_verions(self) -> Tuple[str, str]:
+        """Sync model type with training tab when preview tab is selected and update model version choices"""
         model_type = self.get_default_model_type()
-        model_variant = self.get_default_variant(model_type)
-        return model_type, model_variant
+        model_version = ""
+        
+        # Try to get model_version from session or UI state
+        ui_state = self.app.training.load_ui_state()
+        preview_state = ui_state.get("preview", {})
+        model_version = preview_state.get("model_version", "")
+        
+        if not model_version:
+            # Format it as a display choice
+            internal_type = MODEL_TYPES.get(model_type)
+            if internal_type and internal_type in MODEL_VERSIONS:
+                first_version = next(iter(MODEL_VERSIONS[internal_type].keys()), "")
+                if first_version:
+                    model_version_info = MODEL_VERSIONS[internal_type][first_version]
+                    model_version = f"{first_version} - {model_version_info.get('name', '')}"
+        
+        # If we couldn't get it, use default
+        if not model_version:
+            model_version = self.get_default_model_version(model_type)
+            
+        return model_type, model_version
     
     def update_resolution(self, preset: str) -> Tuple[int, int, float]:
         """Update resolution and flow shift based on preset"""
@@ -385,11 +435,11 @@ class PreviewTab(BaseTab):
             # Get model type (can't be changed in UI)
             model_type = self.get_default_model_type()
             
-            # If model_variant not in choices for current model_type, use default
-            model_variant = preview_state.get("model_variant", "")
-            variant_choices = self.get_variant_choices(model_type)
-            if model_variant not in variant_choices and variant_choices:
-                model_variant = variant_choices[0]
+            # If model_version not in choices for current model_type, use default
+            model_version = preview_state.get("model_version", "")
+            model_version_choices = self.get_model_version_choices(model_type)
+            if model_version not in model_version_choices and model_version_choices:
+                model_version = model_version_choices[0]
             
             return (
                 preview_state.get("prompt", ""),
@@ -404,7 +454,7 @@ class PreviewTab(BaseTab):
                 preview_state.get("lora_weight", 0.7),
                 preview_state.get("inference_steps", 30),
                 preview_state.get("enable_cpu_offload", True),
-                model_variant
+                model_version
             )
         except Exception as e:
             logger.error(f"Error loading preview state: {e}")
@@ -414,7 +464,7 @@ class PreviewTab(BaseTab):
                 "worst quality, low quality, blurry, jittery, distorted, ugly, deformed, disfigured, messy background", 
                 DEFAULT_PROMPT_PREFIX,
                 832, 480, 49, 16, 5.0, 3.0, 0.7, 30, True,
-                self.get_default_variant(self.get_default_model_type())
+                self.get_default_model_version(self.get_default_model_type())
             )
     
     def save_preview_state_value(self, value: Any) -> None:
@@ -456,7 +506,7 @@ class PreviewTab(BaseTab):
     def generate_video(
         self,
         model_type: str,
-        model_variant: str,
+        model_version: str,
         prompt: str,
         negative_prompt: str,
         prompt_prefix: str,
@@ -473,13 +523,14 @@ class PreviewTab(BaseTab):
     ) -> Tuple[Optional[str], str, str]:
         """Handler for generate button click, delegates to preview service"""
         # Save all the parameters to preview state before generating
+        print("preview_tab: generate_video() has been called")
         try:
             state = self.app.training.load_ui_state()
             if "preview" not in state:
                 state["preview"] = {}
                 
-            # Extract model ID from variant choice
-            model_variant_id = self.extract_model_id(model_variant)
+            # Extract model ID from model version choice
+            model_version_id = self.extract_model_id(model_version)
                 
             # Update all values
             preview_state = {
@@ -487,7 +538,7 @@ class PreviewTab(BaseTab):
                 "negative_prompt": negative_prompt,
                 "prompt_prefix": prompt_prefix,
                 "model_type": model_type,
-                "model_variant": model_variant,
+                "model_version": model_version,
                 "width": width,
                 "height": height,
                 "num_frames": num_frames,
@@ -504,40 +555,30 @@ class PreviewTab(BaseTab):
         except Exception as e:
             logger.error(f"Error saving preview state before generation: {e}")
         
-        # Clear the log display at the start to make room for new logs
-        # Yield and sleep briefly to allow UI update
-        yield None, "Starting generation...", ""
-        time.sleep(0.1)
+        # Extract model ID from model version choice string
+        model_version_id = self.extract_model_id(model_version)
         
-        # Extract model ID from variant choice string
-        model_variant_id = self.extract_model_id(model_variant)
+        # Initial UI update
+        video_path, status, log = None, "Initializing generation...", "Starting video generation process..."
         
-        # Use streaming updates to provide real-time feedback during generation
-        def generate_with_updates():
-            # Initial UI update
-            yield None, "Initializing generation...", "Starting video generation process..."
-            
-            # Start actual generation
-            result = self.app.previewing.generate_video(
-                model_type=model_type,
-                model_variant=model_variant_id,
-                prompt=prompt,
-                negative_prompt=negative_prompt,
-                prompt_prefix=prompt_prefix,
-                width=width,
-                height=height,
-                num_frames=num_frames,
-                guidance_scale=guidance_scale,
-                flow_shift=flow_shift,
-                lora_weight=lora_weight,
-                inference_steps=inference_steps,
-                enable_cpu_offload=enable_cpu_offload,
-                fps=fps,
-                conditioning_image=conditioning_image
-            )
-            
-            # Return final result
-            return result
+        # Start actual generation
+        result = self.app.previewing.generate_video(
+            model_type=model_type,
+            model_version=model_version_id,
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            prompt_prefix=prompt_prefix,
+            width=width,
+            height=height,
+            num_frames=num_frames,
+            guidance_scale=guidance_scale,
+            flow_shift=flow_shift,
+            lora_weight=lora_weight,
+            inference_steps=inference_steps,
+            enable_cpu_offload=enable_cpu_offload,
+            fps=fps,
+            conditioning_image=conditioning_image
+        )
         
-        # Return the generator for streaming updates
-        return generate_with_updates()
+        # Return final result
+        return result
