@@ -430,7 +430,7 @@ class TrainTab(BaseTab):
         """Update model version choices based on selected model type"""
         model_versions = self.get_model_version_choices(model_type)
         default_version = self.get_default_model_version(model_type)
-        print(f"update_model_versions({model_type}): default_version = {default_version}")
+        #print(f"update_model_versions({model_type}): default_version = {default_version}")
         # Update UI state with proper model_type first (add this line)
         self.app.update_ui_state(model_type=model_type)
         
@@ -519,7 +519,7 @@ class TrainTab(BaseTab):
         """Get default model version for the given model type"""
         # Convert UI display name to internal name
         internal_type = MODEL_TYPES.get(model_type)
-        print(f"get_default_model_version({model_type}) = {internal_type}")
+        #print(f"get_default_model_version({model_type}) = {internal_type}")
         if not internal_type or internal_type not in MODEL_VERSIONS:
             return ""
             
