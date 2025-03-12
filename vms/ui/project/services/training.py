@@ -14,6 +14,7 @@ import zipfile
 import logging
 import traceback
 import threading
+import fcntl
 import select
 
 from typing import Any, Optional, Dict, List, Union, Tuple
@@ -62,6 +63,8 @@ class TrainingService:
         self.status_file = OUTPUT_PATH / "status.json"
         self.pid_file = OUTPUT_PATH / "training.pid"
         self.log_file = OUTPUT_PATH / "training.log"
+
+        self.file_lock = threading.Lock()
 
         self.file_handler = None
         self.setup_logging()
@@ -131,67 +134,69 @@ class TrainingService:
         """Save current UI state to file with validation"""
         ui_state_file = OUTPUT_PATH / "ui_state.json"
         
-        # Validate values before saving
-        validated_values = {}
-        default_state = {
-            "model_type": list(MODEL_TYPES.keys())[0],
-            "model_version": "",
-            "training_type": list(TRAINING_TYPES.keys())[0],
-            "lora_rank": DEFAULT_LORA_RANK_STR,
-            "lora_alpha": DEFAULT_LORA_ALPHA_STR, 
-            "train_steps": DEFAULT_NB_TRAINING_STEPS,
-            "batch_size": DEFAULT_BATCH_SIZE,
-            "learning_rate": DEFAULT_LEARNING_RATE,
-            "save_iterations": DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
-            "training_preset": list(TRAINING_PRESETS.keys())[0],
-            "num_gpus": DEFAULT_NUM_GPUS,
-            "precomputation_items": DEFAULT_PRECOMPUTATION_ITEMS,
-            "lr_warmup_steps": DEFAULT_NB_LR_WARMUP_STEPS
-        }
-        
-        # Copy default values first
-        validated_values = default_state.copy()
-        
-        # Update with provided values, converting types as needed
-        for key, value in values.items():
-            if key in default_state:
-                if key == "train_steps":
-                    try:
-                        validated_values[key] = int(value)
-                    except (ValueError, TypeError):
-                        validated_values[key] = default_state[key]
-                elif key == "batch_size":
-                    try:
-                        validated_values[key] = int(value)
-                    except (ValueError, TypeError):
-                        validated_values[key] = default_state[key]
-                elif key == "learning_rate":
-                    try:
-                        validated_values[key] = float(value)
-                    except (ValueError, TypeError):
-                        validated_values[key] = default_state[key]
-                elif key == "save_iterations":
-                    try:
-                        validated_values[key] = int(value)
-                    except (ValueError, TypeError):
-                        validated_values[key] = default_state[key]
-                elif key == "lora_rank" and value not in ["16", "32", "64", "128", "256", "512", "1024"]:
-                    validated_values[key] = default_state[key]
-                elif key == "lora_alpha" and value not in ["16", "32", "64", "128", "256", "512", "1024"]:
-                    validated_values[key] = default_state[key]
-                else:
-                    validated_values[key] = value
-        
-        try:
-            # First verify we can serialize to JSON
-            json_data = json.dumps(validated_values, indent=2)
+        # Use a lock to prevent concurrent writes
+        with self.file_lock:
+            # Validate values before saving
+            validated_values = {}
+            default_state = {
+                "model_type": list(MODEL_TYPES.keys())[0],
+                "model_version": "",
+                "training_type": list(TRAINING_TYPES.keys())[0],
+                "lora_rank": DEFAULT_LORA_RANK_STR,
+                "lora_alpha": DEFAULT_LORA_ALPHA_STR, 
+                "train_steps": DEFAULT_NB_TRAINING_STEPS,
+                "batch_size": DEFAULT_BATCH_SIZE,
+                "learning_rate": DEFAULT_LEARNING_RATE,
+                "save_iterations": DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
+                "training_preset": list(TRAINING_PRESETS.keys())[0],
+                "num_gpus": DEFAULT_NUM_GPUS,
+                "precomputation_items": DEFAULT_PRECOMPUTATION_ITEMS,
+                "lr_warmup_steps": DEFAULT_NB_LR_WARMUP_STEPS
+            }
             
-            # Write to the file
-            with open(ui_state_file, 'w') as f:
-                f.write(json_data)
-            logger.debug(f"UI state saved successfully")
-        except Exception as e:
-            logger.error(f"Error saving UI state: {str(e)}")
+            # Copy default values first
+            validated_values = default_state.copy()
+            
+            # Update with provided values, converting types as needed
+            for key, value in values.items():
+                if key in default_state:
+                    if key == "train_steps":
+                        try:
+                            validated_values[key] = int(value)
+                        except (ValueError, TypeError):
+                            validated_values[key] = default_state[key]
+                    elif key == "batch_size":
+                        try:
+                            validated_values[key] = int(value)
+                        except (ValueError, TypeError):
+                            validated_values[key] = default_state[key]
+                    elif key == "learning_rate":
+                        try:
+                            validated_values[key] = float(value)
+                        except (ValueError, TypeError):
+                            validated_values[key] = default_state[key]
+                    elif key == "save_iterations":
+                        try:
+                            validated_values[key] = int(value)
+                        except (ValueError, TypeError):
+                            validated_values[key] = default_state[key]
+                    elif key == "lora_rank" and value not in ["16", "32", "64", "128", "256", "512", "1024"]:
+                        validated_values[key] = default_state[key]
+                    elif key == "lora_alpha" and value not in ["16", "32", "64", "128", "256", "512", "1024"]:
+                        validated_values[key] = default_state[key]
+                    else:
+                        validated_values[key] = value
+            
+            try:
+                # First verify we can serialize to JSON
+                json_data = json.dumps(validated_values, indent=2)
+                
+                # Write to the file
+                with open(ui_state_file, 'w') as f:
+                    f.write(json_data)
+                logger.debug(f"UI state saved successfully")
+            except Exception as e:
+                logger.error(f"Error saving UI state: {str(e)}")
 
     def _backup_and_recreate_ui_state(self, ui_state_file, default_state):
         """Backup the corrupted UI state file and create a new one with defaults"""
@@ -229,130 +234,133 @@ class TrainingService:
             "lr_warmup_steps": DEFAULT_NB_LR_WARMUP_STEPS
         }
         
-        if not ui_state_file.exists():
-            logger.info("UI state file does not exist, using default values")
-            return default_state
-                
-        try:
-            # First check if the file is empty
-            file_size = ui_state_file.stat().st_size
-            if file_size == 0:
-                logger.warning("UI state file exists but is empty, using default values")
-                return default_state
-                
-            with open(ui_state_file, 'r') as f:
-                file_content = f.read().strip()
-                if not file_content:
-                    logger.warning("UI state file is empty or contains only whitespace, using default values")
-                    return default_state
-                    
-                try:
-                    saved_state = json.loads(file_content)
-                except json.JSONDecodeError as e:
-                    logger.error(f"Error parsing UI state JSON: {str(e)}")
-                    # Instead of showing the error, recreate the file with defaults
-                    self._backup_and_recreate_ui_state(ui_state_file, default_state)
-                    return default_state
-                
-                # Clean up model type if it contains " (LoRA)" suffix
-                if "model_type" in saved_state and " (LoRA)" in saved_state["model_type"]:
-                    saved_state["model_type"] = saved_state["model_type"].replace(" (LoRA)", "")
-                    logger.info(f"Removed (LoRA) suffix from saved model type: {saved_state['model_type']}")
+        # Use lock for reading too to avoid reading during a write
+        with self.file_lock:
 
-                # Convert numeric values to appropriate types
-                if "train_steps" in saved_state:
-                    try:
-                        saved_state["train_steps"] = int(saved_state["train_steps"])
-                    except (ValueError, TypeError):
-                        saved_state["train_steps"] = default_state["train_steps"]
-                        logger.warning("Invalid train_steps value, using default")
-                        
-                if "batch_size" in saved_state:
-                    try:
-                        saved_state["batch_size"] = int(saved_state["batch_size"])
-                    except (ValueError, TypeError):
-                        saved_state["batch_size"] = default_state["batch_size"]
-                        logger.warning("Invalid batch_size value, using default")
-                        
-                if "learning_rate" in saved_state:
-                    try:
-                        saved_state["learning_rate"] = float(saved_state["learning_rate"])
-                    except (ValueError, TypeError):
-                        saved_state["learning_rate"] = default_state["learning_rate"]
-                        logger.warning("Invalid learning_rate value, using default")
-                        
-                if "save_iterations" in saved_state:
-                    try:
-                        saved_state["save_iterations"] = int(saved_state["save_iterations"])
-                    except (ValueError, TypeError):
-                        saved_state["save_iterations"] = default_state["save_iterations"]
-                        logger.warning("Invalid save_iterations value, using default")
+            if not ui_state_file.exists():
+                logger.info("UI state file does not exist, using default values")
+                return default_state
                     
-                # Make sure we have all keys (in case structure changed)
-                merged_state = default_state.copy()
-                merged_state.update({k: v for k, v in saved_state.items() if v is not None})
-                
-                # Validate model_type is in available choices
-                if merged_state["model_type"] not in MODEL_TYPES:
-                    # Try to map from internal name
-                    model_found = False
-                    for display_name, internal_name in MODEL_TYPES.items():
-                        if internal_name == merged_state["model_type"]:
-                            merged_state["model_type"] = display_name
-                            model_found = True
-                            break
-                    # If still not found, use default
-                    if not model_found:
-                        merged_state["model_type"] = default_state["model_type"]
-                        logger.warning(f"Invalid model type in saved state, using default")
+            try:
+                # First check if the file is empty
+                file_size = ui_state_file.stat().st_size
+                if file_size == 0:
+                    logger.warning("UI state file exists but is empty, using default values")
+                    return default_state
+                    
+                with open(ui_state_file, 'r') as f:
+                    file_content = f.read().strip()
+                    if not file_content:
+                        logger.warning("UI state file is empty or contains only whitespace, using default values")
+                        return default_state
+                        
+                    try:
+                        saved_state = json.loads(file_content)
+                    except json.JSONDecodeError as e:
+                        logger.error(f"Error parsing UI state JSON: {str(e)}")
+                        # Instead of showing the error, recreate the file with defaults
+                        self._backup_and_recreate_ui_state(ui_state_file, default_state)
+                        return default_state
+                    
+                    # Clean up model type if it contains " (LoRA)" suffix
+                    if "model_type" in saved_state and " (LoRA)" in saved_state["model_type"]:
+                        saved_state["model_type"] = saved_state["model_type"].replace(" (LoRA)", "")
+                        logger.info(f"Removed (LoRA) suffix from saved model type: {saved_state['model_type']}")
+
+                    # Convert numeric values to appropriate types
+                    if "train_steps" in saved_state:
+                        try:
+                            saved_state["train_steps"] = int(saved_state["train_steps"])
+                        except (ValueError, TypeError):
+                            saved_state["train_steps"] = default_state["train_steps"]
+                            logger.warning("Invalid train_steps value, using default")
                             
-                # Validate model_version is appropriate for model_type
-                if "model_type" in merged_state and "model_version" in merged_state:
-                    model_internal_type = MODEL_TYPES.get(merged_state["model_type"])
-                    if model_internal_type:
-                        valid_versions = MODEL_VERSIONS.get(model_internal_type, {}).keys()
-                        if merged_state["model_version"] not in valid_versions:
-                            # Set to default for this model type
-                            from vms.ui.project.tabs.train_tab import TrainTab
-                            train_tab = TrainTab(None)  # Temporary instance just for the helper method
-                            merged_state["model_version"] = train_tab.get_default_model_version(saved_state["model_type"])
-                            logger.warning(f"Invalid model version for {merged_state['model_type']}, using default")
-                
-                # Validate training_type is in available choices
-                if merged_state["training_type"] not in TRAINING_TYPES:
-                    # Try to map from internal name
-                    training_found = False
-                    for display_name, internal_name in TRAINING_TYPES.items():
-                        if internal_name == merged_state["training_type"]:
-                            merged_state["training_type"] = display_name
-                            training_found = True
-                            break
-                    # If still not found, use default
-                    if not training_found:
-                        merged_state["training_type"] = default_state["training_type"]
-                        logger.warning(f"Invalid training type in saved state, using default")
-                
-                # Validate training_preset is in available choices
-                if merged_state["training_preset"] not in TRAINING_PRESETS:
-                    merged_state["training_preset"] = default_state["training_preset"]
-                    logger.warning(f"Invalid training preset in saved state, using default")
+                    if "batch_size" in saved_state:
+                        try:
+                            saved_state["batch_size"] = int(saved_state["batch_size"])
+                        except (ValueError, TypeError):
+                            saved_state["batch_size"] = default_state["batch_size"]
+                            logger.warning("Invalid batch_size value, using default")
+                            
+                    if "learning_rate" in saved_state:
+                        try:
+                            saved_state["learning_rate"] = float(saved_state["learning_rate"])
+                        except (ValueError, TypeError):
+                            saved_state["learning_rate"] = default_state["learning_rate"]
+                            logger.warning("Invalid learning_rate value, using default")
+                            
+                    if "save_iterations" in saved_state:
+                        try:
+                            saved_state["save_iterations"] = int(saved_state["save_iterations"])
+                        except (ValueError, TypeError):
+                            saved_state["save_iterations"] = default_state["save_iterations"]
+                            logger.warning("Invalid save_iterations value, using default")
+                        
+                    # Make sure we have all keys (in case structure changed)
+                    merged_state = default_state.copy()
+                    merged_state.update({k: v for k, v in saved_state.items() if v is not None})
                     
-                # Validate lora_rank is in allowed values
-                if merged_state.get("lora_rank") not in ["16", "32", "64", "128", "256", "512", "1024"]:
-                    merged_state["lora_rank"] = default_state["lora_rank"]
-                    logger.warning(f"Invalid lora_rank in saved state, using default")
+                    # Validate model_type is in available choices
+                    if merged_state["model_type"] not in MODEL_TYPES:
+                        # Try to map from internal name
+                        model_found = False
+                        for display_name, internal_name in MODEL_TYPES.items():
+                            if internal_name == merged_state["model_type"]:
+                                merged_state["model_type"] = display_name
+                                model_found = True
+                                break
+                        # If still not found, use default
+                        if not model_found:
+                            merged_state["model_type"] = default_state["model_type"]
+                            logger.warning(f"Invalid model type in saved state, using default")
+                                
+                    # Validate model_version is appropriate for model_type
+                    if "model_type" in merged_state and "model_version" in merged_state:
+                        model_internal_type = MODEL_TYPES.get(merged_state["model_type"])
+                        if model_internal_type:
+                            valid_versions = MODEL_VERSIONS.get(model_internal_type, {}).keys()
+                            if merged_state["model_version"] not in valid_versions:
+                                # Set to default for this model type
+                                from vms.ui.project.tabs.train_tab import TrainTab
+                                train_tab = TrainTab(None)  # Temporary instance just for the helper method
+                                merged_state["model_version"] = train_tab.get_default_model_version(saved_state["model_type"])
+                                logger.warning(f"Invalid model version for {merged_state['model_type']}, using default")
                     
-                # Validate lora_alpha is in allowed values
-                if merged_state.get("lora_alpha") not in ["16", "32", "64", "128", "256", "512", "1024"]:
-                    merged_state["lora_alpha"] = default_state["lora_alpha"]
-                    logger.warning(f"Invalid lora_alpha in saved state, using default")
+                    # Validate training_type is in available choices
+                    if merged_state["training_type"] not in TRAINING_TYPES:
+                        # Try to map from internal name
+                        training_found = False
+                        for display_name, internal_name in TRAINING_TYPES.items():
+                            if internal_name == merged_state["training_type"]:
+                                merged_state["training_type"] = display_name
+                                training_found = True
+                                break
+                        # If still not found, use default
+                        if not training_found:
+                            merged_state["training_type"] = default_state["training_type"]
+                            logger.warning(f"Invalid training type in saved state, using default")
                     
-                return merged_state
-        except Exception as e:
-            logger.error(f"Error loading UI state: {str(e)}")
-            # If anything goes wrong, backup and recreate
-            self._backup_and_recreate_ui_state(ui_state_file, default_state)
-            return default_state
+                    # Validate training_preset is in available choices
+                    if merged_state["training_preset"] not in TRAINING_PRESETS:
+                        merged_state["training_preset"] = default_state["training_preset"]
+                        logger.warning(f"Invalid training preset in saved state, using default")
+                        
+                    # Validate lora_rank is in allowed values
+                    if merged_state.get("lora_rank") not in ["16", "32", "64", "128", "256", "512", "1024"]:
+                        merged_state["lora_rank"] = default_state["lora_rank"]
+                        logger.warning(f"Invalid lora_rank in saved state, using default")
+                        
+                    # Validate lora_alpha is in allowed values
+                    if merged_state.get("lora_alpha") not in ["16", "32", "64", "128", "256", "512", "1024"]:
+                        merged_state["lora_alpha"] = default_state["lora_alpha"]
+                        logger.warning(f"Invalid lora_alpha in saved state, using default")
+                        
+                    return merged_state
+            except Exception as e:
+                logger.error(f"Error loading UI state: {str(e)}")
+                # If anything goes wrong, backup and recreate
+                self._backup_and_recreate_ui_state(ui_state_file, default_state)
+                return default_state
 
     def ensure_valid_ui_state_file(self):
         """Ensure UI state file exists and is valid JSON"""

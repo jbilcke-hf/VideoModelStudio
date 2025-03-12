@@ -69,7 +69,7 @@ class TrainTab(BaseTab):
                             # Get model versions for the default model type
                             default_model_versions = self.get_model_version_choices(default_model_type)
                             default_model_version = self.get_default_model_version(default_model_type)
-                            
+                            print(f"default_model_version(default_model_type) = {default_model_version}")
                             self.components["model_version"] = gr.Dropdown(
                                 choices=default_model_versions,
                                 label="Model Version",
@@ -214,6 +214,37 @@ class TrainTab(BaseTab):
                     
         return tab
     
+    def update_model_type_and_version(self, model_type: str, model_version: str):
+        """Update both model type and version together to keep them in sync"""
+        # Get internal model type
+        internal_type = MODEL_TYPES.get(model_type)
+        
+        # Make sure model_version is valid for this model type
+        if internal_type and internal_type in MODEL_VERSIONS:
+            valid_versions = list(MODEL_VERSIONS[internal_type].keys())
+            if not model_version or model_version not in valid_versions:
+                if valid_versions:
+                    model_version = valid_versions[0]
+        
+        # Update UI state with both values to keep them in sync
+        self.app.update_ui_state(model_type=model_type, model_version=model_version)
+        return None
+
+    def save_model_version(self, model_type: str, model_version: str):
+        """Save model version ensuring it's consistent with model type"""
+        internal_type = MODEL_TYPES.get(model_type)
+        
+        # Verify the model_version is compatible with the current model_type
+        if internal_type and internal_type in MODEL_VERSIONS:
+            valid_versions = MODEL_VERSIONS[internal_type].keys()
+            if model_version not in valid_versions:
+                # Don't save incompatible version
+                return None
+                
+        # Save the model version along with current model type to ensure consistency
+        self.app.update_ui_state(model_type=model_type, model_version=model_version)
+        return None
+
     def connect_events(self) -> None:
         """Connect event handlers to UI components"""
         # Model type change event - Update model version dropdown choices
@@ -222,8 +253,8 @@ class TrainTab(BaseTab):
             inputs=[self.components["model_type"]],
             outputs=[self.components["model_version"]]
         ).then(
-            fn=lambda v: self.app.update_ui_state(model_type=v),
-            inputs=[self.components["model_type"]],
+            fn=self.update_model_type_and_version,  # Add this new function
+            inputs=[self.components["model_type"], self.components["model_version"]],
             outputs=[]
         ).then(
             # Use get_model_info instead of update_model_info
@@ -234,8 +265,8 @@ class TrainTab(BaseTab):
         
         # Model version change event
         self.components["model_version"].change(
-            fn=lambda v: self.app.update_ui_state(model_version=v),
-            inputs=[self.components["model_version"]],
+            fn=self.save_model_version,  # Replace with this new function
+            inputs=[self.components["model_type"], self.components["model_version"]],
             outputs=[]
         )
             
@@ -399,10 +430,13 @@ class TrainTab(BaseTab):
         """Update model version choices based on selected model type"""
         model_versions = self.get_model_version_choices(model_type)
         default_version = self.get_default_model_version(model_type)
+        print(f"update_model_versions({model_type}): default_version = {default_version}")
+        # Update UI state with proper model_type first (add this line)
+        self.app.update_ui_state(model_type=model_type)
         
         # Update the model_version dropdown with new choices and default value
         return gr.Dropdown(choices=model_versions, value=default_version)
-        
+
     def handle_training_start(
         self, preset, model_type, model_version, training_type, 
         lora_rank, lora_alpha, train_steps, batch_size, learning_rate, 
@@ -477,22 +511,24 @@ class TrainTab(BaseTab):
         if not internal_type or internal_type not in MODEL_VERSIONS:
             return []
             
-        # Get versions and return them as choices
-        versions = MODEL_VERSIONS.get(internal_type, {})
-        return list(versions.keys())
+        # Return just the model IDs without formatting
+        return list(MODEL_VERSIONS.get(internal_type, {}).keys())
+
     
     def get_default_model_version(self, model_type: str) -> str:
         """Get default model version for the given model type"""
         # Convert UI display name to internal name
         internal_type = MODEL_TYPES.get(model_type)
+        print(f"get_default_model_version({model_type}) = {internal_type}")
         if not internal_type or internal_type not in MODEL_VERSIONS:
             return ""
             
         # Get the first version available for this model type
         versions = MODEL_VERSIONS.get(internal_type, {})
         if versions:
-            return next(iter(versions.keys()))
-            
+            model_versions = list(versions.keys())
+            if model_versions:
+                return model_versions[0]
         return ""
    
     def update_model_info(self, model_type: str, training_type: str) -> Dict:
