@@ -52,13 +52,15 @@ class PreviewTab(BaseTab):
                         value=DEFAULT_PROMPT_PREFIX
                     )
 
+                    # Ensure seed is interactive with a slider
                     self.components["seed"] = gr.Slider(
                         label="Generation Seed (-1 for random)",
                         minimum=-1,
                         maximum=2147483647,  # 2^31 - 1
                         step=1,
                         value=-1,
-                        info="Set to -1 for random seed or specific value for reproducible results"
+                        info="Set to -1 for random seed or specific value for reproducible results",
+                        interactive=True
                     )
                     
                     with gr.Row():
@@ -80,6 +82,24 @@ class PreviewTab(BaseTab):
                                 choices=self.get_model_version_choices(default_model),
                                 value=self.get_default_model_version(default_model)
                             )
+                    
+                    # Add dropdown to choose between LoRA and original model
+                    has_lora = self.check_lora_model_exists()
+                    lora_choices = []
+                    default_lora_choice = ""
+
+                    if has_lora:
+                        lora_choices = ["Use LoRA model", "Use original model"]
+                        default_lora_choice = "Use LoRA model"
+                    else:
+                        lora_choices = ["Cannot find LoRA model", "Use original model"]
+                        default_lora_choice = "Use original model"
+
+                    self.components["use_lora"] = gr.Dropdown(
+                        choices=lora_choices,
+                        label="Model Selection",
+                        value=default_lora_choice
+                    )
                     
                     # Add image input for image-to-video models
                     self.components["conditioning_image"] = gr.Image(
@@ -148,7 +168,8 @@ class PreviewTab(BaseTab):
                             minimum=0.0,
                             maximum=1.0,
                             step=0.01,
-                            value=0.7
+                            value=0.7,
+                            visible=has_lora  # Only visible if using LoRA
                         )
                         
                         self.components["inference_steps"] = gr.Slider(
@@ -156,12 +177,12 @@ class PreviewTab(BaseTab):
                             minimum=1,
                             maximum=100,
                             step=1,
-                            value=30
+                            value=20
                         )
                     
                     self.components["enable_cpu_offload"] = gr.Checkbox(
                         label="Enable Model CPU Offload (for low-VRAM GPUs)",
-                        value=True
+                        value=False # let's assume user is using a video model training rig with a good GPU
                     )
                     
                     self.components["generate_btn"] = gr.Button(
@@ -184,10 +205,37 @@ class PreviewTab(BaseTab):
                         self.components["log"] = gr.TextArea(
                             label="Generation Log",
                             interactive=False,
-                            lines=15
+                            lines=20
                         )
         
         return tab
+
+    def check_lora_model_exists(self) -> bool:
+        """Check if any LoRA model files exist in the output directory"""
+        # Look for the standard LoRA weights file
+        lora_path = OUTPUT_PATH / "pytorch_lora_weights.safetensors"
+        if lora_path.exists():
+            return True
+        
+        # If not found in the expected location, try to find in checkpoints
+        checkpoints = list(OUTPUT_PATH.glob("checkpoint-*"))
+        if not checkpoints:
+            return False
+        
+        for checkpoint in checkpoints:
+            lora_path = checkpoint / "pytorch_lora_weights.safetensors"
+            if lora_path.exists():
+                return True
+        
+        return False
+    
+    def update_lora_ui(self, use_lora_value: str) -> Dict[str, Any]:
+        """Update UI based on LoRA selection"""
+        is_using_lora = "Use LoRA model" in use_lora_value
+        
+        return {
+            self.components["lora_weight"]: gr.Slider(visible=is_using_lora)
+        }
     
     def get_model_version_choices(self, model_type: str) -> List[str]:
         """Get model version choices based on model type"""
@@ -325,6 +373,13 @@ class PreviewTab(BaseTab):
             ]
         )
         
+        # Connect LoRA selection dropdown to update LoRA weight visibility
+        self.components["use_lora"].change(
+            fn=self.update_lora_ui,
+            inputs=[self.components["use_lora"]],
+            outputs=[self.components["lora_weight"]]
+        )
+        
         # Load preview UI state when the tab is selected
         if hasattr(self.app, 'tabs_component') and self.app.tabs_component is not None:
             self.app.tabs_component.select(
@@ -343,7 +398,9 @@ class PreviewTab(BaseTab):
                     self.components["lora_weight"],
                     self.components["inference_steps"],
                     self.components["enable_cpu_offload"],
-                    self.components["model_version"]
+                    self.components["model_version"],
+                    self.components["seed"],
+                    self.components["use_lora"]
                 ]
             )
         
@@ -351,7 +408,7 @@ class PreviewTab(BaseTab):
         for component_name in [
             "prompt", "negative_prompt", "prompt_prefix", "model_version", "resolution_preset",
             "width", "height", "num_frames", "fps", "guidance_scale", "flow_shift",
-            "lora_weight", "inference_steps", "enable_cpu_offload"
+            "lora_weight", "inference_steps", "enable_cpu_offload", "seed", "use_lora"
         ]:
             if component_name in self.components:
                 self.components[component_name].change(
@@ -378,7 +435,9 @@ class PreviewTab(BaseTab):
                 self.components["inference_steps"],
                 self.components["enable_cpu_offload"],
                 self.components["fps"],
-                self.components["conditioning_image"]
+                self.components["conditioning_image"],
+                self.components["seed"],
+                self.components["use_lora"]
             ],
             outputs=[
                 self.components["preview_video"],
@@ -444,6 +503,26 @@ class PreviewTab(BaseTab):
             if model_version not in model_version_choices and model_version_choices:
                 model_version = model_version_choices[0]
             
+            # Check if LoRA exists and set appropriate dropdown options
+            has_lora = self.check_lora_model_exists()
+            use_lora = preview_state.get("use_lora", "")
+            
+            # Validate use_lora value against current state
+            if has_lora:
+                valid_choices = ["Use LoRA model", "Use original model"]
+                if use_lora not in valid_choices:
+                    use_lora = "Use LoRA model"  # Default when LoRA exists
+            else:
+                valid_choices = ["Cannot find LoRA model", "Use original model"]
+                if use_lora not in valid_choices:
+                    use_lora = "Use original model"  # Default when no LoRA
+                    
+            # Update the dropdown choices in the UI
+            try:
+                self.components["use_lora"].choices = valid_choices
+            except Exception as e:
+                logger.error(f"Failed to update use_lora choices: {e}")
+            
             return (
                 preview_state.get("prompt", ""),
                 preview_state.get("negative_prompt", "worst quality, low quality, blurry, jittery, distorted, ugly, deformed, disfigured, messy background"),
@@ -457,7 +536,9 @@ class PreviewTab(BaseTab):
                 preview_state.get("lora_weight", 0.7),
                 preview_state.get("inference_steps", 30),
                 preview_state.get("enable_cpu_offload", True),
-                model_version
+                model_version,
+                preview_state.get("seed", -1),
+                use_lora
             )
         except Exception as e:
             logger.error(f"Error loading preview state: {e}")
@@ -467,7 +548,9 @@ class PreviewTab(BaseTab):
                 "worst quality, low quality, blurry, jittery, distorted, ugly, deformed, disfigured, messy background", 
                 DEFAULT_PROMPT_PREFIX,
                 832, 480, 49, 16, 5.0, 3.0, 0.7, 30, True,
-                self.get_default_model_version(self.get_default_model_type())
+                self.get_default_model_version(self.get_default_model_type()),
+                -1,
+                "Use original model" if not self.check_lora_model_exists() else "Use LoRA model"
             )
     
     def save_preview_state_value(self, value: Any) -> None:
@@ -522,7 +605,9 @@ class PreviewTab(BaseTab):
         inference_steps: int,
         enable_cpu_offload: bool,
         fps: int,
-        conditioning_image: Optional[str] = None
+        conditioning_image: Optional[str] = None,
+        seed: int = -1,
+        use_lora: str = "Use LoRA model"
     ) -> Tuple[Optional[str], str, str]:
         """Handler for generate button click, delegates to preview service"""
         # Save all the parameters to preview state before generating
@@ -550,7 +635,9 @@ class PreviewTab(BaseTab):
                 "flow_shift": flow_shift,
                 "lora_weight": lora_weight,
                 "inference_steps": inference_steps,
-                "enable_cpu_offload": enable_cpu_offload
+                "enable_cpu_offload": enable_cpu_offload,
+                "seed": seed,
+                "use_lora": use_lora
             }
             
             state["preview"] = preview_state
@@ -564,7 +651,13 @@ class PreviewTab(BaseTab):
         # Initial UI update
         video_path, status, log = None, "Initializing generation...", "Starting video generation process..."
         
+        # Set lora_path to None if not using LoRA
+        use_lora_model = use_lora == "Use LoRA model"
+        
         # Start actual generation
+        # If not using LoRA, set lora_weight to 0 to disable it
+        effective_lora_weight = lora_weight if use_lora_model else 0.0
+        
         result = self.app.previewing.generate_video(
             model_type=model_type,
             model_version=model_version_id,
@@ -576,11 +669,12 @@ class PreviewTab(BaseTab):
             num_frames=num_frames,
             guidance_scale=guidance_scale,
             flow_shift=flow_shift,
-            lora_weight=lora_weight,
+            lora_weight=effective_lora_weight,  # Use 0.0 if not using LoRA
             inference_steps=inference_steps,
             enable_cpu_offload=enable_cpu_offload,
             fps=fps,
-            conditioning_image=conditioning_image
+            conditioning_image=conditioning_image,
+            seed=seed
         )
         
         # Return final result

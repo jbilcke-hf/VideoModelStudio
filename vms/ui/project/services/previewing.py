@@ -85,10 +85,17 @@ class PreviewingService:
                 # Return updated log string for UI updates
                 return "\n".join(log_messages)
             
-            # Find latest LoRA weights
-            lora_path = self.find_latest_lora_weights()
-            if not lora_path:
-                return None, "Error: No LoRA weights found", log("Error: No LoRA weights found in output directory")
+            # Find latest LoRA weights if lora_weight > 0
+            lora_path = None
+            using_lora = lora_weight > 0
+            
+            if using_lora:
+                lora_path = self.find_latest_lora_weights()
+                if not lora_path:
+                    return None, "Error: No LoRA weights found", log("Error: No LoRA weights found in output directory")
+                log(f"Using LoRA weights with weight {lora_weight}")
+            else:
+                log("Using original model without LoRA weights")
             
             # Add prefix to prompt
             if prompt_prefix and not prompt.startswith(prompt_prefix):
@@ -143,12 +150,13 @@ class PreviewingService:
             
             log(f"Generating video with model type: {internal_model_type}")
             log(f"Using model version: {model_version}")
-            log(f"Using LoRA weights from: {lora_path}")
+            if using_lora and lora_path:
+                log(f"Using LoRA weights from: {lora_path}")
             log(f"Resolution: {width}x{height}, Frames: {num_frames}, FPS: {fps}")
-            log(f"Guidance Scale: {guidance_scale}, Flow Shift: {flow_shift}, LoRA Weight: {lora_weight}")
+            log(f"Guidance Scale: {guidance_scale}, Flow Shift: {flow_shift}, LoRA Weight: {lora_weight if using_lora else 0}")
             log(f"Generation Seed: {seed}")
-            log(f"Prompt: {full_prompt}")
-            log(f"Negative Prompt: {negative_prompt}")
+            #log(f"Prompt: {full_prompt}")
+            #log(f"Negative Prompt: {negative_prompt}")
             
             # Import required components based on model type
             if internal_model_type == "wan":
@@ -246,11 +254,14 @@ class PreviewingService:
                 log_fn("Enabling model CPU offload...")
                 pipe.enable_model_cpu_offload()
                 
-            log_fn(f"Loading LoRA weights from {lora_path} with weight {lora_weight}...")
-            pipe.load_lora_weights(lora_path)
-            
-            # TODO: Set the lora scale directly instead of using fuse_lora
-            #pipe._lora_scale = lora_weight
+            # Apply LoRA weights if using them
+            if lora_weight > 0 and lora_path:
+                log_fn(f"Loading LoRA weights from {lora_path} with weight {lora_weight}...")
+                pipe.load_lora_weights(lora_path)
+                # TODO: Set the lora scale directly instead of using fuse_lora
+                #pipe._lora_scale = lora_weight
+            else:
+                log_fn("Using base model without LoRA weights")
                 
             # Create temporary file for the output
             with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as temp_file:
@@ -371,9 +382,13 @@ class PreviewingService:
                 log_fn("Enabling model CPU offload...")
                 pipe.enable_model_cpu_offload()
             
-            log_fn(f"Loading LoRA weights from {lora_path} with weight {lora_weight}...")
-            pipe.load_lora_weights(lora_path)
-            pipe.fuse_lora(lora_weight)
+            # Apply LoRA weights if using them
+            if lora_weight > 0 and lora_path:
+                log_fn(f"Loading LoRA weights from {lora_path} with weight {lora_weight}...")
+                pipe.load_lora_weights(lora_path)
+                pipe.fuse_lora(lora_weight)
+            else:
+                log_fn("Using base model without LoRA weights")
             
             # Create temporary file for the output
             with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as temp_file:
@@ -488,9 +503,13 @@ class PreviewingService:
                 log_fn("Enabling model CPU offload...")
                 pipe.enable_model_cpu_offload()
             
-            log_fn(f"Loading LoRA weights from {lora_path} with weight {lora_weight}...")
-            pipe.load_lora_weights(lora_path)
-            pipe.fuse_lora(lora_weight)
+            # Apply LoRA weights if using them
+            if lora_weight > 0 and lora_path:
+                log_fn(f"Loading LoRA weights from {lora_path} with weight {lora_weight}...")
+                pipe.load_lora_weights(lora_path)
+                pipe.fuse_lora(lora_weight)
+            else:
+                log_fn("Using base model without LoRA weights")
             
             # Create temporary file for the output
             with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as temp_file:
