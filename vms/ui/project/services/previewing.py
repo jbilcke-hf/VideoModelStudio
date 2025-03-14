@@ -36,7 +36,9 @@ class PreviewingService:
                 return str(lora_path)
             
             # If not found in the expected location, try to find in checkpoints
-            checkpoints = list(OUTPUT_PATH.glob("checkpoint-*"))
+            checkpoints = list(OUTPUT_PATH.glob("finetrainers_step_*"))
+            has_checkpoints = len(checkpoints) > 0
+
             if not checkpoints:
                 return None
             
