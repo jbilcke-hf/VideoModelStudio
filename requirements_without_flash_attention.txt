@@ -20,7 +20,8 @@ eva-decord==0.6.1
 wandb
 pandas
 sentencepiece>=0.2.0
-imageio-ffmpeg>=0.5.1
+imageio
+imageio-ffmpeg
 torchdata==0.11.0
 
 # for youtube video download

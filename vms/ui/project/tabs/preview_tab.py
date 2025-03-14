@@ -33,6 +33,25 @@ class PreviewTab(BaseTab):
             
             with gr.Row():
                 with gr.Column(scale=2):
+                                        
+                    # Add dropdown to choose between LoRA and original model
+                    has_lora = self.check_lora_model_exists()
+                    lora_choices = []
+                    default_lora_choice = ""
+
+                    if has_lora:
+                        lora_choices = ["Use LoRA model", "Use original model"]
+                        default_lora_choice = "Use LoRA model"
+                    else:
+                        lora_choices = ["Cannot find LoRA model", "Use original model"]
+                        default_lora_choice = "Use original model"
+
+                    self.components["use_lora"] = gr.Dropdown(
+                        choices=lora_choices,
+                        label="Model Selection",
+                        value=default_lora_choice
+                    )
+                    
                     self.components["prompt"] = gr.Textbox(
                         label="Prompt",
                         placeholder="Enter your prompt here...",
@@ -82,25 +101,7 @@ class PreviewTab(BaseTab):
                                 choices=self.get_model_version_choices(default_model),
                                 value=self.get_default_model_version(default_model)
                             )
-                    
-                    # Add dropdown to choose between LoRA and original model
-                    has_lora = self.check_lora_model_exists()
-                    lora_choices = []
-                    default_lora_choice = ""
 
-                    if has_lora:
-                        lora_choices = ["Use LoRA model", "Use original model"]
-                        default_lora_choice = "Use LoRA model"
-                    else:
-                        lora_choices = ["Cannot find LoRA model", "Use original model"]
-                        default_lora_choice = "Use original model"
-
-                    self.components["use_lora"] = gr.Dropdown(
-                        choices=lora_choices,
-                        label="Model Selection",
-                        value=default_lora_choice
-                    )
-                    
                     # Add image input for image-to-video models
                     self.components["conditioning_image"] = gr.Image(
                         label="Conditioning Image (for Image-to-Video models)",
