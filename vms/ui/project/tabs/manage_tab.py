@@ -65,10 +65,42 @@ class ManageTab(BaseTab):
 
             with gr.Row():
                 with gr.Column():
-                    gr.Markdown("## Delete your model")
-                    gr.Markdown("If something went wrong, you can trigger a full reset (model shutdown + data destruction).")
+                    gr.Markdown("## Delete your data")
                     gr.Markdown("Make sure you have made a backup first.")
                     gr.Markdown("If you are deleting because of a bug, remember you can use the Developer Mode on HF to inspect the working directory (in /data or .data)")
+
+            with gr.Row():
+                with gr.Column():
+                    gr.Markdown("### Delete specific data")
+                    gr.Markdown("You can selectively delete either the dataset and/or the last model data.")
+
+            with gr.Row():
+                with gr.Column(scale=1):
+                    self.components["delete_dataset_btn"] = gr.Button(
+                        "Delete dataset (images, video, captions)",
+                        variant="secondary"
+                    )
+                    self.components["delete_dataset_status"] = gr.Textbox(
+                        label="Delete Dataset Status",
+                        interactive=False,
+                        visible=False
+                    )
+                
+                with gr.Column(scale=1):
+                    self.components["delete_model_btn"] = gr.Button(
+                        "Delete model (checkpoints, weights, config)",
+                        variant="secondary"
+                    )
+                    self.components["delete_model_status"] = gr.Textbox(
+                        label="Delete Model Status",
+                        interactive=False,
+                        visible=False
+                    )
+                
+            with gr.Row():
+                with gr.Column():
+                    gr.Markdown("### Delete everything")
+                    gr.Markdown("This will delete both the dataset (all images, videos and captions) AND the latest model (weights, checkpoints, settings). So use with care!")
 
             with gr.Row():
                 self.components["global_stop_btn"] = gr.Button(
@@ -101,6 +133,24 @@ class ManageTab(BaseTab):
         self.components["download_model_btn"].click(
             fn=self.app.training.get_model_output_safetensors,
             outputs=[self.components["download_model_btn"]]
+        )
+        
+        # New delete dataset button
+        self.components["delete_dataset_btn"].click(
+            fn=self.delete_dataset,
+            outputs=[
+                self.components["delete_dataset_status"],
+                self.app.tabs["caption_tab"].components["training_dataset"]
+            ]
+        )
+        
+        # New delete model button
+        self.components["delete_model_btn"].click(
+            fn=self.delete_model,
+            outputs=[
+                self.components["delete_model_status"],
+                self.app.tabs["train_tab"].components["status_box"]
+            ]
         )
         
         # Global stop button
@@ -151,6 +201,91 @@ class ManageTab(BaseTab):
             return f"Successfully uploaded model to {repo_id}"
         else:
             return f"Failed to upload model to {repo_id}"
+    
+    def delete_dataset(self):
+        """Delete dataset files (images, videos, captions)"""
+        status_messages = {}
+        
+        try:
+            # Stop captioning if running
+            if self.app.captioning:
+                self.app.captioning.stop_captioning()
+                status_messages["captioning"] = "Captioning stopped"
+            
+            # Stop scene detection if running
+            if self.app.splitting.is_processing():
+                self.app.splitting.processing = False
+                status_messages["splitting"] = "Scene detection stopped"
+            
+            # Clear dataset directories
+            for path in [VIDEOS_TO_SPLIT_PATH, STAGING_PATH, TRAINING_VIDEOS_PATH, TRAINING_PATH]:
+                if path.exists():
+                    try:
+                        shutil.rmtree(path)
+                        path.mkdir(parents=True, exist_ok=True)
+                    except Exception as e:
+                        status_messages[f"clear_{path.name}"] = f"Error clearing {path.name}: {str(e)}"
+                    else:
+                        status_messages[f"clear_{path.name}"] = f"Cleared {path.name}"
+            
+            # Reset any relevant persistent state
+            self.app.tabs["caption_tab"]._should_stop_captioning = True
+            self.app.splitting.processing = False
+            
+            # Format response
+            details = "\n".join(f"{k}: {v}" for k, v in status_messages.items())
+            message = f"Dataset deleted successfully\n\nDetails:\n{details}"
+            
+            # Get fresh lists after cleanup
+            clips = self.app.tabs["caption_tab"].list_training_files_to_caption()
+            
+            return gr.update(value=message, visible=True), clips
+            
+        except Exception as e:
+            error_message = f"Error deleting dataset: {str(e)}\n\nDetails:\n{status_messages}"
+            return gr.update(value=error_message, visible=True), self.app.tabs["caption_tab"].list_training_files_to_caption()
+    
+    def delete_model(self):
+        """Delete model files (checkpoints, weights, configuration)"""
+        status_messages = {}
+        
+        try:
+            # Stop training if running
+            if self.app.training.is_training_running():
+                training_result = self.app.training.stop_training()
+                status_messages["training"] = training_result["status"]
+            
+            # Clear model output directory
+            if OUTPUT_PATH.exists():
+                try:
+                    shutil.rmtree(OUTPUT_PATH)
+                    OUTPUT_PATH.mkdir(parents=True, exist_ok=True)
+                except Exception as e:
+                    status_messages[f"clear_{OUTPUT_PATH.name}"] = f"Error clearing {OUTPUT_PATH.name}: {str(e)}"
+                else:
+                    status_messages[f"clear_{OUTPUT_PATH.name}"] = f"Cleared {OUTPUT_PATH.name}"
+            
+            # Properly close logging before clearing log file
+            if self.app.training.file_handler:
+                self.app.training.file_handler.close()
+                logger.removeHandler(self.app.training.file_handler)
+                self.app.training.file_handler = None
+                
+            if LOG_FILE_PATH.exists():
+                LOG_FILE_PATH.unlink()
+            
+            # Reset training UI state
+            self.app.training.setup_logging()
+            
+            # Format response
+            details = "\n".join(f"{k}: {v}" for k, v in status_messages.items())
+            message = f"Model deleted successfully\n\nDetails:\n{details}"
+            
+            return gr.update(value=message, visible=True), "Model files have been deleted"
+            
+        except Exception as e:
+            error_message = f"Error deleting model: {str(e)}\n\nDetails:\n{status_messages}"
+            return gr.update(value=error_message, visible=True), f"Error deleting model: {str(e)}"
             
     def handle_global_stop(self):
         """Handle the global stop button click"""

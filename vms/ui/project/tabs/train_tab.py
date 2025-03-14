@@ -6,6 +6,7 @@ import gradio as gr
 import logging
 import os
 import json
+import shutil
 from typing import Dict, Any, List, Optional, Tuple
 from pathlib import Path
 
@@ -177,39 +178,58 @@ class TrainTab(BaseTab):
                             precision=0,
                             info="Number of warmup steps (typically 20-40% of total training steps). This helps reducing the impact of early training examples as well as giving time to optimizers to compute accurate statistics."
                         )
-                with gr.Column():
-                    with gr.Row():
-                        # Check for existing checkpoints to determine button text
-                        has_checkpoints = len(list(OUTPUT_PATH.glob("checkpoint-*"))) > 0
-                        start_text = "Continue Training" if has_checkpoints else "Start Training"
-                        
-                        self.components["start_btn"] = gr.Button(
-                            start_text,
-                            variant="primary",
-                            interactive=not ASK_USER_TO_DUPLICATE_SPACE
-                        )
-                        
-                        # Just use stop and pause buttons for now to ensure compatibility
-                        self.components["stop_btn"] = gr.Button(
-                            "Stop at Last Checkpoint",
-                            variant="primary",
-                            interactive=False
-                        )
-                        
-                        self.components["pause_resume_btn"] = gr.Button(
-                            "Resume Training",
-                            variant="secondary",
-                            interactive=False,
-                            visible=False
-                        )
-                        
-                        # Add delete checkpoints button
-                        self.components["delete_checkpoints_btn"] = gr.Button(
-                            "Delete All Checkpoints",
-                            variant="stop",
-                            interactive=True
-                        )
 
+                with gr.Row():
+                    with gr.Column():
+                        # Add description of the training buttons
+                        self.components["training_buttons_info"] = gr.Markdown("""
+                        ## Training Options
+                        - **Start new training**: Begins training from scratch (clears previous checkpoints)
+                        - **Start from latest checkpoint**: Continues training from the most recent checkpoint
+                        """)
+                        
+                        with gr.Row():
+                            # Check for existing checkpoints to determine button text
+                            checkpoints = list(OUTPUT_PATH.glob("finetrainers_step_*"))
+                            has_checkpoints = len(checkpoints) > 0
+
+                            # Rename "Start Training" to "Start new training"
+                            self.components["start_btn"] = gr.Button(
+                                "Start new training",
+                                variant="primary",
+                                interactive=not ASK_USER_TO_DUPLICATE_SPACE
+                            )
+                            
+                            # Add new button for continuing from checkpoint
+                            self.components["resume_btn"] = gr.Button(
+                                "Start from latest checkpoint",
+                                variant="primary", 
+                                interactive=has_checkpoints and not ASK_USER_TO_DUPLICATE_SPACE
+                            )
+                            
+                        with gr.Row():
+                            # Just use stop and pause buttons for now to ensure compatibility
+                            self.components["stop_btn"] = gr.Button(
+                                "Stop at Last Checkpoint",
+                                variant="primary",
+                                interactive=False
+                            )
+                            
+                            self.components["pause_resume_btn"] = gr.Button(
+                                "Resume Training",
+                                variant="secondary",
+                                interactive=False,
+                                visible=False
+                            )
+                            
+                            # Add delete checkpoints button
+                            self.components["delete_checkpoints_btn"] = gr.Button(
+                                "Delete All Checkpoints",
+                                variant="stop",
+                                interactive=has_checkpoints
+                            )
+
+                with gr.Column():
                     with gr.Row():
                         with gr.Column():
                             self.components["status_box"] = gr.Textbox(
@@ -226,12 +246,12 @@ class TrainTab(BaseTab):
                                 elem_id="current_task_display"
                             )
                             
-                            with gr.Accordion("See training logs"):
+                            with gr.Accordion("Finetrainers output (or see app logs for more details)"):
                                 self.components["log_box"] = gr.TextArea(
-                                    label="Finetrainers output (see HF Space logs for more details)",
+                                    #label="",
                                     interactive=False,
-                                    lines=40,
-                                    max_lines=200,
+                                    lines=60,
+                                    max_lines=600,
                                     autoscroll=True
                                 )
                     
@@ -267,6 +287,55 @@ class TrainTab(BaseTab):
         # Save the model version along with current model type to ensure consistency
         self.app.update_ui_state(model_type=model_type, model_version=model_version)
         return None
+
+    def handle_new_training_start(
+        self, preset, model_type, model_version, training_type, 
+        lora_rank, lora_alpha, train_steps, batch_size, learning_rate, 
+        save_iterations, repo_id, progress=gr.Progress()
+    ):
+        """Handle new training start with checkpoint cleanup"""
+        # Clear output directory to start fresh
+
+        # Delete all checkpoint directories
+        for checkpoint in OUTPUT_PATH.glob("finetrainers_step_*"):
+            if checkpoint.is_dir():
+                shutil.rmtree(checkpoint)
+                
+        # Also delete session.json which contains previous training info
+        session_file = OUTPUT_PATH / "session.json"
+        if session_file.exists():
+            session_file.unlink()
+        
+        self.append_log("Cleared previous checkpoints for new training session")
+        
+        # Start training normally
+        return self.handle_training_start(
+            preset, model_type, model_version, training_type, 
+            lora_rank, lora_alpha, train_steps, batch_size, learning_rate, 
+            save_iterations, repo_id, progress
+        )
+
+    def handle_resume_training(
+        self, preset, model_type, model_version, training_type, 
+        lora_rank, lora_alpha, train_steps, batch_size, learning_rate, 
+        save_iterations, repo_id, progress=gr.Progress()
+    ):
+        """Handle resuming training from the latest checkpoint"""
+        # Find the latest checkpoint
+        checkpoints = list(OUTPUT_PATH.glob("finetrainers_step_*"))
+
+        if not checkpoints:
+            return "No checkpoints found to resume from", "Please start a new training session instead"
+        
+        self.append_log(f"Resuming training from latest checkpoint")
+        
+        # Start training with the checkpoint
+        return self.handle_training_start(
+            preset, model_type, model_version, training_type, 
+            lora_rank, lora_alpha, train_steps, batch_size, learning_rate, 
+            save_iterations, repo_id, progress, 
+            resume_from_checkpoint="latest"
+        )
 
     def connect_events(self) -> None:
         """Connect event handlers to UI components"""
@@ -396,11 +465,11 @@ class TrainTab(BaseTab):
         
         # Training control events
         self.components["start_btn"].click(
-            fn=self.handle_training_start,
+            fn=self.handle_new_training_start,
             inputs=[
                 self.components["training_preset"],
                 self.components["model_type"],
-                self.components["model_version"],  # Add model_version to the inputs
+                self.components["model_version"],
                 self.components["training_type"],
                 self.components["lora_rank"],
                 self.components["lora_alpha"],
@@ -415,6 +484,28 @@ class TrainTab(BaseTab):
                 self.components["log_box"]
             ]
         )
+
+        self.components["resume_btn"].click(
+            fn=self.handle_resume_training,
+            inputs=[
+                self.components["training_preset"],
+                self.components["model_type"],
+                self.components["model_version"],
+                self.components["training_type"],
+                self.components["lora_rank"],
+                self.components["lora_alpha"],
+                self.components["train_steps"],
+                self.components["batch_size"],
+                self.components["learning_rate"],
+                self.components["save_iterations"],
+                self.app.tabs["manage_tab"].components["repo_id"]
+            ],
+            outputs=[
+                self.components["status_box"],
+                self.components["log_box"]
+            ]
+        )
+        
 
         # Use simplified event handlers for pause/resume and stop
         third_btn = self.components["delete_checkpoints_btn"] if "delete_checkpoints_btn" in self.components else self.components["pause_resume_btn"]
@@ -500,7 +591,8 @@ class TrainTab(BaseTab):
             self.app.log_parser = TrainingLogParser()
             
         # Check for latest checkpoint
-        checkpoints = list(OUTPUT_PATH.glob("checkpoint-*"))
+        checkpoints = list(OUTPUT_PATH.glob("finetrainers_step_*"))
+        has_checkpoints = len(checkpoints) > 0
         resume_from = None
         
         if checkpoints:
@@ -863,17 +955,22 @@ class TrainTab(BaseTab):
         status, _, _ = self.get_latest_status_message_and_logs()
         
         # Add checkpoints detection
-        has_checkpoints = len(list(OUTPUT_PATH.glob("checkpoint-*"))) > 0
+        checkpoints = list(OUTPUT_PATH.glob("finetrainers_step_*"))
+        has_checkpoints = len(checkpoints) > 0
         
         is_training = status in ["training", "initializing"]
         is_completed = status in ["completed", "error", "stopped"]
         
-        start_text = "Continue Training" if has_checkpoints else "Start Training"
-        
         # Create button updates
         start_btn = gr.Button(
-            value=start_text,
+            value="Start new training",
             interactive=not is_training,
+            variant="primary" if not is_training else "secondary"
+        )
+        
+        resume_btn = gr.Button(
+            value="Start from latest checkpoint",
+            interactive=has_checkpoints and not is_training,
             variant="primary" if not is_training else "secondary"
         )
         
@@ -883,23 +980,15 @@ class TrainTab(BaseTab):
             variant="primary" if is_training else "secondary"
         )
         
-        # Add delete_checkpoints_btn or pause_resume_btn
-        if "delete_checkpoints_btn" in self.components:
-            third_btn = gr.Button(
-                "Delete All Checkpoints",
-                interactive=has_checkpoints and not is_training,
-                variant="stop"
-            )
-        else:
-            third_btn = gr.Button(
-                "Resume Training" if status == "paused" else "Pause Training",
-                interactive=(is_training or status == "paused") and not is_completed,
-                variant="secondary",
-                visible=False
-            )
+        # Add delete_checkpoints_btn
+        delete_checkpoints_btn = gr.Button(
+            "Delete All Checkpoints",
+            interactive=has_checkpoints and not is_training,
+            variant="stop"
+        )
         
-        return start_btn, stop_btn, third_btn
-        
+        return start_btn, resume_btn, stop_btn, delete_checkpoints_btn
+            
     def update_training_ui(self, training_state: Dict[str, Any]):
         """Update UI components based on training state"""
         updates = {}

@@ -1042,7 +1042,7 @@ class TrainingService:
         ui_updates = {}
         
         # Check for any checkpoints, even if status doesn't indicate training
-        checkpoints = list(OUTPUT_PATH.glob("checkpoint-*"))
+        checkpoints = list(OUTPUT_PATH.glob("finetrainers_step_*"))
         has_checkpoints = len(checkpoints) > 0
         
         # If status indicates training but process isn't running, or if we have checkpoints
@@ -1078,6 +1078,7 @@ class TrainingService:
                     }
                     logger.info("Created default session from UI state for recovery")
                 else:
+                    logger.warning(f"No checkpoints found for recovery")
                     # Set buttons for no active training
                     ui_updates = {
                         "start_btn": {"interactive": True, "variant": "primary", "value": "Start Training"},
@@ -1092,8 +1093,9 @@ class TrainingService:
             checkpoint_step = 0
             
             if has_checkpoints:
-                latest_checkpoint = max(checkpoints, key=os.path.getmtime)
-                checkpoint_step = int(latest_checkpoint.name.split("-")[1])
+                # Find the latest checkpoint by step number
+                latest_checkpoint = max(checkpoints, key=lambda x: int(x.name.split("_")[-1]))
+                checkpoint_step = int(latest_checkpoint.name.split("_")[-1])
                 logger.info(f"Found checkpoint at step {checkpoint_step}")
             else:
                 logger.warning("No checkpoints found for recovery")
@@ -1226,7 +1228,7 @@ class TrainingService:
             
         try:
             # Find all checkpoint directories
-            checkpoints = list(OUTPUT_PATH.glob("checkpoint-*"))
+            checkpoints = list(OUTPUT_PATH.glob("finetrainers_step_*"))
             
             if not checkpoints:
                 return "No checkpoints found to delete."
