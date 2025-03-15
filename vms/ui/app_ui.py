@@ -146,8 +146,8 @@ class AppUI:
                 # Sidebar for navigation
                 with gr.Sidebar(position="left", open=True):
                     gr.Markdown("# 🎞️ Video Model Studio")
-                    self.components["current_project_btn"] = gr.Button("Current Project", variant="primary")
-                    self.components["system_monitoring_btn"] = gr.Button("System Monitoring")
+                    self.components["current_project_btn"] = gr.Button("📂 Current Project", variant="primary")
+                    self.components["system_monitoring_btn"] = gr.Button("🌡️ System Monitoring")
 
                 # Main content area with tabs
                 with gr.Column():
@@ -174,7 +174,7 @@ class AppUI:
                                     tab_obj.create(project_tabs)
                         
                         # Monitoring View Tab
-                        with gr.Tab("📊 System Monitoring", id=1) as monitoring_view:
+                        with gr.Tab("🌡️ System Monitoring", id=1) as monitoring_view:
                             # Create monitoring tabs
                             with gr.Tabs() as monitoring_tabs:
                                 # Store reference to monitoring tabs component
@@ -257,19 +257,13 @@ class AppUI:
             self.project_tabs["train_tab"].components["stop_btn"],
             self.project_tabs["train_tab"].components["delete_checkpoints_btn"]
         ]
-        
+
         button_timer.tick(
             fn=self.project_tabs["train_tab"].get_button_updates,
             outputs=button_outputs
         )
         
-        
-        # Add delete_checkpoints_btn or pause_resume_btn as the third button
-        if "delete_checkpoints_btn" in self.project_tabs["train_tab"].components:
-            button_outputs.append(self.project_tabs["train_tab"].components["delete_checkpoints_btn"])
-        elif "pause_resume_btn" in self.project_tabs["train_tab"].components:
-            button_outputs.append(self.project_tabs["train_tab"].components["pause_resume_btn"])
-        
+    
         # Dataset refresh timer (every 5 seconds)
         dataset_timer = gr.Timer(value=5)
         dataset_timer.tick(
@@ -558,21 +552,21 @@ class AppUI:
             
             if is_training:
                 # Active training detected
-                start_btn_props = {"interactive": False, "variant": "secondary", "value": "Start new training"}
-                resume_btn_props = {"interactive": False, "variant": "secondary", "value": "Start from latest checkpoint"}
+                start_btn_props = {"interactive": False, "variant": "secondary", "value": "🚀 Start new training"}
+                resume_btn_props = {"interactive": False, "variant": "secondary", "value": "🛰️ Start from latest checkpoint"}
                 stop_btn_props = {"interactive": True, "variant": "primary", "value": "Stop at Last Checkpoint"}
                 delete_btn_props = {"interactive": False, "variant": "stop", "value": "Delete All Checkpoints"}
             else:
                 # No active training
-                start_btn_props = {"interactive": True, "variant": "primary", "value": "Start new training"}
-                resume_btn_props = {"interactive": has_checkpoints, "variant": "primary", "value": "Start from latest checkpoint"}
+                start_btn_props = {"interactive": True, "variant": "primary", "value": "🚀 Start new training"}
+                resume_btn_props = {"interactive": has_checkpoints, "variant": "primary", "value": "🛰️ Start from latest checkpoint"}
                 stop_btn_props = {"interactive": False, "variant": "secondary", "value": "Stop at Last Checkpoint"}
                 delete_btn_props = {"interactive": has_checkpoints, "variant": "stop", "value": "Delete All Checkpoints"}
         else:
             # Use button states from recovery, adding the new resume button
-            start_btn_props = ui_updates.get("start_btn", {"interactive": True, "variant": "primary", "value": "Start new training"})
+            start_btn_props = ui_updates.get("start_btn", {"interactive": True, "variant": "primary", "value": "🚀 Start new training"})
             resume_btn_props = {"interactive": has_checkpoints and not self.training.is_training_running(), 
-                            "variant": "primary", "value": "Start from latest checkpoint"}
+                            "variant": "primary", "value": "🛰️ Start from latest checkpoint"}
             stop_btn_props = ui_updates.get("stop_btn", {"interactive": False, "variant": "secondary", "value": "Stop at Last Checkpoint"})
             delete_btn_props = ui_updates.get("delete_checkpoints_btn", {"interactive": has_checkpoints, "variant": "stop", "value": "Delete All Checkpoints"})
         
@@ -604,7 +598,7 @@ class AppUI:
         
         return (
             gr.Markdown(value=caption_title),
-            gr.Markdown(value=f"{train_title} available for training")
+            gr.Markdown(value=f"{train_title}")
         )
     
     def refresh_dataset(self):

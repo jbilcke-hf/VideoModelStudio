@@ -32,7 +32,7 @@ class GeneralTab(BaseTab):
         """Create the Monitor tab UI components"""
         with gr.TabItem(self.title, id=self.id) as tab:
             with gr.Row():
-                gr.Markdown("## System Monitoring")
+                gr.Markdown("## 🌡️ System Monitoring")
   
             # Current metrics
             with gr.Row():

@@ -29,7 +29,7 @@ class PreviewTab(BaseTab):
         """Create the Preview tab UI components"""
         with gr.TabItem(self.title, id=self.id) as tab:
             with gr.Row():
-                gr.Markdown("## Preview your model")
+                gr.Markdown("## 🔬 Preview your model")
             
             with gr.Row():
                 with gr.Column(scale=2):
@@ -202,11 +202,11 @@ class PreviewTab(BaseTab):
                         interactive=False
                     )
                     
-                    with gr.Accordion("Log", open=True):
+                    with gr.Accordion("Log", open=False):
                         self.components["log"] = gr.TextArea(
                             label="Generation Log",
                             interactive=False,
-                            lines=20
+                            lines=60
                         )
         
         return tab
