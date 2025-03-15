@@ -1166,7 +1166,7 @@ class TrainingService:
                     )
                     # Set buttons for active training
                     ui_updates.update({
-                        "start_btn": {"interactive": False, "variant": "secondary", "value": ""Start over a new training""},
+                        "start_btn": {"interactive": False, "variant": "secondary", "value": "Start over a new training"},
                         "stop_btn": {"interactive": True, "variant": "primary", "value": "Stop at Last Checkpoint"},
                         "delete_checkpoints_btn": {"interactive": False, "variant": "stop", "value": "Delete All Checkpoints"},
                         "pause_resume_btn": {"interactive": False, "variant": "secondary", "visible": False}
@@ -1182,7 +1182,7 @@ class TrainingService:
                     logger.error(f"Failed to auto-resume training: {str(e)}")
                     # Set buttons for manual recovery
                     ui_updates.update({
-                        "start_btn": {"interactive": True, "variant": "primary", "value": ""Start over a new training""},
+                        "start_btn": {"interactive": True, "variant": "primary", "value": "Start over a new training"},
                         "stop_btn": {"interactive": False, "variant": "secondary", "value": "Stop at Last Checkpoint"},
                         "delete_checkpoints_btn": {"interactive": True, "variant": "stop", "value": "Delete All Checkpoints"},
                         "pause_resume_btn": {"interactive": False, "variant": "secondary", "visible": False}
@@ -1191,7 +1191,7 @@ class TrainingService:
                 else:
                     # Set up UI for manual recovery
                     ui_updates.update({
-                        "start_btn": {"interactive": True, "variant": "primary", "value": ""Start over a new training""},
+                        "start_btn": {"interactive": True, "variant": "primary", "value": "Start over a new training"},
                         "stop_btn": {"interactive": False, "variant": "secondary", "value": "Stop at Last Checkpoint"},
                         "pause_resume_btn": {"interactive": False, "variant": "secondary", "visible": False}
                     })
@@ -1200,7 +1200,7 @@ class TrainingService:
         elif self.is_training_running():
             # Process is still running, set buttons accordingly
             ui_updates = {
-                "start_btn": {"interactive": False, "variant": "secondary", "value": ""Start over a new training"" if has_checkpoints else "Start Training"},
+                "start_btn": {"interactive": False, "variant": "secondary", "value": "Start over a new training" if has_checkpoints else "Start Training"},
                 "stop_btn": {"interactive": True, "variant": "primary", "value": "Stop at Last Checkpoint"},
                 "pause_resume_btn": {"interactive": False, "variant": "secondary", "visible": False},
                 "delete_checkpoints_btn": {"interactive": False, "variant": "stop", "value": "Delete All Checkpoints"}
@@ -1208,7 +1208,7 @@ class TrainingService:
             return {"status": "running", "message": "Training process is running", "ui_updates": ui_updates}
         else:
             # No training process, set buttons to default state
-            button_text = ""Start over a new training"" if has_checkpoints else "Start Training"
+            button_text = "Start over a new training" if has_checkpoints else "Start Training"
             ui_updates = {
                 "start_btn": {"interactive": True, "variant": "primary", "value": button_text},
                 "stop_btn": {"interactive": False, "variant": "secondary", "value": "Stop at Last Checkpoint"},
