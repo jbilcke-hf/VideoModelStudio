@@ -29,23 +29,23 @@ class ManageTab(BaseTab):
         with gr.TabItem(self.title, id=self.id) as tab:
             with gr.Row():
                 with gr.Column():
-                    gr.Markdown("## Download your model")
+                    gr.Markdown("## 🏦 Backup your model")
                     gr.Markdown("There is currently a bug, you might have to click multiple times to trigger a download.")
 
                     with gr.Row():
                         self.components["download_dataset_btn"] = gr.DownloadButton(
-                            "Download training dataset",
+                            "📦 Download training dataset (.zip)",
                             variant="secondary",
                             size="lg"
                         )
                         self.components["download_model_btn"] = gr.DownloadButton(
-                            "Download model weights",
+                            "🧠 Download weights (.safetensors)",
                             variant="secondary",
                             size="lg"
                         )
             with gr.Row():
                 with gr.Column():
-                    gr.Markdown("## Publish your model")
+                    gr.Markdown("## 📡 Publish your model")
                     gr.Markdown("You model can be pushed to Hugging Face (this will use HF_API_TOKEN)")
 
             with gr.Row():
@@ -65,19 +65,19 @@ class ManageTab(BaseTab):
 
             with gr.Row():
                 with gr.Column():
-                    gr.Markdown("## Delete your data")
+                    gr.Markdown("## ♻️ Delete your data")
                     gr.Markdown("Make sure you have made a backup first.")
                     gr.Markdown("If you are deleting because of a bug, remember you can use the Developer Mode on HF to inspect the working directory (in /data or .data)")
 
             with gr.Row():
                 with gr.Column():
-                    gr.Markdown("### Delete specific data")
+                    gr.Markdown("### 🧽 Delete specific data")
                     gr.Markdown("You can selectively delete either the dataset and/or the last model data.")
 
             with gr.Row():
                 with gr.Column(scale=1):
                     self.components["delete_dataset_btn"] = gr.Button(
-                        "Delete dataset (images, video, captions)",
+                        "🚨 Delete dataset (images, video, captions)",
                         variant="secondary"
                     )
                     self.components["delete_dataset_status"] = gr.Textbox(
@@ -88,7 +88,7 @@ class ManageTab(BaseTab):
                 
                 with gr.Column(scale=1):
                     self.components["delete_model_btn"] = gr.Button(
-                        "Delete model (checkpoints, weights, config)",
+                        "🚨 Delete model (checkpoints, weights, config)",
                         variant="secondary"
                     )
                     self.components["delete_model_status"] = gr.Textbox(
@@ -99,12 +99,12 @@ class ManageTab(BaseTab):
                 
             with gr.Row():
                 with gr.Column():
-                    gr.Markdown("### Delete everything")
-                    gr.Markdown("This will delete both the dataset (all images, videos and captions) AND the latest model (weights, checkpoints, settings). So use with care!")
+                    gr.Markdown("### ☢️ Nuke all project data")
+                    gr.Markdown("This will nuke the original dataset (all images, videos and captions), the training dataset, and the model outputs (weights, checkpoints, settings). So use with care!")
 
             with gr.Row():
                 self.components["global_stop_btn"] = gr.Button(
-                    "Stop everything and delete my data",
+                    "🚨 Delete all project data and models (are you sure?!)",
                     variant="stop"
                 )
                 self.components["global_status"] = gr.Textbox(
