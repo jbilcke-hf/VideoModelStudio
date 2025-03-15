@@ -520,7 +520,6 @@ class PreviewingService:
             log_fn("Starting video generation...")
             start_time.record()
             
-            # Fix for Issue #2: The pipe() expected list rather than float
             # Make sure negative_prompt is a list or None
             neg_prompt = [negative_prompt] if negative_prompt else None
             

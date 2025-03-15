@@ -434,14 +434,12 @@ class AppUI:
             training_preset = list(TRAINING_PRESETS.keys())[0]
             logger.warning(f"Invalid training preset '{training_preset}', using default: {training_preset}")
         
-        # Rest of the function remains unchanged
         lora_rank_val = ui_state.get("lora_rank", DEFAULT_LORA_RANK_STR)
         lora_alpha_val = ui_state.get("lora_alpha", DEFAULT_LORA_ALPHA_STR)
         batch_size_val = int(ui_state.get("batch_size", DEFAULT_BATCH_SIZE))
         learning_rate_val = float(ui_state.get("learning_rate", DEFAULT_LEARNING_RATE))
         save_iterations_val = int(ui_state.get("save_iterations", DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS))
         
-        # Update for new UI components
         num_gpus_val = int(ui_state.get("num_gpus", DEFAULT_NUM_GPUS))
         
         # Calculate recommended precomputation items based on video count
