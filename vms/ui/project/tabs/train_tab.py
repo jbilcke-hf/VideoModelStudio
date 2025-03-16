@@ -187,8 +187,8 @@ class TrainTab(BaseTab):
                                 # Add description of the training buttons
                                 self.components["training_buttons_info"] = gr.Markdown("""
                                 ## ⚗️ Train your model on your dataset
-                                - **Start new training**: Begins training from scratch (clears previous checkpoints)
-                                - **Start from latest checkpoint**: Continues training from the most recent checkpoint
+                                - **🚀 Start new training**: Begins training from scratch (clears previous checkpoints)
+                                - **🛸 Start from latest checkpoint**: Continues training from the most recent checkpoint
                                 """)
                                 
                                 with gr.Row():
@@ -204,7 +204,7 @@ class TrainTab(BaseTab):
                                     
                                     # Add new button for continuing from checkpoint
                                     self.components["resume_btn"] = gr.Button(
-                                        "🛰️ Start from latest checkpoint",
+                                        "🛸 Start from latest checkpoint",
                                         variant="primary", 
                                         interactive=has_checkpoints and not ASK_USER_TO_DUPLICATE_SPACE
                                     )
@@ -972,7 +972,7 @@ class TrainTab(BaseTab):
         )
         
         resume_btn = gr.Button(
-            value="Start from latest checkpoint",
+            value="🛸 Start from latest checkpoint",
             interactive=has_checkpoints and not is_training,
             variant="primary" if not is_training else "secondary"
         )

@@ -146,7 +146,7 @@ class AppUI:
                 # Sidebar for navigation
                 with gr.Sidebar(position="left", open=True):
                     gr.Markdown("# 🎞️ Video Model Studio")
-                    self.components["current_project_btn"] = gr.Button("📂 Current Project", variant="primary")
+                    self.components["current_project_btn"] = gr.Button("📂 New Project", variant="primary")
                     self.components["system_monitoring_btn"] = gr.Button("🌡️ System Monitoring")
 
                 # Main content area with tabs
@@ -156,7 +156,7 @@ class AppUI:
                         self.main_tabs = main_tabs
                         
                         # Project View Tab
-                        with gr.Tab("📁 Current Project", id=0) as project_view:
+                        with gr.Tab("📁 New Project", id=0) as project_view:
                             # Create project tabs
                             with gr.Tabs() as project_tabs:
                                 # Store reference to project tabs component
@@ -551,20 +551,20 @@ class AppUI:
             if is_training:
                 # Active training detected
                 start_btn_props = {"interactive": False, "variant": "secondary", "value": "🚀 Start new training"}
-                resume_btn_props = {"interactive": False, "variant": "secondary", "value": "🛰️ Start from latest checkpoint"}
+                resume_btn_props = {"interactive": False, "variant": "secondary", "value": "🛸 Start from latest checkpoint"}
                 stop_btn_props = {"interactive": True, "variant": "primary", "value": "Stop at Last Checkpoint"}
                 delete_btn_props = {"interactive": False, "variant": "stop", "value": "Delete All Checkpoints"}
             else:
                 # No active training
                 start_btn_props = {"interactive": True, "variant": "primary", "value": "🚀 Start new training"}
-                resume_btn_props = {"interactive": has_checkpoints, "variant": "primary", "value": "🛰️ Start from latest checkpoint"}
+                resume_btn_props = {"interactive": has_checkpoints, "variant": "primary", "value": "🛸 Start from latest checkpoint"}
                 stop_btn_props = {"interactive": False, "variant": "secondary", "value": "Stop at Last Checkpoint"}
                 delete_btn_props = {"interactive": has_checkpoints, "variant": "stop", "value": "Delete All Checkpoints"}
         else:
             # Use button states from recovery, adding the new resume button
             start_btn_props = ui_updates.get("start_btn", {"interactive": True, "variant": "primary", "value": "🚀 Start new training"})
             resume_btn_props = {"interactive": has_checkpoints and not self.training.is_training_running(), 
-                            "variant": "primary", "value": "🛰️ Start from latest checkpoint"}
+                            "variant": "primary", "value": "🛸 Start from latest checkpoint"}
             stop_btn_props = ui_updates.get("stop_btn", {"interactive": False, "variant": "secondary", "value": "Stop at Last Checkpoint"})
             delete_btn_props = ui_updates.get("delete_checkpoints_btn", {"interactive": has_checkpoints, "variant": "stop", "value": "Delete All Checkpoints"})
         
