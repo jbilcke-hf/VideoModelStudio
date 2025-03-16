@@ -307,7 +307,7 @@ class TrainTab(BaseTab):
         if session_file.exists():
             session_file.unlink()
         
-        self.append_log("Cleared previous checkpoints for new training session")
+        self.app.training.append_log("Cleared previous checkpoints for new training session")
         
         # Start training normally
         return self.handle_training_start(
@@ -328,8 +328,8 @@ class TrainTab(BaseTab):
         if not checkpoints:
             return "No checkpoints found to resume from", "Please start a new training session instead"
         
-        self.append_log(f"Resuming training from latest checkpoint")
-        
+        self.app.training.append_log(f"Resuming training from latest checkpoint")
+    
         # Start training with the checkpoint
         return self.handle_training_start(
             preset, model_type, model_version, training_type, 
