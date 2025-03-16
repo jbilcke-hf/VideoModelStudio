@@ -580,7 +580,9 @@ class TrainTab(BaseTab):
     def handle_training_start(
         self, preset, model_type, model_version, training_type, 
         lora_rank, lora_alpha, train_steps, batch_size, learning_rate, 
-        save_iterations, repo_id, progress=gr.Progress()
+        save_iterations, repo_id,
+        progress=gr.Progress(),
+        resume_from_checkpoint=None,
     ):
         """Handle training start with proper log parser reset and checkpoint detection"""
         # Safely reset log parser if it exists
@@ -594,14 +596,14 @@ class TrainTab(BaseTab):
         # Check for latest checkpoint
         checkpoints = list(OUTPUT_PATH.glob("finetrainers_step_*"))
         has_checkpoints = len(checkpoints) > 0
-        resume_from = None
+        resume_from = resume_from_checkpoint  # Use the passed parameter
         
-        if checkpoints:
+        if resume_from == "latest" and checkpoints:
             # Find the latest checkpoint
             latest_checkpoint = max(checkpoints, key=os.path.getmtime)
             resume_from = str(latest_checkpoint)
             logger.info(f"Found checkpoint at {resume_from}, will resume training")
-        
+            
         # Convert model_type display name to internal name
         model_internal_type = MODEL_TYPES.get(model_type)
         
