@@ -1146,15 +1146,12 @@ class TrainingService:
             auto_recover = True  # Always auto-recover on startup
             
             if auto_recover:
-                # Rest of the auto-recovery code remains unchanged
                 try:
-                    # Use the internal model_type for the actual training
-                    # But keep model_type_display for the UI
                     result = self.start_training(
                         model_type=model_type_internal,
                         lora_rank=params.get('lora_rank', DEFAULT_LORA_RANK_STR),
                         lora_alpha=params.get('lora_alpha', DEFAULT_LORA_ALPHA_STR),
-                        train_size=params.get('train_steps', DEFAULT_NB_TRAINING_STEPS),
+                        train_steps=params.get('train_steps', DEFAULT_NB_TRAINING_STEPS),
                         batch_size=params.get('batch_size', DEFAULT_BATCH_SIZE),
                         learning_rate=params.get('learning_rate', DEFAULT_LEARNING_RATE),
                         save_iterations=params.get('save_iterations', DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS),
