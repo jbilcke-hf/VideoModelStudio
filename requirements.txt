@@ -17,8 +17,8 @@ bitsandbytes
 peft>=0.12.0
 
 # eva-decord is missing get_batch it seems
-#eva-decord==0.6.1
-decord
+eva-decord==0.6.1
+#decord
 
 wandb
 pandas
