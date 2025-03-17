@@ -233,7 +233,7 @@ class TrainTab(BaseTab):
                                     )
 
                                 with gr.Row():
-                                    self.components["auto_resume_checkbox"] = gr.Checkbox(
+                                    self.components["auto_resume"] = gr.Checkbox(
                                         label="Automatically continue training in case of server reboot.",
                                         value=DEFAULT_AUTO_RESUME,
                                         info="When enabled, training will automatically resume from the latest checkpoint after app restart"
@@ -389,9 +389,9 @@ class TrainTab(BaseTab):
             ]
         )
 
-        self.components["auto_resume_checkbox"].change(
+        self.components["auto_resume"].change(
             fn=lambda v: self.app.update_ui_state(auto_resume=v),
-            inputs=[self.components["auto_resume_checkbox"]],
+            inputs=[self.components["auto_resume"]],
             outputs=[]
         )
 

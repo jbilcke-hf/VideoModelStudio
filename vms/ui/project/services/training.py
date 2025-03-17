@@ -1078,7 +1078,8 @@ class TrainingService:
                             "learning_rate": ui_state.get("learning_rate", DEFAULT_LEARNING_RATE),
                             "save_iterations": ui_state.get("save_iterations", DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS),
                             "preset_name": ui_state.get("training_preset", list(TRAINING_PRESETS.keys())[0]),
-                            "repo_id": ""  # Default empty repo ID
+                            "repo_id": ""  # Default empty repo ID,
+                            "auto_resume": ui_state.get("auto_resume", DEFAULT_AUTO_RESUME)
                         }
                     }
                     logger.info("Created default session from UI state for recovery")
@@ -1150,7 +1151,7 @@ class TrainingService:
                 "learning_rate": params.get('learning_rate', DEFAULT_LEARNING_RATE),
                 "save_iterations": params.get('save_iterations', DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS),
                 "training_preset": params.get('preset_name', list(TRAINING_PRESETS.keys())[0]),
-                "auto_resume_checkbox": params.get("auto_resume", DEFAULT_AUTO_RESUME)
+                "auto_resume": params.get("auto_resume", DEFAULT_AUTO_RESUME)
             })
             
             # Check if we should auto-recover (immediate restart)
