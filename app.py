@@ -12,7 +12,7 @@ from vms.config import (
     STORAGE_PATH, VIDEOS_TO_SPLIT_PATH, STAGING_PATH, 
     TRAINING_PATH, TRAINING_VIDEOS_PATH, MODEL_PATH, 
     OUTPUT_PATH, ASK_USER_TO_DUPLICATE_SPACE, 
-    HF_API_TOKEN
+    HF_API_TOKEN, VMS_ADMIN_PASSWORD
 )
 
 from vms.ui.app_ui import AppUI
@@ -67,7 +67,8 @@ def main():
     # Launch the Gradio app
     app.queue(default_concurrency_limit=2).launch(
         server_name="0.0.0.0",
-        allowed_paths=allowed_paths
+        allowed_paths=allowed_paths,
+        auth=("admin", VMS_ADMIN_PASSWORD) if VMS_ADMIN_PASSWORD else None
     )
 
 if __name__ == "__main__":

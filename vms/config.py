@@ -52,6 +52,9 @@ TRAINING_VIDEOS_PATH.mkdir(parents=True, exist_ok=True)
 MODEL_PATH.mkdir(parents=True, exist_ok=True)
 OUTPUT_PATH.mkdir(parents=True, exist_ok=True)
 
+# To secure public instances
+VMS_ADMIN_PASSWORD = os.environ.get('VMS_ADMIN_PASSWORD', '')
+
 # Image normalization settings
 NORMALIZE_IMAGES_TO = os.environ.get('NORMALIZE_IMAGES_TO', 'png').lower()
 if NORMALIZE_IMAGES_TO not in ['png', 'jpg']:
