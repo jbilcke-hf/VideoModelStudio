@@ -970,59 +970,9 @@ def _preprocess_image(image: PIL.Image.Image) -> torch.Tensor:
     image = image.permute(2, 0, 1).contiguous() / 127.5 - 1.0
     return image
 
-def _preprocess_video(video) -> torch.Tensor:
-    import torch
-    import numpy as np
-    
-    # For decord VideoReader
-    if hasattr(video, 'get_batch') and 'decord' in str(type(video)):
-        video = video.get_batch(list(range(len(video))))
-        video = video.permute(0, 3, 1, 2).contiguous() / 127.5 - 1.0
-        return video
-    
-    # For torchvision VideoReader
-    elif 'torchvision.io.video_reader' in str(type(video)):
-        # Use the correct iteration pattern for torchvision.io.VideoReader
-        frames = []
-        try:
-            # First seek to the beginning
-            video.seek(0)
-            
-            # Then collect frames by iterating
-            for _ in range(30):  # Try to get a reasonable number of frames
-                try:
-                    frame_dict = next(video)
-                    frame = frame_dict["data"]  # Extract the tensor data from the dict
-                    frames.append(frame)
-                except StopIteration:
-                    break
-        except Exception as e:
-            print(f"Error iterating VideoReader: {e}")
-        
-        if frames:
-            # In torchvision.io.VideoReader, frames are already in [C, H, W] format
-            # We need to stack and convert to [B, C, H, W]
-            stacked_frames = torch.stack(frames)
-            # Normalize to [-1, 1]
-            stacked_frames = stacked_frames.float() / 127.5 - 1.0
-            return stacked_frames
-        
-        # If we couldn't get frames, create a dummy tensor
-        print("Failed to get frames, creating dummy tensor")
-        return torch.zeros(16, 3, 512, 768).float()
-    
-    # For list of PIL images
-    elif isinstance(video, list) and len(video) > 0 and hasattr(video[0], 'convert'):
-        frames = []
-        for img in video:
-            img_tensor = torch.from_numpy(np.array(img.convert("RGB"))).float()
-            frames.append(img_tensor)
-        
-        video = torch.stack(frames)
-        video = video.permute(0, 3, 1, 2).contiguous() / 127.5 - 1.0
-        return video
-    
-    # Unknown type
-    else:
-        print(f"Unknown video type: {type(video)}")
-        return torch.zeros(16, 3, 512, 768).float()
+
+def _preprocess_video(video: decord.VideoReader) -> torch.Tensor:
+    video = video.get_batch(list(range(len(video))))
+    video = video.permute(0, 3, 1, 2).contiguous()
+    video = video.float() / 127.5 - 1.0
+    return video

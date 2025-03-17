@@ -7,6 +7,10 @@ torch==2.5.1
 torchvision==0.20.1
 torchao==0.6.1
 
+# datasets 3.4.0 replaces decord by torchvision
+# let's free it for now
+datasets==3.3.2
+
 huggingface_hub
 hf_transfer>=0.1.8
 diffusers @ git+https://github.com/huggingface/diffusers.git@main
