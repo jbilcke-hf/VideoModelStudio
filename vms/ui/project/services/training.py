@@ -1150,7 +1150,7 @@ class TrainingService:
                 "learning_rate": params.get('learning_rate', DEFAULT_LEARNING_RATE),
                 "save_iterations": params.get('save_iterations', DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS),
                 "training_preset": params.get('preset_name', list(TRAINING_PRESETS.keys())[0]),
-                "auto_resume_checkbox": ui_state.get("auto_resume", DEFAULT_AUTO_RESUME)
+                "auto_resume_checkbox": params.get("auto_resume", DEFAULT_AUTO_RESUME)
             })
             
             # Check if we should auto-recover (immediate restart)
