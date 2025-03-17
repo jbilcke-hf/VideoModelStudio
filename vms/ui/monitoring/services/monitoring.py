@@ -21,6 +21,8 @@ import matplotlib.pyplot as plt
 
 import numpy as np
 
+from vms.ui.monitoring.services.gpu import GPUMonitoringService
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
@@ -50,6 +52,9 @@ class MonitoringService:
         
         # Per-core CPU history
         self.cpu_cores_percent = {}
+        
+        # Initialize GPU monitoring service
+        self.gpu = GPUMonitoringService(history_minutes=history_minutes, sample_interval=sample_interval)
         
         # Track if the monitoring thread is running
         self.is_running = False
@@ -124,6 +129,9 @@ class MonitoringService:
             return
             
         self.is_running = True
+
+        # Start GPU monitoring if available
+        self.gpu.start_monitoring()
         
         def _monitor_loop():
             while self.is_running:
@@ -143,8 +151,12 @@ class MonitoringService:
         """Stop the monitoring thread"""
         if not self.is_running:
             return
-            
+
         self.is_running = False
+
+        # Stop GPU monitoring
+        self.gpu.stop_monitoring()
+
         if self.thread:
             self.thread.join(timeout=1.0)
             logger.info("System monitoring thread stopped")

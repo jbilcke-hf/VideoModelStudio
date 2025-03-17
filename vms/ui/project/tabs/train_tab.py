@@ -26,6 +26,7 @@ from vms.config import (
     DEFAULT_PRECOMPUTATION_ITEMS,
     DEFAULT_NB_TRAINING_STEPS,
     DEFAULT_NB_LR_WARMUP_STEPS,
+    DEFAULT_AUTO_RESUME
 )
 
 logger = logging.getLogger(__name__)
@@ -231,6 +232,13 @@ class TrainTab(BaseTab):
                                         interactive=has_checkpoints
                                     )
 
+                                with gr.Row():
+                                    self.components["auto_resume_checkbox"] = gr.Checkbox(
+                                        label="Automatically continue training in case of server reboot.",
+                                        value=DEFAULT_AUTO_RESUME,
+                                        info="When enabled, training will automatically resume from the latest checkpoint after app restart"
+                                    )
+
                         with gr.Row():
                             with gr.Column():
                                 self.components["status_box"] = gr.Textbox(
@@ -379,6 +387,12 @@ class TrainTab(BaseTab):
                 self.components["save_iterations"],
                 self.components["lora_params_row"]
             ]
+        )
+
+        self.components["auto_resume_checkbox"].change(
+            fn=lambda v: self.app.update_ui_state(auto_resume=v),
+            inputs=[self.components["auto_resume_checkbox"]],
+            outputs=[]
         )
 
         # Add in the connect_events() method:
