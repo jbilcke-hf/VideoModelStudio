@@ -234,7 +234,7 @@ class AppUI:
                     self.project_tabs["train_tab"].components["num_gpus"],
                     self.project_tabs["train_tab"].components["precomputation_items"],
                     self.project_tabs["train_tab"].components["lr_warmup_steps"],
-                    self.project_tabs["train_tab"].components["auto_resume_checkbox"]
+                    self.project_tabs["train_tab"].components["auto_resume"]
                 ]
             )
         
