@@ -325,21 +325,8 @@ class SFTTrainer:
         resume_from_checkpoint = self.args.resume_from_checkpoint
         if resume_from_checkpoint == "latest":
             resume_from_checkpoint = -1
-            
-        # Store the load result
-        load_successful = False
         if resume_from_checkpoint is not None:
-            load_successful = self.checkpointer.load(resume_from_checkpoint)
-            
-        # If loading succeeded and we have a specific checkpoint path
-        if load_successful and isinstance(resume_from_checkpoint, str) and resume_from_checkpoint != "latest":
-            try:
-                step = int(resume_from_checkpoint.split("_")[-1])
-                self.state.train_state.step = step
-                logger.info(f"Explicitly setting training step to {step} based on checkpoint path")
-            except (ValueError, IndexError):
-                logger.warning(f"Could not parse step number from checkpoint path: {resume_from_checkpoint}")
-                
+            self.checkpointer.load(resume_from_checkpoint)
 
     def _train(self) -> None:
         logger.info("Starting training")

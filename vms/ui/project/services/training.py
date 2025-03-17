@@ -1097,6 +1097,11 @@ class TrainingService:
                 latest_checkpoint = max(checkpoints, key=lambda x: int(x.name.split("_")[-1]))
                 checkpoint_step = int(latest_checkpoint.name.split("_")[-1])
                 logger.info(f"Found checkpoint at step {checkpoint_step}")
+
+                # both options are valid, but imho it is easier to just return "latest"
+                # under the hood Finetrainers will convert ("latest") to (-1)
+                #latest_checkpoint = int(checkpoint_step)
+                latest_checkpoint = "latest"
             else:
                 logger.warning("No checkpoints found for recovery")
                 # Set buttons for no active training
