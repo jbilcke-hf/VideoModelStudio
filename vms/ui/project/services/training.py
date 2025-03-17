@@ -1164,7 +1164,7 @@ class TrainingService:
                         repo_id=params.get('repo_id', ''),
                         preset_name=params.get('preset_name', list(TRAINING_PRESETS.keys())[0]),
                         training_type=training_type_internal,
-                        resume_from_checkpoint=str(latest_checkpoint)
+                        resume_from_checkpoint="latest"
                     )
                     # Set buttons for active training
                     ui_updates.update({
