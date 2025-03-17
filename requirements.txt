@@ -6,7 +6,7 @@ numpy>=1.26.4
 # on some system (Python 3.13+) those do not work:
 torch==2.5.1
 torchvision==0.20.1
-torchao==0.6.1
+torchao>=0.7.0
 
 # datasets 3.4.0 replaces decord by torchvision
 # let's free it for now
