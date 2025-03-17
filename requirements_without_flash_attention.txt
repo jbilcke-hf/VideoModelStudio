@@ -21,6 +21,10 @@ accelerate
 bitsandbytes
 peft>=0.12.0
 
+# For GPU monitoring of NVIDIA chipsets
+you probably won't be able to install that on macOS
+# pynvml
+
 # eva-decord is missing get_batch it seems
 eva-decord==0.6.1
 # decord

@@ -2,6 +2,7 @@ numpy>=1.26.4
 
 # to quote a-r-r-o-w/finetrainers:
 # It is recommended to use Pytorch 2.5.1 or above for training. Previous versions can lead to completely black videos, OOM errors, or other issues and are not tested.
+
 # on some system (Python 3.13+) those do not work:
 torch==2.5.1
 torchvision==0.20.1
@@ -19,6 +20,9 @@ transformers>=4.45.2
 accelerate
 bitsandbytes
 peft>=0.12.0
+
+# For GPU monitoring of NVIDIA chipsets
+pynvml
 
 # eva-decord is missing get_batch it seems
 #eva-decord==0.6.1

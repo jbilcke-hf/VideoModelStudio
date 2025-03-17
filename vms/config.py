@@ -150,6 +150,9 @@ DEFAULT_NB_TRAINING_STEPS = 1000
 # For this value, it is recommended to use about 20 to 40% of the number of training steps
 DEFAULT_NB_LR_WARMUP_STEPS = math.ceil(0.20 * DEFAULT_NB_TRAINING_STEPS)  # 20% of training steps
 
+# Whether to automatically restart a training job after a server reboot or not
+DEFAULT_AUTO_RESUME = False
+
 # For validation
 DEFAULT_VALIDATION_NB_STEPS = 50
 DEFAULT_VALIDATION_HEIGHT = 512

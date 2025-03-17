@@ -38,7 +38,8 @@ from vms.config import (
     DEFAULT_MAX_GPUS,
     DEFAULT_PRECOMPUTATION_ITEMS,
     DEFAULT_NB_TRAINING_STEPS,
-    DEFAULT_NB_LR_WARMUP_STEPS
+    DEFAULT_NB_LR_WARMUP_STEPS,
+    DEFAULT_AUTO_RESUME
 )
 from vms.utils import (
     get_available_gpu_count,
@@ -151,7 +152,8 @@ class TrainingService:
                 "training_preset": list(TRAINING_PRESETS.keys())[0],
                 "num_gpus": DEFAULT_NUM_GPUS,
                 "precomputation_items": DEFAULT_PRECOMPUTATION_ITEMS,
-                "lr_warmup_steps": DEFAULT_NB_LR_WARMUP_STEPS
+                "lr_warmup_steps": DEFAULT_NB_LR_WARMUP_STEPS,
+                "auto_resume": False
             }
             
             # Copy default values first
@@ -231,7 +233,8 @@ class TrainingService:
             "training_preset": list(TRAINING_PRESETS.keys())[0],
             "num_gpus": DEFAULT_NUM_GPUS,
             "precomputation_items": DEFAULT_PRECOMPUTATION_ITEMS,
-            "lr_warmup_steps": DEFAULT_NB_LR_WARMUP_STEPS
+            "lr_warmup_steps": DEFAULT_NB_LR_WARMUP_STEPS,
+            "auto_resume": DEFAULT_AUTO_RESUME
         }
         
         # Use lock for reading too to avoid reading during a write
@@ -369,6 +372,7 @@ class TrainingService:
         # Default state with all required values
         default_state = {
             "model_type": list(MODEL_TYPES.keys())[0],
+            "model_version": "",
             "training_type": list(TRAINING_TYPES.keys())[0],
             "lora_rank": DEFAULT_LORA_RANK_STR,
             "lora_alpha": DEFAULT_LORA_ALPHA_STR, 
@@ -379,7 +383,8 @@ class TrainingService:
             "training_preset": list(TRAINING_PRESETS.keys())[0],
             "num_gpus": DEFAULT_NUM_GPUS,
             "precomputation_items": DEFAULT_PRECOMPUTATION_ITEMS,
-            "lr_warmup_steps": DEFAULT_NB_LR_WARMUP_STEPS
+            "lr_warmup_steps": DEFAULT_NB_LR_WARMUP_STEPS,
+            "auto_resume": False
         }
         
         # If file doesn't exist, create it with default values
@@ -1144,12 +1149,15 @@ class TrainingService:
                 "batch_size": params.get('batch_size', DEFAULT_BATCH_SIZE),
                 "learning_rate": params.get('learning_rate', DEFAULT_LEARNING_RATE),
                 "save_iterations": params.get('save_iterations', DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS),
-                "training_preset": params.get('preset_name', list(TRAINING_PRESETS.keys())[0])
+                "training_preset": params.get('preset_name', list(TRAINING_PRESETS.keys())[0]),
+                "auto_resume_checkbox": ui_state.get("auto_resume", DEFAULT_AUTO_RESUME)
             })
             
             # Check if we should auto-recover (immediate restart)
-            auto_recover = True  # Always auto-recover on startup
-            
+            ui_state = self.load_ui_state()
+            auto_recover = ui_state.get("auto_resume", DEFAULT_AUTO_RESUME)
+            logger.info(f"Auto-resume is {'enabled' if auto_recover else 'disabled'}")
+
             if auto_recover:
                 try:
                     result = self.start_training(

@@ -19,7 +19,8 @@ from vms.config import (
     DEFAULT_MAX_GPUS,
     DEFAULT_PRECOMPUTATION_ITEMS,
     DEFAULT_NB_TRAINING_STEPS,
-    DEFAULT_NB_LR_WARMUP_STEPS
+    DEFAULT_NB_LR_WARMUP_STEPS,
+    DEFAULT_AUTO_RESUME
 )
 from vms.utils import (
     get_recommended_precomputation_items,
@@ -40,7 +41,7 @@ from vms.ui.monitoring.services import (
 )
 
 from vms.ui.monitoring.tabs import (
-    GeneralTab
+    GeneralTab, GPUTab
 )
 
 logger = logging.getLogger(__name__)
@@ -183,6 +184,8 @@ class AppUI:
                                 # Initialize monitoring tab objects
                                 self.monitor_tabs["general_tab"] = GeneralTab(self)
                                 
+                                self.monitor_tabs["gpu_tab"] = GPUTab(self)
+
                                 # Create tab UI components for monitoring
                                 for tab_id, tab_obj in self.monitor_tabs.items():
                                     tab_obj.create(monitoring_tabs)
@@ -230,7 +233,8 @@ class AppUI:
                     self.project_tabs["train_tab"].components["current_task_box"],
                     self.project_tabs["train_tab"].components["num_gpus"],
                     self.project_tabs["train_tab"].components["precomputation_items"],
-                    self.project_tabs["train_tab"].components["lr_warmup_steps"]
+                    self.project_tabs["train_tab"].components["lr_warmup_steps"],
+                    self.project_tabs["train_tab"].components["auto_resume_checkbox"]
                 ]
             )
         
@@ -376,6 +380,8 @@ class AppUI:
         # Get model_version value
         model_version_val = ""
 
+        auto_resume_val = ui_state.get("auto_resume", DEFAULT_AUTO_RESUME)
+
         # First get the internal model type for the currently selected model
         model_internal_type = MODEL_TYPES.get(model_type_val)
         logger.info(f"Initializing model version for model_type: {model_type_val} (internal: {model_internal_type})")
@@ -480,7 +486,8 @@ class AppUI:
             current_task_val,
             num_gpus_val,
             precomputation_items_val,
-            lr_warmup_steps_val
+            lr_warmup_steps_val,
+            auto_resume_val
         )
     
     def initialize_ui_from_state(self):
