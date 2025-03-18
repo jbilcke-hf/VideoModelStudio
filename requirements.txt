@@ -28,7 +28,9 @@ pynvml
 #eva-decord==0.6.1
 decord
 
-finetrainers @ git+https://github.com/a-r-r-o-w/finetrainers.git@4c6844fabf496fb622b6333f57e8ebecee6f2780
+#finetrainers @ git+https://github.com/a-r-r-o-w/finetrainers.git@main
+# temporary fix for pip install bug:
+finetrainers @ git+https://github.com/jbilcke-hf/finetrainers-patches.git@fix_missing_sft_trainer_files
 
 wandb
 pandas
