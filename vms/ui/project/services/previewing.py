@@ -69,7 +69,7 @@ class PreviewingService:
         num_frames: int,
         guidance_scale: float,
         flow_shift: float,
-        lora_weight: float,
+        lora_scale: float,
         inference_steps: int,
         seed: int = -1,
         enable_cpu_offload: bool = True,
@@ -87,15 +87,15 @@ class PreviewingService:
                 # Return updated log string for UI updates
                 return "\n".join(log_messages)
             
-            # Find latest LoRA weights if lora_weight > 0
+            # Find latest LoRA weights if lora_scale > 0
             lora_path = None
-            using_lora = lora_weight > 0
+            using_lora = lora_scale > 0
             
             if using_lora:
                 lora_path = self.find_latest_lora_weights()
                 if not lora_path:
                     return None, "Error: No LoRA weights found", log("Error: No LoRA weights found in output directory")
-                log(f"Using LoRA weights with weight {lora_weight}")
+                log(f"Using LoRA weights with scale {lora_scale}")
             else:
                 log("Using original model without LoRA weights")
             
@@ -155,7 +155,7 @@ class PreviewingService:
             if using_lora and lora_path:
                 log(f"Using LoRA weights from: {lora_path}")
             log(f"Resolution: {width}x{height}, Frames: {num_frames}, FPS: {fps}")
-            log(f"Guidance Scale: {guidance_scale}, Flow Shift: {flow_shift}, LoRA Weight: {lora_weight if using_lora else 0}")
+            log(f"Guidance Scale: {guidance_scale}, Flow Shift: {flow_shift}, LoRA Scale: {lora_scale if using_lora else 0}")
             log(f"Generation Seed: {seed}")
             #log(f"Prompt: {full_prompt}")
             #log(f"Negative Prompt: {negative_prompt}")
@@ -164,21 +164,21 @@ class PreviewingService:
             if internal_model_type == "wan":
                 return self.generate_wan_video(
                     full_prompt, negative_prompt, width, height, num_frames,
-                    guidance_scale, flow_shift, lora_path, lora_weight,
+                    guidance_scale, flow_shift, lora_path, lora_scale,
                     inference_steps, seed, enable_cpu_offload, fps, log,
                     model_version, conditioning_image
                 )
             elif internal_model_type == "ltx_video":
                 return self.generate_ltx_video(
                     full_prompt, negative_prompt, width, height, num_frames,
-                    guidance_scale, flow_shift, lora_path, lora_weight,
+                    guidance_scale, flow_shift, lora_path, lora_scale,
                     inference_steps, seed, enable_cpu_offload, fps, log,
                     model_version, conditioning_image
                 )
             elif internal_model_type == "hunyuan_video":
                 return self.generate_hunyuan_video(
                     full_prompt, negative_prompt, width, height, num_frames,
-                    guidance_scale, flow_shift, lora_path, lora_weight,
+                    guidance_scale, flow_shift, lora_path, lora_scale,
                     inference_steps, seed, enable_cpu_offload, fps, log,
                     model_version, conditioning_image
                 )
@@ -199,7 +199,7 @@ class PreviewingService:
         guidance_scale: float,
         flow_shift: float,
         lora_path: str,
-        lora_weight: float,
+        lora_scale: float,
         inference_steps: int,
         seed: int = -1,
         enable_cpu_offload: bool = True,
@@ -257,11 +257,9 @@ class PreviewingService:
                 pipe.enable_model_cpu_offload()
                 
             # Apply LoRA weights if using them
-            if lora_weight > 0 and lora_path:
-                log_fn(f"Loading LoRA weights from {lora_path} with weight {lora_weight}...")
+            if lora_scale > 0 and lora_path:
+                log_fn(f"Loading LoRA weights from {lora_path} with lora scale {lora_scale}...")
                 pipe.load_lora_weights(lora_path)
-                # TODO: Set the lora scale directly instead of using fuse_lora
-                #pipe._lora_scale = lora_weight
             else:
                 log_fn("Using base model without LoRA weights")
                 
@@ -290,6 +288,7 @@ class PreviewingService:
                     num_frames=num_frames,
                     guidance_scale=guidance_scale,
                     num_inference_steps=inference_steps,
+                    cross_attention_kwargs={"scale": lora_scale},
                     generator=generator,
                 ).frames[0]
             else:
@@ -339,7 +338,7 @@ class PreviewingService:
         guidance_scale: float,
         flow_shift: float,
         lora_path: str,
-        lora_weight: float,
+        lora_scale: float,
         inference_steps: int,
         seed: int = -1,
         enable_cpu_offload: bool = True,
@@ -385,10 +384,9 @@ class PreviewingService:
                 pipe.enable_model_cpu_offload()
             
             # Apply LoRA weights if using them
-            if lora_weight > 0 and lora_path:
-                log_fn(f"Loading LoRA weights from {lora_path} with weight {lora_weight}...")
+            if lora_scale > 0 and lora_path:
+                log_fn(f"Loading LoRA weights from {lora_path} with lora scale {lora_scale}...")
                 pipe.load_lora_weights(lora_path)
-                pipe.fuse_lora(lora_weight)
             else:
                 log_fn("Using base model without LoRA weights")
             
@@ -410,6 +408,7 @@ class PreviewingService:
                 decode_timestep=0.03,
                 decode_noise_scale=0.025,
                 num_inference_steps=inference_steps,
+                cross_attention_kwargs={"scale": lora_scale},
                 generator=generator,
             ).frames[0]
             
@@ -446,7 +445,7 @@ class PreviewingService:
         guidance_scale: float,
         flow_shift: float,
         lora_path: str,
-        lora_weight: float,
+        lora_scale: float,
         inference_steps: int,
         seed: int = -1,
         enable_cpu_offload: bool = True,
@@ -506,10 +505,9 @@ class PreviewingService:
                 pipe.enable_model_cpu_offload()
             
             # Apply LoRA weights if using them
-            if lora_weight > 0 and lora_path:
-                log_fn(f"Loading LoRA weights from {lora_path} with weight {lora_weight}...")
+            if lora_scale > 0 and lora_path:
+                log_fn(f"Loading LoRA weights from {lora_path} with lora scale {lora_scale}...")
                 pipe.load_lora_weights(lora_path)
-                pipe.fuse_lora(lora_weight)
             else:
                 log_fn("Using base model without LoRA weights")
             
@@ -532,6 +530,7 @@ class PreviewingService:
                 guidance_scale=guidance_scale,
                 true_cfg_scale=1.0,
                 num_inference_steps=inference_steps,
+                cross_attention_kwargs={"scale": lora_scale},
                 generator=generator,
             ).frames[0]
             

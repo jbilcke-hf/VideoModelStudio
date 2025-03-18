@@ -164,8 +164,8 @@ class PreviewTab(BaseTab):
                         )
                     
                     with gr.Row():
-                        self.components["lora_weight"] = gr.Slider(
-                            label="LoRA Weight",
+                        self.components["lora_scale"] = gr.Slider(
+                            label="LoRA Scale",
                             minimum=0.0,
                             maximum=1.0,
                             step=0.01,
@@ -236,7 +236,7 @@ class PreviewTab(BaseTab):
         is_using_lora = "Use LoRA model" in use_lora_value
         
         return {
-            self.components["lora_weight"]: gr.Slider(visible=is_using_lora)
+            self.components["lora_scale"]: gr.Slider(visible=is_using_lora)
         }
     
     def get_model_version_choices(self, model_type: str) -> List[str]:
@@ -379,7 +379,7 @@ class PreviewTab(BaseTab):
         self.components["use_lora"].change(
             fn=self.update_lora_ui,
             inputs=[self.components["use_lora"]],
-            outputs=[self.components["lora_weight"]]
+            outputs=[self.components["lora_scale"]]
         )
         
         # Load preview UI state when the tab is selected
@@ -397,7 +397,7 @@ class PreviewTab(BaseTab):
                     self.components["fps"],
                     self.components["guidance_scale"],
                     self.components["flow_shift"],
-                    self.components["lora_weight"],
+                    self.components["lora_scale"],
                     self.components["inference_steps"],
                     self.components["enable_cpu_offload"],
                     self.components["model_version"],
@@ -410,7 +410,7 @@ class PreviewTab(BaseTab):
         for component_name in [
             "prompt", "negative_prompt", "prompt_prefix", "model_version", "resolution_preset",
             "width", "height", "num_frames", "fps", "guidance_scale", "flow_shift",
-            "lora_weight", "inference_steps", "enable_cpu_offload", "seed", "use_lora"
+            "lora_scale", "inference_steps", "enable_cpu_offload", "seed", "use_lora"
         ]:
             if component_name in self.components:
                 self.components[component_name].change(
@@ -433,7 +433,7 @@ class PreviewTab(BaseTab):
                 self.components["num_frames"],
                 self.components["guidance_scale"],
                 self.components["flow_shift"],
-                self.components["lora_weight"],
+                self.components["lora_scale"],
                 self.components["inference_steps"],
                 self.components["enable_cpu_offload"],
                 self.components["fps"],
@@ -535,7 +535,7 @@ class PreviewTab(BaseTab):
                 preview_state.get("fps", 16),
                 preview_state.get("guidance_scale", 5.0),
                 preview_state.get("flow_shift", 3.0),
-                preview_state.get("lora_weight", 0.7),
+                preview_state.get("lora_scale", 0.7),
                 preview_state.get("inference_steps", 30),
                 preview_state.get("enable_cpu_offload", True),
                 model_version,
@@ -603,7 +603,7 @@ class PreviewTab(BaseTab):
         num_frames: int,
         guidance_scale: float,
         flow_shift: float,
-        lora_weight: float,
+        lora_scale: float,
         inference_steps: int,
         enable_cpu_offload: bool,
         fps: int,
@@ -635,7 +635,7 @@ class PreviewTab(BaseTab):
                 "fps": fps,
                 "guidance_scale": guidance_scale,
                 "flow_shift": flow_shift,
-                "lora_weight": lora_weight,
+                "lora_scale": lora_scale,
                 "inference_steps": inference_steps,
                 "enable_cpu_offload": enable_cpu_offload,
                 "seed": seed,
@@ -657,8 +657,8 @@ class PreviewTab(BaseTab):
         use_lora_model = use_lora == "Use LoRA model"
         
         # Start actual generation
-        # If not using LoRA, set lora_weight to 0 to disable it
-        effective_lora_weight = lora_weight if use_lora_model else 0.0
+        # If not using LoRA, set lora_scale to 0 to disable it
+        effective_lora_scale = lora_scale if use_lora_model else 0.0
         
         result = self.app.previewing.generate_video(
             model_type=model_type,
@@ -671,7 +671,7 @@ class PreviewTab(BaseTab):
             num_frames=num_frames,
             guidance_scale=guidance_scale,
             flow_shift=flow_shift,
-            lora_weight=effective_lora_weight,  # Use 0.0 if not using LoRA
+            lora_scale=effective_lora_scale,  # Use 0.0 if not using LoRA
             inference_steps=inference_steps,
             enable_cpu_offload=enable_cpu_offload,
             fps=fps,
