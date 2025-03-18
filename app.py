@@ -68,7 +68,11 @@ def main():
     app.queue(default_concurrency_limit=2).launch(
         server_name="0.0.0.0",
         allowed_paths=allowed_paths,
-        auth=("admin", VMS_ADMIN_PASSWORD) if VMS_ADMIN_PASSWORD else None
+
+        # for some reason this crashes Gradio
+        # I was expecting to see a login modal or something
+        # but instead this creates an infinite loop
+        #auth=("admin", VMS_ADMIN_PASSWORD) if VMS_ADMIN_PASSWORD else None
     )
 
 if __name__ == "__main__":
