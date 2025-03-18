@@ -29,9 +29,9 @@ peft>=0.12.0
 eva-decord==0.6.1
 # decord
 
-#finetrainers @ git+https://github.com/a-r-r-o-w/finetrainers.git@main
+finetrainers @ git+https://github.com/a-r-r-o-w/finetrainers.git@main
 # temporary fix for pip install bug:
-finetrainers @ git+https://github.com/jbilcke-hf/finetrainers-patches.git@fix_missing_sft_trainer_files
+#finetrainers @ git+https://github.com/jbilcke-hf/finetrainers-patches.git@fix_missing_sft_trainer_files
 
 wandb
 pandas
