@@ -777,7 +777,8 @@ class TrainingService:
             # Update with resume_from_checkpoint if provided
             if resume_from_checkpoint:
                 config.resume_from_checkpoint = resume_from_checkpoint
-                self.append_log(f"Resuming from checkpoint: {resume_from_checkpoint}")
+                self.append_log(f"Resuming from checkpoint: {resume_from_checkpoint} (will use 'latest')")
+                config.resume_from_checkpoint = "latest"
                 
             # Common settings for both models
             config.mixed_precision = DEFAULT_MIXED_PRECISION
