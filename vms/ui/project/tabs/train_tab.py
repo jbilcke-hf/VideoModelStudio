@@ -612,11 +612,13 @@ class TrainTab(BaseTab):
         has_checkpoints = len(checkpoints) > 0
         resume_from = resume_from_checkpoint  # Use the passed parameter
         
-        if resume_from == "latest" and checkpoints:
+        if resume_from and checkpoints:
             # Find the latest checkpoint
             latest_checkpoint = max(checkpoints, key=os.path.getmtime)
             resume_from = str(latest_checkpoint)
-            logger.info(f"Found checkpoint at {resume_from}, will resume training")
+
+            logger.info(f"Found checkpoint at {resume_from}, note from @julian: right now let's just resume training at 'latest'")
+            result_from = "latest"
             
         # Convert model_type display name to internal name
         model_internal_type = MODEL_TYPES.get(model_type)
