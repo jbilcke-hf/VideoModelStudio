@@ -65,9 +65,11 @@ def main():
     ]
 
     # Launch the Gradio app
-    app.queue(default_concurrency_limit=2).launch(
+    app.queue(default_concurrency_limit=10).launch(
         server_name="0.0.0.0",
         allowed_paths=allowed_paths,
+
+        max_threads=60,
 
         # for some reason this crashes Gradio
         # I was expecting to see a login modal or something
