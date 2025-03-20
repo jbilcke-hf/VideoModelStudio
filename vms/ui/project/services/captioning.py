@@ -17,7 +17,7 @@ from llava.mm_utils import tokenizer_image_token
 from llava.constants import IMAGE_TOKEN_INDEX, DEFAULT_IMAGE_TOKEN, DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN
 from llava.conversation import conv_templates, SeparatorStyle
 
-from vms.config import TRAINING_VIDEOS_PATH, STAGING_PATH, PRELOAD_CAPTIONING_MODEL, CAPTIONING_MODEL, USE_MOCK_CAPTIONING_MODEL, DEFAULT_CAPTIONING_BOT_INSTRUCTIONS, VIDEOS_TO_SPLIT_PATH, DEFAULT_PROMPT_PREFIX
+from vms.config import STAGING_PATH, PRELOAD_CAPTIONING_MODEL, CAPTIONING_MODEL, USE_MOCK_CAPTIONING_MODEL, DEFAULT_CAPTIONING_BOT_INSTRUCTIONS, VIDEOS_TO_SPLIT_PATH, DEFAULT_PROMPT_PREFIX
 from vms.utils import extract_scene_info, is_image_file, is_video_file, copy_files_to_training_dir, prepare_finetrainers_dataset
 
 logger = logging.getLogger(__name__)
@@ -58,7 +58,15 @@ class CaptioningService:
                 cls._model_loading = cls._loop.create_task(cls._background_load_model(model_name))
         return instance
 
-    def __init__(self, model_name=CAPTIONING_MODEL):
+    def __init__(self, app=None, model_name=CAPTIONING_MODEL):
+        """Initialize the preview service
+        
+        Args:
+            app: Reference to main application
+            model_name: Reference to the captioning model name
+        """
+        self.app = app
+
         if hasattr(self, 'model_name'):  # Already initialized
             return
             
@@ -121,8 +129,8 @@ class CaptioningService:
             logger.info(f"Updated caption for {file_path.name}")
             
             # the following code is disabled, because we want to make the copy to prompts.txt manual
-            # If the file is in TRAINING_VIDEOS_PATH, update prompts.txt as well
-            # if TRAINING_VIDEOS_PATH in file_path.parents:
+            # If the file is in self.app.training_videos_path, update prompts.txt as well
+            # if self.app.training_videos_path in file_path.parents:
             #     # Try to update the training dataset
             #     try:
             #         prepare_finetrainers_dataset()

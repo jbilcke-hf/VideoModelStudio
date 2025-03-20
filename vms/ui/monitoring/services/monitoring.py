@@ -237,6 +237,9 @@ class MonitoringService:
             Matplotlib figure with CPU usage plot
         """
         plt.close('all')  # Close all existing figures
+
+        plt.style.use('dark_background')
+
         fig, ax = plt.subplots(figsize=(10, 5))
         
         if not self.timestamps:
@@ -283,6 +286,9 @@ class MonitoringService:
             Matplotlib figure with memory usage plot
         """
         plt.close('all')  # Close all existing figures
+
+        plt.style.use('dark_background')
+
         fig, ax = plt.subplots(figsize=(10, 5))
         
         if not self.timestamps:
@@ -328,6 +334,9 @@ class MonitoringService:
         if num_cores == 0:
             # No data yet
             plt.close('all')  # Close all existing figures
+
+            plt.style.use('dark_background')
+            
             fig, ax = plt.subplots(figsize=(10, 5))
             ax.set_title("No per-core CPU data available yet")
             return fig

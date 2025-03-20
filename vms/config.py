@@ -1,4 +1,7 @@
 import os
+import uuid
+import json
+import shutil
 from dataclasses import dataclass, field
 from typing import Dict, Any, Optional, List, Tuple
 from pathlib import Path
@@ -22,14 +25,11 @@ ASK_USER_TO_DUPLICATE_SPACE = parse_bool_env(os.getenv("ASK_USER_TO_DUPLICATE_SP
 # Base storage path
 STORAGE_PATH = Path(os.environ.get('STORAGE_PATH', '.data'))
 
-# Subdirectories for different data types
+# ----------- Subdirectories for different data types -----------
+# The following paths correspond to temporary files, before they we "commit" (re-copy) them to the current project's training/ directory
 VIDEOS_TO_SPLIT_PATH = STORAGE_PATH / "videos_to_split"    # Raw uploaded/downloaded files
 STAGING_PATH = STORAGE_PATH / "staging"                    # This is where files that are captioned or need captioning are waiting
-TRAINING_PATH = STORAGE_PATH / "training"                  # Folder containing the final training dataset
-TRAINING_VIDEOS_PATH = TRAINING_PATH / "videos"            # Captioned clips ready for training
-MODEL_PATH = STORAGE_PATH / "model"                        # Model checkpoints and files
-OUTPUT_PATH = STORAGE_PATH / "output"                  # Training outputs and logs
-LOG_FILE_PATH = OUTPUT_PATH / "last_session.log"
+# --------------------------------------------------------------
 
 # On the production server we can afford to preload the big model
 PRELOAD_CAPTIONING_MODEL = parse_bool_env(os.environ.get('PRELOAD_CAPTIONING_MODEL'))
@@ -42,15 +42,147 @@ DEFAULT_PROMPT_PREFIX = "In the style of TOK, "
 USE_MOCK_CAPTIONING_MODEL = parse_bool_env(os.environ.get('USE_MOCK_CAPTIONING_MODEL'))
 
 DEFAULT_CAPTIONING_BOT_INSTRUCTIONS = "Please write a full video description. Be synthetic and methodically list camera (close-up shot, medium-shot..), genre (music video, horror movie scene, video game footage, go pro footage, japanese anime, noir film, science-fiction, action movie, documentary..), characters (physical appearance, look, skin, facial features, haircut, clothing), scene (action, positions, movements), location (indoor, outdoor, place, building, country..), time and lighting (natural, golden hour, night time, LED lights, kelvin temperature etc), weather and climate (dusty, rainy, fog, haze, snowing..), era/settings."
-       
+
+def generate_model_project_id() -> str:
+    """Generate a new UUID for a model project"""
+    return str(uuid.uuid4())
+
+def get_global_config_path() -> Path:
+    """Get the path to the global config file"""
+    return STORAGE_PATH / "config.json"
+
+def load_global_config() -> dict:
+    """Load the global configuration file
+    
+    Returns:
+        Dict containing global configuration
+    """
+    config_path = get_global_config_path()
+    if not config_path.exists():
+        # Create default config if it doesn't exist
+        default_config = {
+            "latest_model_project_id": None
+        }
+        save_global_config(default_config)
+        return default_config
+    
+    try:
+        with open(config_path, 'r') as f:
+            return json.load(f)
+    except Exception as e:
+        logger.error(f"Error loading global config: {e}")
+        return {"latest_model_project_id": None}
+
+def save_global_config(config: dict) -> bool:
+    """Save the global configuration file
+    
+    Args:
+        config: Dictionary containing configuration to save
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    config_path = get_global_config_path()
+    try:
+        with open(config_path, 'w') as f:
+            json.dump(config, f, indent=2)
+        return True
+    except Exception as e:
+        logger.error(f"Error saving global config: {e}")
+        return False
+
+def update_latest_project_id(project_id: str) -> bool:
+    """Update the latest project ID in global config
+    
+    Args:
+        project_id: The project ID to save
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    config = load_global_config()
+    config["latest_model_project_id"] = project_id
+    return save_global_config(config)
+
+def get_project_paths(project_id: str) -> Tuple[Path, Path, Path, Path]:
+    """Get paths for a specific project
+    
+    Args:
+        project_id: The model project UUID
+        
+    Returns:
+        Tuple of (training_path, training_videos_path, output_path, log_file_path)
+    """
+    project_base = STORAGE_PATH / "models" / project_id
+    training_path = project_base / "training"
+    training_videos_path = training_path / "videos"
+    output_path = project_base / "output"
+    log_file_path = output_path / "last_session.log"
+    
+    # Ensure directories exist
+    training_path.mkdir(parents=True, exist_ok=True)
+    training_videos_path.mkdir(parents=True, exist_ok=True)
+    output_path.mkdir(parents=True, exist_ok=True)
+    
+    return training_path, training_videos_path, output_path, log_file_path
+
+def migrate_legacy_project() -> Optional[str]:
+    """Migrate legacy project structure to new UUID-based structure
+    
+    Returns:
+        New project UUID if migration was performed, None otherwise
+    """
+    legacy_training = STORAGE_PATH / "training"
+    legacy_output = STORAGE_PATH / "output"
+    
+    # Check if legacy folders exist and contain data
+    has_training_data = legacy_training.exists() and any(legacy_training.iterdir())
+    has_output_data = legacy_output.exists() and any(legacy_output.iterdir())
+    
+    if not (has_training_data or has_output_data):
+        return None
+        
+    # Generate new project ID and paths
+    project_id = generate_model_project_id()
+    training_path, training_videos_path, output_path, log_file_path = get_project_paths(project_id)
+    
+    # Migrate data if it exists
+    if has_training_data:
+        # Copy files instead of moving to prevent data loss
+        for file in legacy_training.glob("*"):
+            if file.is_file():
+                shutil.copy2(file, training_path)
+        
+        # Copy videos subfolder if it exists
+        legacy_videos = legacy_training / "videos"
+        if legacy_videos.exists():
+            for file in legacy_videos.glob("*"):
+                if file.is_file():
+                    shutil.copy2(file, training_videos_path)
+    
+    if has_output_data:
+        for file in legacy_output.glob("*"):
+            if file.is_file():
+                shutil.copy2(file, output_path)
+            elif file.is_dir():
+                # For checkpoint directories
+                target_dir = output_path / file.name
+                target_dir.mkdir(exist_ok=True)
+                for subfile in file.glob("*"):
+                    if subfile.is_file():
+                        shutil.copy2(subfile, target_dir)
+    
+    return project_id
+
 # Create directories
 STORAGE_PATH.mkdir(parents=True, exist_ok=True)
 VIDEOS_TO_SPLIT_PATH.mkdir(parents=True, exist_ok=True)
 STAGING_PATH.mkdir(parents=True, exist_ok=True)
-TRAINING_PATH.mkdir(parents=True, exist_ok=True)
-TRAINING_VIDEOS_PATH.mkdir(parents=True, exist_ok=True)
-MODEL_PATH.mkdir(parents=True, exist_ok=True)
-OUTPUT_PATH.mkdir(parents=True, exist_ok=True)
+
+# Add at the end of the file, after the directory creation section
+# This ensures models directory exists
+MODELS_PATH = STORAGE_PATH / "models"
+MODELS_PATH.mkdir(parents=True, exist_ok=True)
 
 # To secure public instances
 VMS_ADMIN_PASSWORD = os.environ.get('VMS_ADMIN_PASSWORD', '')

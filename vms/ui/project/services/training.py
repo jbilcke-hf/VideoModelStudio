@@ -22,8 +22,8 @@ from typing import Any, Optional, Dict, List, Union, Tuple
 from huggingface_hub import upload_folder, create_repo
 
 from vms.config import (
-    TrainingConfig, TRAINING_PRESETS, LOG_FILE_PATH, TRAINING_VIDEOS_PATH, 
-    STORAGE_PATH, TRAINING_PATH, MODEL_PATH, OUTPUT_PATH, HF_API_TOKEN, 
+    TrainingConfig, TRAINING_PRESETS, 
+    STORAGE_PATH, HF_API_TOKEN, 
     MODEL_TYPES, TRAINING_TYPES, MODEL_VERSIONS,
     DEFAULT_NB_TRAINING_STEPS, DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
     DEFAULT_BATCH_SIZE, DEFAULT_CAPTION_DROPOUT_P,
@@ -39,7 +39,8 @@ from vms.config import (
     DEFAULT_PRECOMPUTATION_ITEMS,
     DEFAULT_NB_TRAINING_STEPS,
     DEFAULT_NB_LR_WARMUP_STEPS,
-    DEFAULT_AUTO_RESUME
+    DEFAULT_AUTO_RESUME,
+    generate_model_project_id
 )
 from vms.utils import (
     get_available_gpu_count,
@@ -56,17 +57,14 @@ logger.setLevel(logging.INFO)
 
 class TrainingService:
     def __init__(self, app=None):
-        # Store reference to app
+        """Initialize the training service
+        
+        Args:
+            app: Reference to main application
+        """
         self.app = app
 
-        # State and log files
-        self.session_file = OUTPUT_PATH / "session.json"
-        self.status_file = OUTPUT_PATH / "status.json"
-        self.pid_file = OUTPUT_PATH / "training.pid"
-        self.log_file = OUTPUT_PATH / "training.log"
-
         self.file_lock = threading.Lock()
-
         self.file_handler = None
         self.setup_logging()
         self.ensure_valid_ui_state_file()
@@ -96,7 +94,7 @@ class TrainingService:
                 self.file_handler.close()
                 logger.removeHandler(self.file_handler)
             
-            self.file_handler = logging.FileHandler(str(LOG_FILE_PATH))
+            self.file_handler = logging.FileHandler(str(self.app.log_file_path))
             self.file_handler.setFormatter(logging.Formatter(
                 '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
             ))
@@ -114,8 +112,8 @@ class TrainingService:
                 self.file_handler = None
             
             # Delete the file if it exists
-            if LOG_FILE_PATH.exists():
-                LOG_FILE_PATH.unlink()
+            if self.app.log_file_path.exists():
+                self.app.log_file_path.unlink()
             
             # Recreate logging setup
             self.setup_logging()
@@ -130,31 +128,26 @@ class TrainingService:
         if self.file_handler:
             self.file_handler.close()
     
-            
+    def update_project_state(self, state_updates: Dict[str, Any]) -> None:
+        """Update project state in UI state file
+        
+        Args:
+            state_updates: Dict of state values to update
+        """
+        current_state = self.load_ui_state()
+        current_state.update(state_updates)
+        self.save_ui_state(current_state)
+
+        logger.info(f"Updated project state: {state_updates}")
+        
     def save_ui_state(self, values: Dict[str, Any]) -> None:
         """Save current UI state to file with validation"""
-        ui_state_file = OUTPUT_PATH / "ui_state.json"
-        
+
         # Use a lock to prevent concurrent writes
         with self.file_lock:
             # Validate values before saving
             validated_values = {}
-            default_state = {
-                "model_type": list(MODEL_TYPES.keys())[0],
-                "model_version": "",
-                "training_type": list(TRAINING_TYPES.keys())[0],
-                "lora_rank": DEFAULT_LORA_RANK_STR,
-                "lora_alpha": DEFAULT_LORA_ALPHA_STR, 
-                "train_steps": DEFAULT_NB_TRAINING_STEPS,
-                "batch_size": DEFAULT_BATCH_SIZE,
-                "learning_rate": DEFAULT_LEARNING_RATE,
-                "save_iterations": DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
-                "training_preset": list(TRAINING_PRESETS.keys())[0],
-                "num_gpus": DEFAULT_NUM_GPUS,
-                "precomputation_items": DEFAULT_PRECOMPUTATION_ITEMS,
-                "lr_warmup_steps": DEFAULT_NB_LR_WARMUP_STEPS,
-                "auto_resume": False
-            }
+            default_state = self.get_default_ui_state()
             
             # Copy default values first
             validated_values = default_state.copy()
@@ -194,21 +187,21 @@ class TrainingService:
                 json_data = json.dumps(validated_values, indent=2)
                 
                 # Write to the file
-                with open(ui_state_file, 'w') as f:
+                with open(self.app.output_ui_state_file, 'w') as f:
                     f.write(json_data)
                 logger.debug(f"UI state saved successfully")
             except Exception as e:
                 logger.error(f"Error saving UI state: {str(e)}")
-
-    def _backup_and_recreate_ui_state(self, ui_state_file, default_state):
+        
+    def _backup_and_recreate_ui_state(self, default_state):
         """Backup the corrupted UI state file and create a new one with defaults"""
         try:
             # Create a backup with timestamp
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            backup_file = ui_state_file.with_suffix(f'.json.bak_{timestamp}')
+            backup_file = self.app.output_ui_state_file.with_suffix(f'.json.bak_{timestamp}')
             
             # Copy the corrupted file
-            shutil.copy2(ui_state_file, backup_file)
+            shutil.copy2(self.app.output_ui_state_file, backup_file)
             logger.info(f"Backed up corrupted UI state file to {backup_file}")
         except Exception as backup_error:
             logger.error(f"Failed to backup corrupted UI state file: {str(backup_error)}")
@@ -217,10 +210,12 @@ class TrainingService:
         self.save_ui_state(default_state)
         logger.info("Created new UI state file with default values after error")
         
-    def load_ui_state(self) -> Dict[str, Any]:
-        """Load saved UI state with robust error handling"""
-        ui_state_file = OUTPUT_PATH / "ui_state.json"
+    def get_default_ui_state(self) -> Dict[str, Any]:
+        """Get a default UI state with robust error handling"""
+
         default_state = {
+            "model_project_id": self.app.current_model_project_id if self.app.current_model_project_id else generate_model_project_id(),
+            "project_status": self.app.current_model_project_status if self.app.current_model_project_status else "draft",
             "model_type": list(MODEL_TYPES.keys())[0],
             "model_version": "",
             "training_type": list(TRAINING_TYPES.keys())[0],
@@ -236,22 +231,29 @@ class TrainingService:
             "lr_warmup_steps": DEFAULT_NB_LR_WARMUP_STEPS,
             "auto_resume": DEFAULT_AUTO_RESUME
         }
+
+        return default_state
+
+    def load_ui_state(self) -> Dict[str, Any]:
+        """Load saved UI state with robust error handling"""
+
+        default_state = self.get_default_ui_state()
         
         # Use lock for reading too to avoid reading during a write
         with self.file_lock:
 
-            if not ui_state_file.exists():
+            if not self.app.output_ui_state_file.exists():
                 logger.info("UI state file does not exist, using default values")
                 return default_state
                     
             try:
                 # First check if the file is empty
-                file_size = ui_state_file.stat().st_size
+                file_size = self.app.output_ui_state_file.stat().st_size
                 if file_size == 0:
                     logger.warning("UI state file exists but is empty, using default values")
                     return default_state
                     
-                with open(ui_state_file, 'r') as f:
+                with open(self.app.output_ui_state_file, 'r') as f:
                     file_content = f.read().strip()
                     if not file_content:
                         logger.warning("UI state file is empty or contains only whitespace, using default values")
@@ -262,7 +264,7 @@ class TrainingService:
                     except json.JSONDecodeError as e:
                         logger.error(f"Error parsing UI state JSON: {str(e)}")
                         # Instead of showing the error, recreate the file with defaults
-                        self._backup_and_recreate_ui_state(ui_state_file, default_state)
+                        self._backup_and_recreate_ui_state(default_state)
                         return default_state
                     
                     # Clean up model type if it contains " (LoRA)" suffix
@@ -362,33 +364,17 @@ class TrainingService:
             except Exception as e:
                 logger.error(f"Error loading UI state: {str(e)}")
                 # If anything goes wrong, backup and recreate
-                self._backup_and_recreate_ui_state(ui_state_file, default_state)
+                self._backup_and_recreate_ui_state(default_state)
                 return default_state
+
 
     def ensure_valid_ui_state_file(self):
         """Ensure UI state file exists and is valid JSON"""
-        ui_state_file = OUTPUT_PATH / "ui_state.json"
-        
-        # Default state with all required values
-        default_state = {
-            "model_type": list(MODEL_TYPES.keys())[0],
-            "model_version": "",
-            "training_type": list(TRAINING_TYPES.keys())[0],
-            "lora_rank": DEFAULT_LORA_RANK_STR,
-            "lora_alpha": DEFAULT_LORA_ALPHA_STR, 
-            "train_steps": DEFAULT_NB_TRAINING_STEPS,
-            "batch_size": DEFAULT_BATCH_SIZE,
-            "learning_rate": DEFAULT_LEARNING_RATE,
-            "save_iterations": DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
-            "training_preset": list(TRAINING_PRESETS.keys())[0],
-            "num_gpus": DEFAULT_NUM_GPUS,
-            "precomputation_items": DEFAULT_PRECOMPUTATION_ITEMS,
-            "lr_warmup_steps": DEFAULT_NB_LR_WARMUP_STEPS,
-            "auto_resume": False
-        }
+
+        default_state = self.get_default_ui_state()
         
         # If file doesn't exist, create it with default values
-        if not ui_state_file.exists():
+        if not self.app.output_ui_state_file.exists():
             logger.info("Creating new UI state file with default values")
             self.save_ui_state(default_state)
             return
@@ -396,13 +382,13 @@ class TrainingService:
         # Check if file is valid JSON
         try:
             # First check if the file is empty
-            file_size = ui_state_file.stat().st_size
+            file_size = self.app.output_ui_state_file.stat().st_size
             if file_size == 0:
                 logger.warning("UI state file exists but is empty, recreating with default values")
                 self.save_ui_state(default_state)
                 return
                 
-            with open(ui_state_file, 'r') as f:
+            with open(self.app.output_ui_state_file, 'r') as f:
                 file_content = f.read().strip()
                 if not file_content:
                     logger.warning("UI state file is empty or contains only whitespace, recreating with default values")
@@ -416,12 +402,12 @@ class TrainingService:
                 except json.JSONDecodeError as e:
                     # JSON parsing failed, backup and recreate
                     logger.error(f"Error parsing UI state JSON: {str(e)}")
-                    self._backup_and_recreate_ui_state(ui_state_file, default_state)
+                    self._backup_and_recreate_ui_state(default_state)
                     return
         except Exception as e:
             # Any other error (file access, etc)
             logger.error(f"Error checking UI state file: {str(e)}")
-            self._backup_and_recreate_ui_state(ui_state_file, default_state)
+            self._backup_and_recreate_ui_state(default_state)
             return
                 
     # Modify save_session to also store the UI state at training start
@@ -434,14 +420,14 @@ class TrainingService:
             # Add UI state at the time training started
             "initial_ui_state": self.load_ui_state()
         }
-        with open(self.session_file, 'w') as f:
+        with open(self.app.output_session_file, 'w') as f:
             json.dump(session_data, f, indent=2)
     
     def load_session(self) -> Optional[Dict]:
         """Load saved training session"""
-        if self.session_file.exists():
+        if self.app.output_session_file.exists():
             try:
-                with open(self.session_file, 'r') as f:
+                with open(self.app.output_session_file, 'r') as f:
                     return json.load(f)
             except json.JSONDecodeError:
                 return None
@@ -451,16 +437,16 @@ class TrainingService:
         """Get current training status"""
         default_status = {'status': 'stopped', 'message': 'No training in progress'}
         
-        if not self.status_file.exists():
+        if not self.app.output_status_file.exists():
             return default_status
                 
         try:
-            with open(self.status_file, 'r') as f:
+            with open(self.app.output_status_file, 'r') as f:
                 status = json.load(f)
                     
             # Check if process is actually running
-            if self.pid_file.exists():
-                with open(self.pid_file, 'r') as f:
+            if self.app.output_pid_file.exists():
+                with open(self.app.output_pid_file, 'r') as f:
                     pid = int(f.read().strip())
                 if not psutil.pid_exists(pid):
                     # Process died unexpectedly
@@ -472,7 +458,7 @@ class TrainingService:
                         status['status'] = 'error'
                         status['message'] = 'Training process terminated unexpectedly'
                         # Update the status file to avoid repeated logging
-                        with open(self.status_file, 'w') as f:
+                        with open(self.app.output_status_file, 'w') as f:
                             json.dump(status, f, indent=2)
                     else:
                         status['status'] = 'stopped'
@@ -484,8 +470,8 @@ class TrainingService:
 
     def get_logs(self, max_lines: int = 100) -> str:
         """Get training logs with line limit"""
-        if self.log_file.exists():
-            with open(self.log_file, 'r') as f:
+        if self.app.output_log_file.exists():
+            with open(self.app.output_log_file, 'r') as f:
                 lines = f.readlines()
                 return ''.join(lines[-max_lines:])
         return ""
@@ -493,14 +479,14 @@ class TrainingService:
     def append_log(self, message: str) -> None:
         """Append message to log file and logger"""
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        with open(self.log_file, 'a') as f:
+        with open(self.app.output_log_file, 'a') as f:
             f.write(f"[{timestamp}] {message}\n")
         logger.info(message)
 
     def clear_logs(self) -> None:
         """Clear log file"""
-        if self.log_file.exists():
-            self.log_file.unlink()
+        if self.app.output_log_file.exists():
+            self.app.output_log_file.unlink()
         self.append_log("Log file cleared")
 
     def validate_training_config(self, config: TrainingConfig, model_type: str) -> Optional[str]:
@@ -532,11 +518,11 @@ class TrainingService:
                 return f"Error reading dataset config file: {str(e)}"
                     
             # Check training videos directory exists
-            if not TRAINING_VIDEOS_PATH.exists():
-                return f"Training videos directory does not exist: {TRAINING_VIDEOS_PATH}"
+            if not self.app.training_videos_path.exists():
+                return f"Training videos directory does not exist: {self.app.training_videos_path}"
                 
             # Validate file counts
-            video_count = len(list(TRAINING_VIDEOS_PATH.glob('*.mp4')))
+            video_count = len(list(self.app.training_videos_path.glob('*.mp4')))
             
             if video_count == 0:
                 return "No training files found"
@@ -582,6 +568,7 @@ class TrainingService:
     ) -> Tuple[str, str]:
         """Start training with finetrainers"""
         
+        training_path
         self.clear_logs()
 
         if not model_type:
@@ -601,7 +588,6 @@ class TrainingService:
         #    progress(0.15, desc="Setting up training configuration")
         
         try:
-            # Get absolute paths - FIXED to look in project root instead of within vms directory
             current_dir = Path(__file__).parent.parent.parent.absolute()  # Go up to project root
             train_script = current_dir / "train.py"
             
@@ -627,7 +613,7 @@ class TrainingService:
             # Log paths for debugging
             logger.info("Current working directory: %s", current_dir)
             logger.info("Training script path: %s", train_script)
-            logger.info("Training data path: %s", TRAINING_PATH)
+            logger.info("Training data path: %s", self.app.training_path)
                 
             # Update progress
             #if progress:
@@ -669,7 +655,7 @@ class TrainingService:
                             custom_prompt_prefix = prefix.rstrip(', ')
 
             # Create a proper dataset configuration JSON file
-            dataset_config_file = OUTPUT_PATH / "dataset_config.json"
+            dataset_config_file = self.app.output_path / "dataset_config.json"
 
             # Determine appropriate ID token based on model type and custom prefix
             id_token = custom_prompt_prefix  # Use custom prefix as the primary id_token
@@ -681,7 +667,7 @@ class TrainingService:
             dataset_config = {
                 "datasets": [
                     {
-                        "data_root": str(TRAINING_PATH),
+                        "data_root": str(self.app.training_path),
                         "dataset_type": DEFAULT_DATASET_TYPE,
                         "id_token": id_token,
                         "video_resolution_buckets": [[f, h, w] for f, h, w in training_buckets],
@@ -701,8 +687,8 @@ class TrainingService:
             if model_type == "hunyuan_video":
                 if training_type == "lora":
                     config = TrainingConfig.hunyuan_video_lora(
-                        data_path=str(TRAINING_PATH),
-                        output_path=str(OUTPUT_PATH),
+                        data_path=str(self.app.training_path),
+                        output_path=str(self.app.output_path),
                         buckets=training_buckets
                     )
                 else:
@@ -713,21 +699,21 @@ class TrainingService:
             elif model_type == "ltx_video":
                 if training_type == "lora":
                     config = TrainingConfig.ltx_video_lora(
-                        data_path=str(TRAINING_PATH),
-                        output_path=str(OUTPUT_PATH),
+                        data_path=str(self.app.training_path),
+                        output_path=str(self.app.output_path),
                         buckets=training_buckets
                     )
                 else:
                     config = TrainingConfig.ltx_video_full_finetune(
-                        data_path=str(TRAINING_PATH),
-                        output_path=str(OUTPUT_PATH),
+                        data_path=str(self.app.training_path),
+                        output_path=str(self.app.output_path),
                         buckets=training_buckets
                     )
             elif model_type == "wan":
                 if training_type == "lora":
                     config = TrainingConfig.wan_lora(
-                        data_path=str(TRAINING_PATH),
-                        output_path=str(OUTPUT_PATH),
+                        data_path=str(self.app.training_path),
+                        output_path=str(self.app.output_path),
                         buckets=training_buckets
                     )
                 else:
@@ -742,7 +728,7 @@ class TrainingService:
             # Create validation dataset if needed
             validation_file = None
             #if enable_validation:  # Add a parameter to control this
-            #    validation_file = create_validation_config()
+            #    validation_file = create_validation_config(self.app.training_videos_path, self.app.output_path)
             #    if validation_file:
             #        config_args.extend([
             #            "--validation_dataset_file", str(validation_file),
@@ -893,7 +879,7 @@ class TrainingService:
             
             logger.info(f"Started process with PID: {process.pid}")
             
-            with open(self.pid_file, 'w') as f:
+            with open(self.app.output_pid_file, 'w') as f:
                 f.write(str(process.pid))
             
             # Save session info including repo_id for later hub upload
@@ -949,18 +935,18 @@ class TrainingService:
             
     def stop_training(self) -> Tuple[str, str]:
         """Stop training process"""
-        if not self.pid_file.exists():
+        if not self.app.output_pid_file.exists():
             return "No training process found", self.get_logs()
             
         try:
-            with open(self.pid_file, 'r') as f:
+            with open(self.app.output_pid_file, 'r') as f:
                 pid = int(f.read().strip())
                     
             if psutil.pid_exists(pid):
                 os.killpg(os.getpgid(pid), signal.SIGTERM)
                     
-            if self.pid_file.exists():
-                self.pid_file.unlink()
+            if self.app.output_pid_file.exists():
+                self.app.output_pid_file.unlink()
                     
             self.append_log("Training process stopped")
             self.save_status(state='stopped', message='Training stopped')
@@ -970,8 +956,8 @@ class TrainingService:
         except Exception as e:
             error_msg = f"Error stopping training: {str(e)}"
             self.append_log(error_msg)
-            if self.pid_file.exists():
-                self.pid_file.unlink()
+            if self.app.output_pid_file.exists():
+                self.app.output_pid_file.unlink()
             return "Error stopping training", error_msg
 
     def pause_training(self) -> Tuple[str, str]:
@@ -980,7 +966,7 @@ class TrainingService:
             return "No training process found", self.get_logs()
             
         try:
-            with open(self.pid_file, 'r') as f:
+            with open(self.app.output_pid_file, 'r') as f:
                 pid = int(f.read().strip())
                 
             if psutil.pid_exists(pid):
@@ -1001,7 +987,7 @@ class TrainingService:
             return "No training process found", self.get_logs()
             
         try:
-            with open(self.pid_file, 'r') as f:
+            with open(self.app.output_pid_file, 'r') as f:
                 pid = int(f.read().strip())
                 
             if psutil.pid_exists(pid):
@@ -1018,11 +1004,11 @@ class TrainingService:
 
     def is_training_running(self) -> bool:
         """Check if training is currently running"""
-        if not self.pid_file.exists():
+        if not self.app.output_pid_file.exists():
             return False
             
         try:
-            with open(self.pid_file, 'r') as f:
+            with open(self.app.output_pid_file, 'r') as f:
                 pid = int(f.read().strip())
             
             # Check if process exists AND is a Python process running train.py
@@ -1048,7 +1034,7 @@ class TrainingService:
         ui_updates = {}
         
         # Check for any checkpoints, even if status doesn't indicate training
-        checkpoints = list(OUTPUT_PATH.glob("finetrainers_step_*"))
+        checkpoints = list(self.app.output_path.glob("finetrainers_step_*"))
         has_checkpoints = len(checkpoints) > 0
         
         # If status indicates training but process isn't running, or if we have checkpoints
@@ -1237,10 +1223,11 @@ class TrainingService:
         """
         if self.is_training_running():
             return "Cannot delete checkpoints while training is running. Stop training first."
-            
+
         try:
+     
             # Find all checkpoint directories
-            checkpoints = list(OUTPUT_PATH.glob("finetrainers_step_*"))
+            checkpoints = list(self.app.output_path.glob("finetrainers_step_*"))
             
             if not checkpoints:
                 return "No checkpoints found to delete."
@@ -1251,8 +1238,8 @@ class TrainingService:
                     shutil.rmtree(checkpoint)
                     
             # Also delete session.json which contains previous training info
-            if self.session_file.exists():
-                self.session_file.unlink()
+            if self.app.output_session_file.exists():
+                self.app.output_session_file.unlink()
                 
             # Reset status file to idle
             self.save_status(state='idle', message='No training in progress')
@@ -1269,11 +1256,11 @@ class TrainingService:
         """Clear all training data"""
         if self.is_training_running():
             return gr.Error("Cannot clear data while training is running")
-            
+        
         try:
-            for file in TRAINING_VIDEOS_PATH.glob("*.*"):
+            for file in self.app.training_videos_path.glob("*.*"):
                 file.unlink()
-            for file in TRAINING_PATH.glob("*.*"):
+            for file in self.app.training_path.glob("*.*"):
                 file.unlink()
             
             self.append_log("Cleared all training data")
@@ -1300,7 +1287,7 @@ class TrainingService:
         elif state == "completed":
             gr.Info("Training completed!")
 
-        with open(self.status_file, 'w') as f:
+        with open(self.app.output_status_file, 'w') as f:
             json.dump(status, f, indent=2)
 
     def _start_log_monitor(self, process: subprocess.Popen) -> None:
@@ -1379,7 +1366,7 @@ class TrainingService:
                 session = self.load_session()
                 if session and session['params'].get('repo_id'):
                     repo_id = session['params']['repo_id']
-                    latest_run = max(Path(OUTPUT_PATH).glob('*'), key=os.path.getmtime)
+                    latest_run = max(Path(self.app.output_path).glob('*'), key=os.path.getmtime)
                     if self.upload_to_hub(latest_run, repo_id):
                         self.append_log(f"Model uploaded to {repo_id}")
                     else:
@@ -1391,8 +1378,8 @@ class TrainingService:
                 self.save_status(state='error', message=error_msg)
             
             # Clean up PID file
-            if self.pid_file.exists():
-                self.pid_file.unlink()
+            if self.app.output_pid_file.exists():
+                self.app.output_pid_file.unlink()
         
         monitor_thread = threading.Thread(target=monitor)
         monitor_thread.daemon = True
@@ -1419,7 +1406,7 @@ class TrainingService:
             
             # Upload files
             upload_folder(
-                folder_path=str(OUTPUT_PATH),
+                folder_path=str(self.app.output_path),
                 repo_id=repo_id,
                 repo_type="model",
                 commit_message="Training completed"
@@ -1438,7 +1425,7 @@ class TrainingService:
             Path to created ZIP file
         """
         
-        model_output_safetensors_path = OUTPUT_PATH / "pytorch_lora_weights.safetensors"
+        model_output_safetensors_path = self.app.output_path / "pytorch_lora_weights.safetensors"
         return str(model_output_safetensors_path)
 
     def create_training_dataset_zip(self) -> str:
@@ -1448,12 +1435,13 @@ class TrainingService:
         Returns:
             Path to created ZIP file
         """
+
         # Create temporary zip file
         with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as temp_zip:
             temp_zip_path = str(temp_zip.name)
-            print(f"Creating zip file for {TRAINING_PATH}..")
+            print(f"Creating zip file for {self.app.training_path}..")
             try:
-                make_archive(TRAINING_PATH, temp_zip_path)
+                make_archive(self.app.training_path, temp_zip_path)
                 print(f"Zip file created!")
                 return temp_zip_path
             except Exception as e:

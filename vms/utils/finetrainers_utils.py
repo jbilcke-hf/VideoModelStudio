@@ -5,7 +5,8 @@ import shutil
 from typing import Any, Optional, Dict, List, Union, Tuple
 
 from ..config import (
-    STORAGE_PATH, TRAINING_PATH, STAGING_PATH, TRAINING_VIDEOS_PATH, MODEL_PATH, OUTPUT_PATH, HF_API_TOKEN, MODEL_TYPES,
+    STORAGE_PATH, STAGING_PATH,
+    HF_API_TOKEN, MODEL_TYPES,
     DEFAULT_VALIDATION_NB_STEPS,
     DEFAULT_VALIDATION_HEIGHT,
     DEFAULT_VALIDATION_WIDTH,
@@ -16,38 +17,46 @@ from .utils import get_video_fps, extract_scene_info, make_archive, is_image_fil
 
 logger = logging.getLogger(__name__)
 
-def prepare_finetrainers_dataset() -> Tuple[Path, Path]:
+def prepare_finetrainers_dataset(training_path=None, training_videos_path=None) -> Tuple[Path, Path]:
     """Prepare a Finetrainers-compatible dataset structure
     
     Creates:
-        training/
-        ├── prompt.txt       # All captions, one per line
-        ├── videos.txt       # All video paths, one per line
-        └── videos/          # Directory containing all mp4 files
-            ├── 00000.mp4
-            ├── 00001.mp4
-            └── ...
+
+        models/
+        ├── {model_project_id}/
+            ├── training/
+                ├── prompts.txt       # All captions, one per line
+                ├── videos.txt       # All video paths, one per line
+                └── videos/          # Directory containing all mp4 files
+                    ├── 00000.mp4
+                    ├── 00001.mp4
+                    └── ...
+
+    Args:
+        training_path: Optional custom training path
+        training_videos_path: Optional custom videos path
+        
     Returns:
         Tuple of (videos_file_path, prompts_file_path)
     """
 
     # Verifies the videos subdirectory
-    TRAINING_VIDEOS_PATH.mkdir(exist_ok=True)
+    training_videos_path.mkdir(exist_ok=True)
     
     # Clear existing training lists
-    for f in TRAINING_PATH.glob("*"):
+    for f in training_path.glob("*"):
         if f.is_file():
-            if f.name in ["videos.txt", "prompts.txt", "prompt.txt"]:
+            if f.name in ["videos.txt", "prompts.txt", "prompt.txt"]: # prompt.txt (singular) is just as a fallback, but maybe we don't need that
                 f.unlink()
     
-    videos_file = TRAINING_PATH / "videos.txt"
-    prompts_file = TRAINING_PATH / "prompts.txt"  # Finetrainers can use either prompts.txt or prompt.txt
+    videos_file = training_path / "videos.txt"
+    prompts_file = training_path / "prompts.txt"  # Finetrainers can use either prompts.txt or prompt.txt
     
     media_files = []
     captions = []
     
     # Process all video files from the videos subdirectory
-    for idx, file in enumerate(sorted(TRAINING_VIDEOS_PATH.glob("*.mp4"))):
+    for idx, file in enumerate(sorted(training_videos_path.glob("*.mp4"))):
         caption_file = file.with_suffix('.txt')
         if caption_file.exists():
             # Normalize caption to single line
@@ -80,8 +89,16 @@ def prepare_finetrainers_dataset() -> Tuple[Path, Path]:
         
     return videos_file, prompts_file
 
-def copy_files_to_training_dir(prompt_prefix: str) -> int:
-    """Just copy files over, with no destruction"""
+def copy_files_to_training_dir(prompt_prefix: str, training_videos_path=None) -> int:
+    """Just copy files over, with no destruction
+    
+    Args:
+        prompt_prefix: Prefix to add to captions
+        training_videos_path: Optional custom training_videos_path
+        
+    Returns:
+        Number of copied pairs
+    """
 
     gr.Info("Copying assets to the training dataset..")
 
@@ -110,7 +127,7 @@ def copy_files_to_training_dir(prompt_prefix: str) -> int:
                 logger.debug(f"Found parent caption file: {parent_caption_path}")
                 parent_caption = parent_caption_path.read_text().strip()
 
-        target_file_path = TRAINING_VIDEOS_PATH / file_path.name
+        target_file_path = training_videos_path / file_path.name
 
         target_caption_path = target_file_path.with_suffix('.txt')
 
@@ -146,7 +163,7 @@ def copy_files_to_training_dir(prompt_prefix: str) -> int:
 
 # Add this function to finetrainers_utils.py or a suitable place
 
-def create_validation_config() -> Optional[Path]:
+def create_validation_config(training_videos_path: str, output_path: str) -> Optional[Path]:
     """Create a validation configuration JSON file for Finetrainers
     
     Creates a validation dataset file with a subset of the training data
@@ -155,12 +172,12 @@ def create_validation_config() -> Optional[Path]:
         Path to the validation JSON file, or None if no training files exist
     """
     # Ensure training dataset exists
-    if not TRAINING_VIDEOS_PATH.exists() or not any(TRAINING_VIDEOS_PATH.glob("*.mp4")):
+    if not training_videos_path.exists() or not any(training_videos_path.glob("*.mp4")):
         logger.warning("No training videos found for validation")
         return None
     
     # Get a subset of the training videos (up to 4) for validation
-    training_videos = list(TRAINING_VIDEOS_PATH.glob("*.mp4"))
+    training_videos = list(training_videos_path.glob("*.mp4"))
     validation_videos = training_videos[:min(4, len(training_videos))]
     
     if not validation_videos:
@@ -201,7 +218,7 @@ def create_validation_config() -> Optional[Path]:
         return None
     
     # Write validation config to file
-    validation_file = OUTPUT_PATH / "validation_config.json"
+    validation_file = output_path / "validation_config.json"
     with open(validation_file, 'w') as f:
         json.dump(validation_data, f, indent=2)
     
