@@ -12,7 +12,7 @@ from pathlib import Path
 
 from vms.utils import BaseTab
 from vms.config import (
-    OUTPUT_PATH, ASK_USER_TO_DUPLICATE_SPACE,
+    ASK_USER_TO_DUPLICATE_SPACE,
     SMALL_TRAINING_BUCKETS,
     TRAINING_PRESETS, TRAINING_TYPES, MODEL_TYPES, MODEL_VERSIONS,
     DEFAULT_NB_TRAINING_STEPS, DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
@@ -194,7 +194,7 @@ class TrainTab(BaseTab):
                                 
                                 with gr.Row():
                                     # Check for existing checkpoints to determine button text
-                                    checkpoints = list(OUTPUT_PATH.glob("finetrainers_step_*"))
+                                    checkpoints = list(self.app.output_path.glob("finetrainers_step_*"))
                                     has_checkpoints = len(checkpoints) > 0
 
                                     self.components["start_btn"] = gr.Button(
@@ -306,12 +306,12 @@ class TrainTab(BaseTab):
         # Clear output directory to start fresh
 
         # Delete all checkpoint directories
-        for checkpoint in OUTPUT_PATH.glob("finetrainers_step_*"):
+        for checkpoint in self.app.output_path.glob("finetrainers_step_*"):
             if checkpoint.is_dir():
                 shutil.rmtree(checkpoint)
                 
         # Also delete session.json which contains previous training info
-        session_file = OUTPUT_PATH / "session.json"
+        session_file = self.app.output_path / "session.json"
         if session_file.exists():
             session_file.unlink()
         
@@ -331,7 +331,7 @@ class TrainTab(BaseTab):
     ):
         """Handle resuming training from the latest checkpoint"""
         # Find the latest checkpoint
-        checkpoints = list(OUTPUT_PATH.glob("finetrainers_step_*"))
+        checkpoints = list(self.app.output_path.glob("finetrainers_step_*"))
 
         if not checkpoints:
             return "No checkpoints found to resume from", "Please start a new training session instead"
@@ -599,6 +599,7 @@ class TrainTab(BaseTab):
         resume_from_checkpoint=None,
     ):
         """Handle training start with proper log parser reset and checkpoint detection"""
+        
         # Safely reset log parser if it exists
         if hasattr(self.app, 'log_parser') and self.app.log_parser is not None:
             self.app.log_parser.reset()
@@ -606,9 +607,9 @@ class TrainTab(BaseTab):
             logger.warning("Log parser not initialized, creating a new one")
             from ..utils import TrainingLogParser
             self.app.log_parser = TrainingLogParser()
-            
+        
         # Check for latest checkpoint
-        checkpoints = list(OUTPUT_PATH.glob("finetrainers_step_*"))
+        checkpoints = list(self.app.output_path.glob("finetrainers_step_*"))
         has_checkpoints = len(checkpoints) > 0
         resume_from = resume_from_checkpoint  # Use the passed parameter
         
@@ -652,7 +653,7 @@ class TrainTab(BaseTab):
                 repo_id,
                 preset_name=preset,
                 training_type=training_internal_type,
-                model_version=model_version,  # Pass the model version from dropdown
+                model_version=model_version,
                 resume_from_checkpoint=resume_from,
                 num_gpus=num_gpus,
                 precomputation_items=precomputation_items,
@@ -974,7 +975,7 @@ class TrainTab(BaseTab):
         status, _, _ = self.get_latest_status_message_and_logs()
         
         # Add checkpoints detection
-        checkpoints = list(OUTPUT_PATH.glob("finetrainers_step_*"))
+        checkpoints = list(self.app.output_path.glob("finetrainers_step_*"))
         has_checkpoints = len(checkpoints) > 0
         
         is_training = status in ["training", "initializing"]

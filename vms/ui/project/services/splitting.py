@@ -12,14 +12,21 @@ import gradio as gr
 from scenedetect import detect, ContentDetector, SceneManager, open_video
 from scenedetect.video_splitter import split_video_ffmpeg
 
-from vms.config import TRAINING_PATH, STORAGE_PATH, TRAINING_VIDEOS_PATH, VIDEOS_TO_SPLIT_PATH, STAGING_PATH, DEFAULT_PROMPT_PREFIX
+from vms.config import STORAGE_PATH, VIDEOS_TO_SPLIT_PATH, STAGING_PATH, DEFAULT_PROMPT_PREFIX
 from vms.utils import remove_black_bars, extract_scene_info, is_video_file, is_image_file, add_prefix_to_caption
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 class SplittingService:
-    def __init__(self):
+    def __init__(self, app=None):
+        """Initialize the splitting service
+        
+        Args:
+            app: Reference to main application
+        """
+        self.app = app
+    
         # Track processing status
         self.processing = False
         self._current_file: Optional[str] = None
@@ -103,7 +110,7 @@ class SplittingService:
 
                     if parent_caption_path.exists():
                         # if it's a single scene with a caption, we can directly promote it to the training/ dir
-                        #output_video_path = TRAINING_VIDEOS_PATH / f"{base_name}___{1:03d}.mp4"
+                        #output_video_path = self.app.training_videos_path / f"{base_name}___{1:03d}.mp4"
                         # WELL ACTUALLY, NOT. The training videos dir removes a lot of thing,
                         # so it has to stay a "last resort" thing
                         output_video_path = STAGING_PATH / f"{base_name}___{1:03d}.mp4"

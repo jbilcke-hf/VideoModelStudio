@@ -10,8 +10,7 @@ from typing import Dict, Any, List, Optional
 
 from vms.utils import BaseTab, validate_model_repo
 from vms.config import (
-    HF_API_TOKEN, VIDEOS_TO_SPLIT_PATH, STAGING_PATH, TRAINING_VIDEOS_PATH, 
-    TRAINING_PATH, MODEL_PATH, OUTPUT_PATH, LOG_FILE_PATH
+    HF_API_TOKEN, VIDEOS_TO_SPLIT_PATH, STAGING_PATH
 )
 
 logger = logging.getLogger(__name__)
@@ -195,7 +194,7 @@ class ManageTab(BaseTab):
             return "Error: No model found to upload"
         
         # Upload model to hub
-        success = self.app.training.upload_to_hub(OUTPUT_PATH, repo_id)
+        success = self.app.training.upload_to_hub(self.app.output_path, repo_id)
         
         if success:
             return f"Successfully uploaded model to {repo_id}"
@@ -218,7 +217,7 @@ class ManageTab(BaseTab):
                 status_messages["splitting"] = "Scene detection stopped"
             
             # Clear dataset directories
-            for path in [VIDEOS_TO_SPLIT_PATH, STAGING_PATH, TRAINING_VIDEOS_PATH, TRAINING_PATH]:
+            for path in [VIDEOS_TO_SPLIT_PATH, STAGING_PATH, self.app.training_videos_path, self.app.training_path]:
                 if path.exists():
                     try:
                         shutil.rmtree(path)
@@ -256,14 +255,14 @@ class ManageTab(BaseTab):
                 status_messages["training"] = training_result["status"]
             
             # Clear model output directory
-            if OUTPUT_PATH.exists():
+            if self.app.output_path.exists():
                 try:
-                    shutil.rmtree(OUTPUT_PATH)
-                    OUTPUT_PATH.mkdir(parents=True, exist_ok=True)
+                    shutil.rmtree(self.app.output_path)
+                    self.app.output_path.mkdir(parents=True, exist_ok=True)
                 except Exception as e:
-                    status_messages[f"clear_{OUTPUT_PATH.name}"] = f"Error clearing {OUTPUT_PATH.name}: {str(e)}"
+                    status_messages[f"clear_{self.app.output_path.name}"] = f"Error clearing {self.app.output_path.name}: {str(e)}"
                 else:
-                    status_messages[f"clear_{OUTPUT_PATH.name}"] = f"Cleared {OUTPUT_PATH.name}"
+                    status_messages[f"clear_{self.app.output_path.name}"] = f"Cleared {self.app.output_path.name}"
             
             # Properly close logging before clearing log file
             if self.app.training.file_handler:
@@ -271,8 +270,8 @@ class ManageTab(BaseTab):
                 logger.removeHandler(self.app.training.file_handler)
                 self.app.training.file_handler = None
                 
-            if LOG_FILE_PATH.exists():
-                LOG_FILE_PATH.unlink()
+            if self.app.log_file_path.exists():
+                self.app.log_file_path.unlink()
             
             # Reset training UI state
             self.app.training.setup_logging()
@@ -338,12 +337,11 @@ class ManageTab(BaseTab):
                 logger.removeHandler(self.app.training.file_handler)
                 self.app.training.file_handler = None
                 
-            if LOG_FILE_PATH.exists():
-                LOG_FILE_PATH.unlink()
+            if self.app.log_file_path.exists():
+                self.app.log_file_path.unlink()
             
             # Clear all data directories
-            for path in [VIDEOS_TO_SPLIT_PATH, STAGING_PATH, TRAINING_VIDEOS_PATH, TRAINING_PATH,
-                        MODEL_PATH, OUTPUT_PATH]:
+            for path in [VIDEOS_TO_SPLIT_PATH, STAGING_PATH, self.app.training_videos_path, self.app.training_path, self.app.output_path]:
                 if path.exists():
                     try:
                         shutil.rmtree(path)

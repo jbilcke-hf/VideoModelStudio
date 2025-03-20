@@ -13,7 +13,7 @@ from typing import Dict, Any, List, Optional, Tuple, Callable
 import time
 
 from vms.config import (
-    OUTPUT_PATH, STORAGE_PATH, MODEL_TYPES, TRAINING_PATH,
+    STORAGE_PATH, MODEL_TYPES,
     DEFAULT_PROMPT_PREFIX, MODEL_VERSIONS
 )
 from vms.utils import format_time
@@ -24,19 +24,23 @@ logger.setLevel(logging.INFO)
 class PreviewingService:
     """Handles the video generation logic and model integration"""
     
-    def __init__(self):
-        """Initialize the preview service"""
-        pass
+    def __init__(self, app=None):
+        """Initialize the preview service
+        
+        Args:
+            app: Reference to main application
+        """
+        self.app = app
     
     def find_latest_lora_weights(self) -> Optional[str]:
         """Find the latest LoRA weights file"""
         try:
-            lora_path = OUTPUT_PATH / "pytorch_lora_weights.safetensors"
+            lora_path = self.app.output_path / "pytorch_lora_weights.safetensors"
             if lora_path.exists():
                 return str(lora_path)
             
             # If not found in the expected location, try to find in checkpoints
-            checkpoints = list(OUTPUT_PATH.glob("finetrainers_step_*"))
+            checkpoints = list(self.app.output_path.glob("finetrainers_step_*"))
             has_checkpoints = len(checkpoints) > 0
 
             if not checkpoints:

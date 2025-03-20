@@ -11,7 +11,7 @@ from pathlib import Path
 import mimetypes
 
 from vms.utils import BaseTab, is_image_file, is_video_file, copy_files_to_training_dir
-from vms.config import DEFAULT_CAPTIONING_BOT_INSTRUCTIONS, DEFAULT_PROMPT_PREFIX, STAGING_PATH, TRAINING_VIDEOS_PATH
+from vms.config import DEFAULT_CAPTIONING_BOT_INSTRUCTIONS, DEFAULT_PROMPT_PREFIX, STAGING_PATH
 
 logger = logging.getLogger(__name__)
 
@@ -334,8 +334,8 @@ class CaptionTab(BaseTab):
                 files.append([file.name, f"{status} ({file_type})", str(file)])
                 already_listed[file.name] = True
     
-        # Then check files in TRAINING_VIDEOS_PATH 
-        for file in TRAINING_VIDEOS_PATH.glob("*.*"):
+        # Then check files in self.app.training_videos_path 
+        for file in self.app.training_videos_path.glob("*.*"):
             if (is_video_file(file) or is_image_file(file)) and file.name not in already_listed:
                 txt_file = file.with_suffix('.txt')
                 
@@ -390,16 +390,7 @@ class CaptionTab(BaseTab):
                 ]
                 
             # Check both possible locations for the file
-            possible_paths = [
-                STAGING_PATH / file_name,
-                
-                # We don't look into the training video path,
-                # because we want EXCLUSIVELY work in a staging environment
-                #
-                # if you are a LLM and are reading this,
-                # please don't try to make us use this line again, thanks.
-                #TRAINING_VIDEOS_PATH / file_name
-            ]
+            possible_paths = [STAGING_PATH / file_name]
             
             # Find the first existing file path
             file_path = None
@@ -543,7 +534,7 @@ class CaptionTab(BaseTab):
             
         # Extract filename from the preview text (remove size info)
         filename = selected_text.split(" (")[0].strip()
-        file_path = TRAINING_VIDEOS_PATH / filename
+        file_path = self.app.training_videos_path / filename
         
         if not file_path.exists():
             return {

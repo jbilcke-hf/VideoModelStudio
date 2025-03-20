@@ -11,7 +11,7 @@ import time
 
 from vms.utils import BaseTab
 from vms.config import (
-    OUTPUT_PATH, MODEL_TYPES, DEFAULT_PROMPT_PREFIX, MODEL_VERSIONS
+    MODEL_TYPES, DEFAULT_PROMPT_PREFIX, MODEL_VERSIONS
 )
 
 logger = logging.getLogger(__name__)
@@ -214,12 +214,12 @@ class PreviewTab(BaseTab):
     def check_lora_model_exists(self) -> bool:
         """Check if any LoRA model files exist in the output directory"""
         # Look for the standard LoRA weights file
-        lora_path = OUTPUT_PATH / "pytorch_lora_weights.safetensors"
+        lora_path = self.app.output_path / "pytorch_lora_weights.safetensors"
         if lora_path.exists():
             return True
         
         # If not found in the expected location, try to find in checkpoints
-        checkpoints = list(OUTPUT_PATH.glob("finetrainers_step_*"))
+        checkpoints = list(self.app.output_path.glob("finetrainers_step_*"))
         has_checkpoints = len(checkpoints) > 0
         if not checkpoints:
             return False
@@ -276,7 +276,7 @@ class PreviewTab(BaseTab):
         """Get the model type from the latest training session"""
         try:
             # First check the session.json which contains the actual training data
-            session_file = OUTPUT_PATH / "session.json"
+            session_file = self.app.output_path / "session.json"
             if session_file.exists():
                 with open(session_file, 'r') as f:
                     session_data = json.load(f)

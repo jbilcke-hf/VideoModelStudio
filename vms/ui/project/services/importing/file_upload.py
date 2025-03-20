@@ -14,7 +14,7 @@ from typing import List, Dict, Optional, Tuple, Any, Union
 import logging
 import traceback
 
-from vms.config import NORMALIZE_IMAGES_TO, TRAINING_VIDEOS_PATH, VIDEOS_TO_SPLIT_PATH, STAGING_PATH, DEFAULT_PROMPT_PREFIX
+from vms.config import NORMALIZE_IMAGES_TO, VIDEOS_TO_SPLIT_PATH, STAGING_PATH, DEFAULT_PROMPT_PREFIX
 from vms.utils import normalize_image, is_image_file, is_video_file, add_prefix_to_caption, webdataset_handler
 
 logger = logging.getLogger(__name__)

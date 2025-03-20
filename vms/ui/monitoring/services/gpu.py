@@ -317,6 +317,9 @@ class GPUMonitoringService:
             Matplotlib figure with utilization plot
         """
         plt.close('all')  # Close all existing figures
+
+        plt.style.use('dark_background')
+
         fig, ax = plt.subplots(figsize=(10, 5))
         
         if not self.has_nvidia_gpus or gpu_index not in self.history:
@@ -371,8 +374,11 @@ class GPUMonitoringService:
             Matplotlib figure with memory usage plot
         """
         plt.close('all')  # Close all existing figures
-        fig, ax = plt.subplots(figsize=(10, 5))
+
+        plt.style.use('dark_background')
         
+        fig, ax = plt.subplots(figsize=(10, 5))
+
         if not self.has_nvidia_gpus or gpu_index not in self.history:
             ax.set_title(f"No data available for GPU {gpu_index}")
             return fig
@@ -427,6 +433,9 @@ class GPUMonitoringService:
             Matplotlib figure with power usage plot
         """
         plt.close('all')  # Close all existing figures
+
+        plt.style.use('dark_background')
+        
         fig, ax = plt.subplots(figsize=(10, 5))
         
         if not self.has_nvidia_gpus or gpu_index not in self.history:

@@ -9,9 +9,8 @@ import logging
 from pathlib import Path
 
 from vms.config import (
-    STORAGE_PATH, VIDEOS_TO_SPLIT_PATH, STAGING_PATH, 
-    TRAINING_PATH, TRAINING_VIDEOS_PATH, MODEL_PATH, 
-    OUTPUT_PATH, ASK_USER_TO_DUPLICATE_SPACE, 
+    STORAGE_PATH, VIDEOS_TO_SPLIT_PATH, STAGING_PATH, MODELS_PATH, 
+    ASK_USER_TO_DUPLICATE_SPACE, 
     HF_API_TOKEN, VMS_ADMIN_PASSWORD
 )
 
@@ -57,11 +56,8 @@ def main():
     allowed_paths = [
         str(STORAGE_PATH),  # Base storage
         str(VIDEOS_TO_SPLIT_PATH),
-        str(STAGING_PATH), 
-        str(TRAINING_PATH),
-        str(TRAINING_VIDEOS_PATH),
-        str(MODEL_PATH),
-        str(OUTPUT_PATH)
+        str(STAGING_PATH),
+        str(MODELS_PATH),
     ]
 
     # Launch the Gradio app

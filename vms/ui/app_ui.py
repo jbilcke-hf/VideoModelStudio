@@ -1,4 +1,6 @@
 import platform
+import uuid
+import json
 import gradio as gr
 from pathlib import Path
 import logging
@@ -6,8 +8,8 @@ import asyncio
 from typing import Any, Optional, Dict, List, Union, Tuple
 
 from vms.config import (
-    STORAGE_PATH, VIDEOS_TO_SPLIT_PATH, STAGING_PATH, OUTPUT_PATH,
-    TRAINING_PATH, LOG_FILE_PATH, TRAINING_PRESETS, TRAINING_VIDEOS_PATH, MODEL_PATH, OUTPUT_PATH,
+    STORAGE_PATH, VIDEOS_TO_SPLIT_PATH, STAGING_PATH,
+    TRAINING_PRESETS,
     MODEL_TYPES, SMALL_TRAINING_BUCKETS, TRAINING_TYPES, MODEL_VERSIONS,
     DEFAULT_NB_TRAINING_STEPS, DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
     DEFAULT_BATCH_SIZE, DEFAULT_CAPTION_DROPOUT_P,
@@ -20,7 +22,14 @@ from vms.config import (
     DEFAULT_PRECOMPUTATION_ITEMS,
     DEFAULT_NB_TRAINING_STEPS,
     DEFAULT_NB_LR_WARMUP_STEPS,
-    DEFAULT_AUTO_RESUME
+    DEFAULT_AUTO_RESUME,
+
+    get_project_paths,
+    generate_model_project_id,
+    load_global_config,
+    save_global_config,
+    update_latest_project_id,
+    migrate_legacy_project
 )
 from vms.utils import (
     get_recommended_precomputation_items,
@@ -34,6 +43,10 @@ from vms.ui.project.services import (
 )
 from vms.ui.project.tabs import (
     ImportTab, CaptionTab, TrainTab, PreviewTab, ManageTab
+)
+
+from vms.ui.models.models_tab import (
+    ModelsTab
 )
 
 from vms.ui.monitoring.services import (
@@ -53,6 +66,48 @@ httpx_logger.setLevel(logging.WARN)
 class AppUI:       
     def __init__(self):
         """Initialize services and tabs"""
+
+        # Try to get or create a project ID
+        self.current_model_project_id = None
+
+        # Look for the latest project ID in global config
+        global_config = load_global_config()
+        latest_project_id = global_config.get("latest_model_project_id")
+
+        if latest_project_id:
+            # Check if this project still exists
+            project_dir = STORAGE_PATH / "models" / latest_project_id
+            if project_dir.exists():
+                logger.info(f"Loading latest project: {latest_project_id}")
+                self.current_model_project_id = latest_project_id
+            else:
+                logger.warning(f"Latest project {latest_project_id} not found")
+
+        # If no project ID found, check for legacy migration
+        if not self.current_model_project_id:
+            migrated_id = migrate_legacy_project()
+            if migrated_id:
+                self.current_model_project_id = migrated_id
+                logger.info(f"Migrated legacy project to new ID: {self.current_model_project_id}")
+            else:
+                # Generate new project ID for a fresh start
+                self.current_model_project_id = generate_model_project_id()
+                logger.info(f"Generated new project ID: {self.current_model_project_id}")
+
+        # Save current project ID to global config
+        update_latest_project_id(self.current_model_project_id)
+
+        # Get dynamic paths for the current project
+        self.training_path, self.training_videos_path, self.output_path, self.log_file_path = get_project_paths(self.current_model_project_id)
+
+        self.output_session_file = self.output_path / "session.json"
+        self.output_status_file = self.output_path / "status.json"
+        self.output_pid_file = self.output_path / "training.pid"
+        self.output_log_file = self.output_path / "training.log"
+        self.output_ui_state_file = self.output_path / "ui_state.json"
+
+        self.current_model_project_status = 'draft' # Default status for new projects
+
         # Project view
         self.training = TrainingService(self)
         self.splitting = SplittingService()
@@ -60,10 +115,20 @@ class AppUI:
         self.captioning = CaptioningService()
         self.previewing = PreviewingService()
 
+        # Initialize models tab
+        self.models_tab = ModelsTab(self)
+
         # Monitoring view
         self.monitoring = MonitoringService()
         self.monitoring.start_monitoring()
     
+        # Update UI state with project ID if needed
+        project_state = {
+            'model_project_id': self.current_model_project_id,
+            'project_status': self.current_model_project_status
+        }
+        self.training.update_project_state(project_state)
+
         # Recovery status from any interrupted training
         recovery_result = self.training.recover_interrupted_training()
 
@@ -92,7 +157,62 @@ class AppUI:
 
         # Log recovery status
         logger.info(f"Initialization complete. Recovery status: {self.recovery_status}")
-    
+
+    def switch_project(self, project_id: str = None) -> Dict[str, Any]:
+        """Switch to a different project or create a new one
+        
+        Args:
+            project_id: Optional project ID to switch to, generates new if None
+            
+        Returns:
+            Dict of UI updates
+        """
+        if not project_id:
+            # Create a new project
+            project_id = generate_model_project_id()
+            project_status = 'draft'
+        else:
+            # Validate project_id exists
+            project_dir = STORAGE_PATH / "models" / project_id
+            if not project_dir.exists():
+                logger.warning(f"Project {project_id} not found, creating new directories")
+                project_status = 'draft'
+            else:
+                # Load project state
+                ui_state_file = project_dir / "output" / "ui_state.json"
+                if ui_state_file.exists():
+                    try:
+                        with open(ui_state_file, 'r') as f:
+                            ui_state = json.load(f)
+                            project_status = ui_state.get('project_status', 'draft')
+                    except:
+                        project_status = 'draft'
+                else:
+                    project_status = 'draft'
+        
+        # Update current project
+        self.current_model_project_id = project_id
+        self.current_model_project_status = project_status
+        
+        # Update global config with latest project ID
+        update_latest_project_id(project_id)
+        
+        self.training_path, self.training_videos_path, self.output_path, self.log_file_path = get_project_paths(project_id)
+        
+        # Update UI state
+        project_state = {
+            'model_project_id': project_id,
+            'project_status': project_status
+        }
+        self.training.update_project_state(project_state)
+        
+        # Refresh UI
+        logger.info(f"Switched to project {project_id} with status {project_status}")
+        
+        # Return a dictionary of UI updates
+        return {}
+
+
     def add_periodic_callback(self, callback_fn, interval=1.0):
         """Add a periodic callback function to the UI
         
@@ -133,12 +253,25 @@ class AppUI:
     
     def create_ui(self):
         self.components = {}
+
         """Create the main Gradio UI with tabbed navigation"""
         with gr.Blocks(
             title="🎞️ Video Model Studio",
 
+            theme=gr.themes.Base(
+                primary_hue="lime", # I would prefer if we used this: -> #3E8300
+                secondary_hue="sky",
+                spacing_size="md",
+                radius_size=gr.themes.Size(lg="14px", md="10px", sm="8px", xl="18px", xs="6px", xxl="28px", xxs="4px"),
+            ).set(
+                prose_text_size='*text_xl',
+                prose_text_weight='300',
+                prose_header_text_weight='400'
+            ),
+
             # Let's hack Gradio!
-            css="#main-tabs > .tab-wrapper{ display: none; }") as app:
+            css="#main-tabs > .tab-wrapper{ display: none; }",
+            ) as app:
             self.app = app
             
             
@@ -146,9 +279,10 @@ class AppUI:
             with gr.Row():
                 # Sidebar for navigation
                 with gr.Sidebar(position="left", open=True):
-                    gr.Markdown("# 🎞️ Video Model Studio")
+                    gr.Markdown("# 🎞️ VideoModelStudio")
                     self.components["current_project_btn"] = gr.Button("📂 New Project", variant="primary")
-                    self.components["system_monitoring_btn"] = gr.Button("🌡️ System Monitoring")
+                    self.components["models_btn"] = gr.Button("🎞️ My Models")
+                    self.components["system_monitoring_btn"] = gr.Button("🌡️ Monitoring")
 
                 # Main content area with tabs
                 with gr.Column():
@@ -173,9 +307,13 @@ class AppUI:
                                 # Create tab UI components for project
                                 for tab_id, tab_obj in self.project_tabs.items():
                                     tab_obj.create(project_tabs)
+
+                        with gr.Tab("🎞️ Models", id=1) as models_view:
+                            # Create models tabs
+                            self.models_tab.create(models_view)
                         
                         # Monitoring View Tab
-                        with gr.Tab("🌡️ System Monitoring", id=1) as monitoring_view:
+                        with gr.Tab("🌡️ System Monitor", id=2) as monitoring_view:
                             # Create monitoring tabs
                             with gr.Tabs() as monitoring_tabs:
                                 # Store reference to monitoring tabs component
@@ -205,9 +343,14 @@ class AppUI:
                 fn=lambda: self.switch_to_tab(0),
                 outputs=[self.main_tabs],
             )
+
+            self.components["models_btn"].click(
+                fn=lambda: self.switch_to_tab(1),
+                outputs=[self.main_tabs],
+            )
             
             self.components["system_monitoring_btn"].click(
-                fn=lambda: self.switch_to_tab(1),
+                fn=lambda: self.switch_to_tab(2),
                 outputs=[self.main_tabs],
             )
             
@@ -449,7 +592,7 @@ class AppUI:
         num_gpus_val = int(ui_state.get("num_gpus", DEFAULT_NUM_GPUS))
         
         # Calculate recommended precomputation items based on video count
-        video_count = len(list(TRAINING_VIDEOS_PATH.glob('*.mp4')))
+        video_count = len(list(self.training_videos_path.glob('*.mp4')))
         recommended_precomputation = get_recommended_precomputation_items(video_count, num_gpus_val)
         precomputation_items_val = int(ui_state.get("precomputation_items", recommended_precomputation))
         
@@ -546,9 +689,9 @@ class AppUI:
         """Get the initial states for training buttons based on recovery status"""
         recovery_result = self.state.get("recovery_result") or self.training.recover_interrupted_training()
         ui_updates = recovery_result.get("ui_updates", {})
-        
+
         # Check for checkpoints to determine start button text
-        checkpoints = list(OUTPUT_PATH.glob("finetrainers_step_*"))
+        checkpoints = list(self.output_path.glob("finetrainers_step_*"))
         has_checkpoints = len(checkpoints) > 0
         
         # Default button states if recovery didn't provide any
@@ -596,7 +739,7 @@ class AppUI:
         )
         
         # Count files for training
-        train_videos, train_images, train_size = count_media_files(TRAINING_VIDEOS_PATH)
+        train_videos, train_images, train_size = count_media_files(self.training_videos_path)
         train_title = format_media_title(
             "train", train_videos, train_images, train_size
         )
