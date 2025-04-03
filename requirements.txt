@@ -1,25 +1,4 @@
-numpy>=1.26.4
 
-# to quote a-r-r-o-w/finetrainers:
-# It is recommended to use Pytorch 2.5.1 or above for training. Previous versions can lead to completely black videos, OOM errors, or other issues and are not tested.
-
-# on some system (Python 3.13+) those do not work:
-torch==2.5.1
-torchvision==0.20.1
-torchao>=0.7.0
-
-# datasets 3.4.0 replaces decord by torchvision
-# let's free it for now
-#datasets==3.3.2
-
-huggingface_hub
-hf_transfer>=0.1.8
-diffusers @ git+https://github.com/huggingface/diffusers.git@main
-transformers>=4.45.2
-
-accelerate
-bitsandbytes
-peft>=0.12.0
 
 # For GPU monitoring of NVIDIA chipsets
 pynvml
@@ -33,12 +12,9 @@ finetrainers==0.1.0
 # temporary fix for pip install bug:
 #finetrainers @ git+https://github.com/jbilcke-hf/finetrainers-patches.git@fix_missing_sft_trainer_files
 
-wandb
-pandas
-sentencepiece>=0.2.0
+
 imageio
 imageio-ffmpeg
-torchdata==0.11.0
 
 flash-attn @ https://github.com/Dao-AILab/flash-attention/releases/download/v2.7.4.post1/flash_attn-2.7.4.post1+cu12torch2.4cxx11abiFALSE-cp310-cp310-linux_x86_64.whl
 
