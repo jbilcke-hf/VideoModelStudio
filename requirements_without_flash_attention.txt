@@ -12,6 +12,8 @@ finetrainers==0.1.0
 # temporary fix for pip install bug:
 #finetrainers @ git+https://github.com/jbilcke-hf/finetrainers-patches.git@fix_missing_sft_trainer_files
 
+# it is recommended to always use the latest version
+diffusers @ git+https://github.com/huggingface/diffusers.git@main
 
 imageio
 imageio-ffmpeg
