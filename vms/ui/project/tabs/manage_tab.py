@@ -11,7 +11,7 @@ from typing import Dict, Any, List, Optional
 from vms.utils import BaseTab, validate_model_repo
 from vms.config import (
     HF_API_TOKEN, VIDEOS_TO_SPLIT_PATH, STAGING_PATH, TRAINING_VIDEOS_PATH, 
-    TRAINING_PATH, MODEL_PATH, OUTPUT_PATH, LOG_FILE_PATH
+    TRAINING_PATH, MODEL_PATH, OUTPUT_PATH, LOG_FILE_PATH, USE_LARGE_DATASET
 )
 
 logger = logging.getLogger(__name__)
@@ -36,8 +36,13 @@ class ManageTab(BaseTab):
                         self.components["download_dataset_btn"] = gr.DownloadButton(
                             "📦 Download training dataset (.zip)",
                             variant="secondary",
-                            size="lg"
+                            size="lg",
+                            visible=not USE_LARGE_DATASET
                         )
+                        # If we have a large dataset, display a message explaining why download is disabled
+                        if USE_LARGE_DATASET:
+                            gr.Markdown("📦 Training dataset download disabled for large datasets")
+                            
                         self.components["download_model_btn"] = gr.DownloadButton(
                             "🧠 Download weights (.safetensors)",
                             variant="secondary",
