@@ -12,7 +12,7 @@ python3.10 -m venv .venv
 
 source .venv/bin/activate
 
-python3.10 -m pip install -r requirements_without_flash_attention.txt
+python3.10 -m pip install -r requirements_without_flash_attention.txt --ignore-conflicts 
 
 # if you require flash attention, please install it manually for your operating system
 
