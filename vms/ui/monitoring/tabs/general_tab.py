@@ -8,6 +8,7 @@ import time
 import logging
 from pathlib import Path
 import os
+import pandas as pd
 import psutil
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime, timedelta
@@ -42,14 +43,30 @@ class GeneralTab(BaseTab):
             # CPU and Memory charts in tabs
             with gr.Tabs() as metrics_tabs:
                 with gr.Tab(label="CPU Usage") as cpu_tab:
-                    self.components["cpu_plot"] = gr.Plot()
-                
-                with gr.Tab(label="Memory Usage") as memory_tab:
-                    self.components["memory_plot"] = gr.Plot()
+                    empty_cpu_df = pd.DataFrame({'time': [], 'CPU Usage (%)': []})
+                    self.components["cpu_plot"] = gr.LinePlot(
+                        empty_cpu_df,
+                        show_label=False,
+                        height=400,
+                        x="time",
+                        y=["CPU Usage (%)"],
+                        y_title="Value",
+                        title="CPU Usage and Temperature"
+                    )
                     
-                #with gr.Tab(label="Per-Core CPU") as per_core_tab:
-                #    self.components["per_core_plot"] = gr.Plot()
-
+                with gr.Tab(label="Memory Usage") as memory_tab:
+                    empty_memory_df = pd.DataFrame({'time': [], 'Memory Usage (%)': [], 'Memory Used (GB)': [], 'Memory Available (GB)': []})
+        
+                    self.components["memory_plot"] = gr.LinePlot(
+                        empty_memory_df,
+                        show_label=False,
+                        height=400,
+                        x="time",
+                        y=["Memory Usage (%)", "Memory Used (GB)", "Memory Available (GB)"],
+                        y_title="Value",
+                        title="Memory Usage"
+                    )
+                    
             # System information summary in columns
             with gr.Row():
                 with gr.Column(scale=1):
@@ -171,10 +188,9 @@ class GeneralTab(BaseTab):
             # current_metrics = self.app.monitoring.get_current_metrics()
             metrics_html = "" # self.format_current_metrics(current_metrics)
             
-            # Generate plots
-            cpu_plot = self.app.monitoring.generate_cpu_plot()
-            memory_plot = self.app.monitoring.generate_memory_plot()
-            #per_core_plot = self.app.monitoring.generate_per_core_plot()
+            # Get DataFrame from monitoring service
+            cpu_plot_df = self.app.monitoring.get_cpu_data()
+            memory_plot_df = self.app.monitoring.get_memory_data()
             
             return (
                 system_info_html, 
@@ -182,8 +198,8 @@ class GeneralTab(BaseTab):
                 memory_info_html, 
                 storage_info_html, 
                 metrics_html, 
-                cpu_plot, 
-                memory_plot, 
+                cpu_plot_df, 
+                memory_plot_df, 
                 #per_core_plot
             )
             

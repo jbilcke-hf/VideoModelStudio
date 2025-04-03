@@ -59,13 +59,34 @@ class GPUTab(BaseTab):
             # Display GPU metrics in tabs
             with gr.Tabs(visible=self.app.monitoring.gpu.has_nvidia_gpus) as metrics_tabs:
                 with gr.Tab(label="Utilization") as util_tab:
-                    self.components["utilization_plot"] = gr.Plot()
-                
+                    self.components["utilization_plot"] = gr.LinePlot(
+                        show_label=False,
+                        height=400,
+                        x="time",
+                        y=["GPU Utilization (%)", "Temperature (°C)"],
+                        y_title="Value",
+                        title="GPU Utilization and Temperature"
+                    )
+
                 with gr.Tab(label="Memory") as memory_tab:
-                    self.components["memory_plot"] = gr.Plot()
-                
+                    self.components["memory_plot"] = gr.LinePlot(
+                        show_label=False,
+                        height=400,
+                        x="time",
+                        y=["Memory Usage (%)", "Memory Used (GB)"],
+                        y_title="Value",
+                        title="GPU Memory Usage"
+                    )
+
                 with gr.Tab(label="Power") as power_tab:
-                    self.components["power_plot"] = gr.Plot()
+                    self.components["power_plot"] = gr.LinePlot(
+                        show_label=False,
+                        height=400,
+                        x="time",
+                        y=["Power Usage (W)", "Power Limit (W)"],
+                        y_title="Watts",
+                        title="GPU Power Usage"
+                    )
             
             # Process information
             with gr.Row(visible=self.app.monitoring.gpu.has_nvidia_gpus):
@@ -190,6 +211,7 @@ class GPUTab(BaseTab):
         Returns:
             Updated values for all components
         """
+
         try:
             if not self.app.monitoring.gpu.has_nvidia_gpus:
                 return (
@@ -226,16 +248,17 @@ class GPUTab(BaseTab):
             gpu_info = self.app.monitoring.gpu.get_gpu_info()
             gpu_info_html = self.format_gpu_info(gpu_info[self.selected_gpu] if self.selected_gpu < len(gpu_info) else {})
             
-            # Generate plots
-            utilization_plot = self.app.monitoring.gpu.generate_utilization_plot(self.selected_gpu)
-            memory_plot = self.app.monitoring.gpu.generate_memory_plot(self.selected_gpu)
-            power_plot = self.app.monitoring.gpu.generate_power_plot(self.selected_gpu)
+            # Get DataFrame from monitoring service
+            utilization_plot_df = self.app.monitoring.gpu.get_utilization_data(self.selected_gpu)
+            memory_plot_df = self.app.monitoring.gpu.get_memory_data(self.selected_gpu)
+            power_plot_df = self.app.monitoring.gpu.get_power_data(self.selected_gpu)
+            
             
             return (
                 metrics_html,
-                utilization_plot,
-                memory_plot,
-                power_plot,
+                utilization_plot_df,
+                memory_plot_df,
+                power_plot_df,
                 process_info_html,
                 gpu_info_html
             )

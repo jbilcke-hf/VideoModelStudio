@@ -10,11 +10,8 @@ from typing import Dict, List, Any, Optional, Tuple
 from collections import deque
 from datetime import datetime
 
-# Force the use of the Agg backend which is thread-safe
-import matplotlib
-matplotlib.use('Agg')  # Must be before importing pyplot
-import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -307,180 +304,81 @@ class GPUMonitoringService:
         """
         return self.collect_gpu_metrics()
     
-    def generate_utilization_plot(self, gpu_index: int) -> plt.Figure:
-        """Generate a plot of GPU utilization over time
+    def get_utilization_data(self, gpu_index: int) -> pd.DataFrame:
+        """Get utilization data as a DataFrame
         
         Args:
-            gpu_index: Index of the GPU to plot
+            gpu_index: Index of the GPU to get data for
             
         Returns:
-            Matplotlib figure with utilization plot
+            DataFrame with time, utilization, and temperature
         """
-        plt.close('all')  # Close all existing figures
-
-        plt.style.use('dark_background')
-
-        fig, ax = plt.subplots(figsize=(10, 5))
-        
         if not self.has_nvidia_gpus or gpu_index not in self.history:
-            ax.set_title(f"No data available for GPU {gpu_index}")
-            return fig
+            return pd.DataFrame()
             
         history = self.history[gpu_index]
         if not history['timestamps']:
-            ax.set_title(f"No history data for GPU {gpu_index}")
-            return fig
+            return pd.DataFrame()
             
-        # Convert timestamps to strings
-        x = [t.strftime('%H:%M:%S') for t in history['timestamps']]
+        # Convert to dataframe
+        return pd.DataFrame({
+            'time': list(history['timestamps']),
+            'GPU Utilization (%)': list(history['utilization']),
+            'Temperature (°C)': list(history['temperature'])
+        })
         
-        # If we have many points, show fewer labels for readability
-        if len(x) > 10:
-            step = len(x) // 10
-            ax.set_xticks(range(0, len(x), step))
-            ax.set_xticklabels([x[i] for i in range(0, len(x), step)], rotation=45)
-        
-        # Plot utilization
-        ax.plot(x, list(history['utilization']), 'b-', label='GPU Utilization %')
-        ax.set_ylim(0, 100)
-        
-        # Add temperature on secondary y-axis
-        ax2 = ax.twinx()
-        ax2.plot(x, list(history['temperature']), 'r-', label='Temperature °C')
-        ax2.set_ylabel('Temperature (°C)', color='r')
-        ax2.tick_params(axis='y', colors='r')
-        
-        # Set labels and title
-        ax.set_title(f'GPU {gpu_index} Utilization Over Time')
-        ax.set_xlabel('Time')
-        ax.set_ylabel('Utilization %')
-        ax.grid(True, alpha=0.3)
-        
-        # Add legend
-        lines, labels = ax.get_legend_handles_labels()
-        lines2, labels2 = ax2.get_legend_handles_labels()
-        ax.legend(lines + lines2, labels + labels2, loc='upper left')
-        
-        plt.tight_layout()
-        return fig
-    
-    def generate_memory_plot(self, gpu_index: int) -> plt.Figure:
-        """Generate a plot of GPU memory usage over time
+    def get_memory_data(self, gpu_index: int) -> pd.DataFrame:
+        """Get memory data as a DataFrame
         
         Args:
-            gpu_index: Index of the GPU to plot
+            gpu_index: Index of the GPU to get data for
             
         Returns:
-            Matplotlib figure with memory usage plot
+            DataFrame with time, memory percent, and memory used
         """
-        plt.close('all')  # Close all existing figures
-
-        plt.style.use('dark_background')
-        
-        fig, ax = plt.subplots(figsize=(10, 5))
-
         if not self.has_nvidia_gpus or gpu_index not in self.history:
-            ax.set_title(f"No data available for GPU {gpu_index}")
-            return fig
+            return pd.DataFrame()
             
         history = self.history[gpu_index]
         if not history['timestamps']:
-            ax.set_title(f"No history data for GPU {gpu_index}")
-            return fig
+            return pd.DataFrame()
             
-        # Convert timestamps to strings
-        x = [t.strftime('%H:%M:%S') for t in history['timestamps']]
-        
-        # If we have many points, show fewer labels for readability
-        if len(x) > 10:
-            step = len(x) // 10
-            ax.set_xticks(range(0, len(x), step))
-            ax.set_xticklabels([x[i] for i in range(0, len(x), step)], rotation=45)
-        
-        # Plot memory percentage
-        ax.plot(x, list(history['memory_percent']), 'g-', label='Memory Usage %')
-        ax.set_ylim(0, 100)
-        
-        # Add absolute memory values on secondary y-axis (convert to GB)
-        ax2 = ax.twinx()
+        # Convert to dataframe
         memory_used_gb = [m / (1024**3) for m in history['memory_used']]
-        memory_total_gb = [m / (1024**3) for m in history['memory_total']]
-        
-        ax2.plot(x, memory_used_gb, 'm--', label='Used (GB)')
-        ax2.set_ylabel('Memory (GB)')
-        
-        # Set labels and title
-        ax.set_title(f'GPU {gpu_index} Memory Usage Over Time')
-        ax.set_xlabel('Time')
-        ax.set_ylabel('Usage %')
-        ax.grid(True, alpha=0.3)
-        
-        # Add legend
-        lines, labels = ax.get_legend_handles_labels()
-        lines2, labels2 = ax2.get_legend_handles_labels()
-        ax.legend(lines + lines2, labels + labels2, loc='upper left')
-        
-        plt.tight_layout()
-        return fig
+        return pd.DataFrame({
+            'time': list(history['timestamps']),
+            'Memory Usage (%)': list(history['memory_percent']),
+            'Memory Used (GB)': memory_used_gb
+        })
     
-    def generate_power_plot(self, gpu_index: int) -> plt.Figure:
-        """Generate a plot of GPU power usage over time
+    def get_power_data(self, gpu_index: int) -> pd.DataFrame:
+        """Get power data as a DataFrame
         
         Args:
-            gpu_index: Index of the GPU to plot
+            gpu_index: Index of the GPU to get data for
             
         Returns:
-            Matplotlib figure with power usage plot
+            DataFrame with time and power usage
         """
-        plt.close('all')  # Close all existing figures
-
-        plt.style.use('dark_background')
-        
-        fig, ax = plt.subplots(figsize=(10, 5))
-        
         if not self.has_nvidia_gpus or gpu_index not in self.history:
-            ax.set_title(f"No data available for GPU {gpu_index}")
-            return fig
+            return pd.DataFrame()
             
         history = self.history[gpu_index]
         if not history['timestamps'] or not any(history['power_usage']):
-            ax.set_title(f"No power data for GPU {gpu_index}")
-            return fig
+            return pd.DataFrame()
             
-        # Convert timestamps to strings
-        x = [t.strftime('%H:%M:%S') for t in history['timestamps']]
+        power_limit = max(history['power_limit']) if any(history['power_limit']) else None
         
-        # If we have many points, show fewer labels for readability
-        if len(x) > 10:
-            step = len(x) // 10
-            ax.set_xticks(range(0, len(x), step))
-            ax.set_xticklabels([x[i] for i in range(0, len(x), step)], rotation=45)
+        df = pd.DataFrame({
+            'time': list(history['timestamps']),
+            'Power Usage (W)': list(history['power_usage'])
+        })
         
-        # Plot power usage
-        power_usage = list(history['power_usage'])
-        if any(power_usage):  # Only plot if we have actual power data
-            ax.plot(x, power_usage, 'b-', label='Power Usage (W)')
+        if power_limit and power_limit > 0:
+            df['Power Limit (W)'] = power_limit
+        
+        return df
             
-            # Get power limit if available
-            power_limit = list(history['power_limit'])
-            if any(power_limit):  # Only plot if we have power limit data
-                # Show power limit as horizontal line
-                limit = max(power_limit)  # Should be constant, but take max just in case
-                if limit > 0:
-                    ax.axhline(y=limit, color='r', linestyle='--', label=f'Power Limit ({limit}W)')
-            
-            # Set labels and title
-            ax.set_title(f'GPU {gpu_index} Power Usage Over Time')
-            ax.set_xlabel('Time')
-            ax.set_ylabel('Power (Watts)')
-            ax.grid(True, alpha=0.3)
-            ax.legend(loc='upper left')
-        else:
-            ax.set_title(f"Power data not available for GPU {gpu_index}")
-        
-        plt.tight_layout()
-        return fig
-        
     def shutdown(self):
         """Clean up resources when shutting down"""
         self.stop_monitoring()
