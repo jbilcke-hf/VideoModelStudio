@@ -217,3 +217,15 @@ By default `run.sh` will store stuff in `.data/` (located inside the current wor
 ```bash
 ./run.sh
 ```
+
+### Environment Variables
+
+- `STORAGE_PATH`: Specifies the base storage path (default: '.data')
+- `HF_API_TOKEN`: Your Hugging Face API token for accessing models and publishing
+- `USE_LARGE_DATASET`: Set to "true" or "1" to enable large dataset mode, which:
+  - Hides the caption list in the caption tab
+  - Disables preview and editing of individual captions
+  - Disables the dataset download button
+  - Use this when working with large datasets that would be too slow to display in the UI
+- `PRELOAD_CAPTIONING_MODEL`: Preloads the captioning model at startup
+- `ASK_USER_TO_DUPLICATE_SPACE`: Prompts users to duplicate the space
