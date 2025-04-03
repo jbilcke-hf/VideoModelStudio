@@ -8,18 +8,12 @@ import time
 import logging
 import platform
 import threading
+import pandas as pd
 from datetime import datetime, timedelta
 from collections import deque
 from typing import Dict, List, Optional, Tuple, Any
 
 import psutil
-
-# Force the use of the Agg backend which is thread-safe
-import matplotlib
-matplotlib.use('Agg')  # Must be before importing pyplot
-import matplotlib.pyplot as plt
-
-import numpy as np
 
 from vms.ui.monitoring.services.gpu import GPUMonitoringService
 
@@ -230,157 +224,112 @@ class MonitoringService:
             'system': sys_info,
         }
     
-    def generate_cpu_plot(self) -> plt.Figure:
-        """Generate a plot of CPU usage over time
+    def get_cpu_data(self) -> pd.DataFrame:
+        """Get CPU usage data as a DataFrame
         
         Returns:
-            Matplotlib figure with CPU usage plot
+            DataFrame with CPU usage data
         """
-        plt.close('all')  # Close all existing figures
-
-        plt.style.use('dark_background')
-
-        fig, ax = plt.subplots(figsize=(10, 5))
-        
         if not self.timestamps:
-            ax.set_title("No CPU data available yet")
-            return fig
+            return pd.DataFrame({
+            'time': list(),
+            'CPU Usage (%)': list()
+        })
             
-        x = [t.strftime('%H:%M:%S') for t in self.timestamps]
-        if len(x) > 10:
-            # Show fewer x-axis labels for readability
-            step = len(x) // 10
-            ax.set_xticks(range(0, len(x), step))
-            ax.set_xticklabels([x[i] for i in range(0, len(x), step)])
+        data = {
+            'time': list(self.timestamps),
+            'CPU Usage (%)': list(self.cpu_percent)
+        }
         
-        ax.plot(x, list(self.cpu_percent), 'b-', label='CPU Usage %')
-        
+        # Add temperature if available
         if self.cpu_temp and len(self.cpu_temp) > 0:
-            # Plot temperature on a secondary y-axis if available
-            ax2 = ax.twinx()
-            ax2.plot(x[:len(self.cpu_temp)], list(self.cpu_temp), 'r-', label='CPU Temp °C')
-            ax2.set_ylabel('Temperature (°C)', color='r')
-            ax2.tick_params(axis='y', colors='r')
+            # Ensure temperature data aligns with timestamps
+            # If fewer temperature readings than timestamps, pad with None
+            temp_data = list(self.cpu_temp)
+            if len(temp_data) < len(self.timestamps):
+                padding = [None] * (len(self.timestamps) - len(temp_data))
+                temp_data = padding + temp_data
+            data['CPU Temperature (°C)'] = temp_data
             
-        ax.set_title('CPU Usage Over Time')
-        ax.set_xlabel('Time')
-        ax.set_ylabel('Usage %')
-        ax.grid(True, alpha=0.3)
-        ax.set_ylim(0, 100)
-        
-        # Add legend
-        lines, labels = ax.get_legend_handles_labels()
-        if hasattr(locals(), 'ax2'):
-            lines2, labels2 = ax2.get_legend_handles_labels()
-            ax.legend(lines + lines2, labels + labels2, loc='upper left')
-        else:
-            ax.legend(loc='upper left')
-            
-        plt.tight_layout()
-        return fig
+        return pd.DataFrame(data)
     
-    def generate_memory_plot(self) -> plt.Figure:
-        """Generate a plot of memory usage over time
+    def get_memory_data(self) -> pd.DataFrame:
+        """Get memory usage data as a DataFrame
         
         Returns:
-            Matplotlib figure with memory usage plot
+            DataFrame with memory usage data
         """
-        plt.close('all')  # Close all existing figures
-
-        plt.style.use('dark_background')
-
-        fig, ax = plt.subplots(figsize=(10, 5))
-        
         if not self.timestamps:
-            ax.set_title("No memory data available yet")
-            return fig
+            return pd.DataFrame({
+            'time': list(),
+            'Memory Usage (%)': list(),
+            'Memory Used (GB)': list(),
+            'Memory Available (GB)': list()
+        })
             
-        x = [t.strftime('%H:%M:%S') for t in self.timestamps]
-        if len(x) > 10:
-            # Show fewer x-axis labels for readability
-            step = len(x) // 10
-            ax.set_xticks(range(0, len(x), step))
-            ax.set_xticklabels([x[i] for i in range(0, len(x), step)])
-        
-        ax.plot(x, list(self.memory_percent), 'g-', label='Memory Usage %')
-        
-        # Add secondary y-axis for absolute memory values
-        ax2 = ax.twinx()
-        ax2.plot(x, list(self.memory_used), 'm--', label='Used (GB)')
-        ax2.plot(x, list(self.memory_available), 'c--', label='Available (GB)')
-        ax2.set_ylabel('Memory (GB)')
-        
-        ax.set_title('Memory Usage Over Time')
-        ax.set_xlabel('Time')
-        ax.set_ylabel('Usage %')
-        ax.grid(True, alpha=0.3)
-        ax.set_ylim(0, 100)
-        
-        # Add legend
-        lines, labels = ax.get_legend_handles_labels()
-        lines2, labels2 = ax2.get_legend_handles_labels()
-        ax.legend(lines + lines2, labels + labels2, loc='upper left')
-            
-        plt.tight_layout()
-        return fig
+        return pd.DataFrame({
+            'time': list(self.timestamps),
+            'Memory Usage (%)': list(self.memory_percent),
+            'Memory Used (GB)': list(self.memory_used),
+            'Memory Available (GB)': list(self.memory_available)
+        })
     
-    def generate_per_core_plot(self) -> plt.Figure:
-        """Generate a plot of per-core CPU usage
+    def get_per_core_data(self) -> Dict[int, pd.DataFrame]:
+        """Get per-core CPU usage data as DataFrames
         
         Returns:
-            Matplotlib figure with per-core CPU usage
+            Dictionary of DataFrames with per-core CPU usage data
         """
-        num_cores = len(self.cpu_cores_percent)
-        if num_cores == 0:
-            # No data yet
-            plt.close('all')  # Close all existing figures
-
-            plt.style.use('dark_background')
+        if not self.timestamps or not self.cpu_cores_percent:
+            return {}
             
-            fig, ax = plt.subplots(figsize=(10, 5))
-            ax.set_title("No per-core CPU data available yet")
-            return fig
+        core_data = {}
+        for core_id, percentages in self.cpu_cores_percent.items():
+            # Ensure we don't have more data points than timestamps
+            data_length = min(len(percentages), len(self.timestamps))
+            core_data[core_id] = pd.DataFrame({
+                'time': list(self.timestamps)[-data_length:],
+                f'Core {core_id} Usage (%)': list(percentages)[-data_length:]
+            })
             
-        # Determine grid layout based on number of cores
-        if num_cores <= 4:
-            rows, cols = 2, 2
-        elif num_cores <= 6:
-            rows, cols = 2, 3
-        elif num_cores <= 9:
-            rows, cols = 3, 3
-        elif num_cores <= 12:
-            rows, cols = 3, 4
-        else:
-            rows, cols = 4, 4
-            
-        fig, axes = plt.subplots(rows, cols, figsize=(12, 8), sharex=True, sharey=True)
-        axes = axes.flatten()
+        return core_data
         
-        x = [t.strftime('%H:%M:%S') for t in self.timestamps]
-        if len(x) > 5:
-            # Show fewer x-axis labels for readability
-            step = len(x) // 5
-        else:
-            step = 1
+    # Replace matplotlib methods with DataFrame methods
+    
+    # This method is kept for backward compatibility but returns a DataFrame
+    def generate_cpu_plot(self) -> pd.DataFrame:
+        """Get CPU usage data for plotting
+        
+        Returns:
+            DataFrame with CPU usage data
+        """
+        return self.get_cpu_data()
+    
+    # This method is kept for backward compatibility but returns a DataFrame
+    def generate_memory_plot(self) -> pd.DataFrame:
+        """Get memory usage data for plotting
+        
+        Returns:
+            DataFrame with memory usage data
+        """
+        return self.get_memory_data()
+    
+    # This method is kept for backward compatibility but returns a DataFrame of all cores
+    def generate_per_core_plot(self) -> pd.DataFrame:
+        """Get per-core CPU usage data for plotting
+        
+        Returns:
+            Combined DataFrame with all cores' usage data
+        """
+        core_data = self.get_per_core_data()
+        if not core_data:
+            return pd.DataFrame()
             
-        for i, (core_id, percentages) in enumerate(self.cpu_cores_percent.items()):
-            if i >= len(axes):
-                break
-                
-            ax = axes[i]
-            ax.plot(x[:len(percentages)], list(percentages), 'b-')
-            ax.set_title(f'Core {core_id}')
-            ax.set_ylim(0, 100)
-            ax.grid(True, alpha=0.3)
+        # Combine all core data into a single DataFrame using the first core's timestamps
+        first_core_id = list(core_data.keys())[0]
+        combined_df = core_data[first_core_id][['time']].copy()
+        
+        for core_id, df in core_data.items():
+            combined_df[f'Core {core_id} Usage (%)'] = df[f'Core {core_id} Usage (%)']
             
-            # Add x-axis labels sparingly for readability
-            if i >= len(axes) - cols:  # Only for bottom row
-                ax.set_xticks(range(0, len(x), step))
-                ax.set_xticklabels([x[i] for i in range(0, len(x), step)], rotation=45)
-                
-        # Hide unused subplots
-        for i in range(num_cores, len(axes)):
-            axes[i].set_visible(False)
-            
-        plt.tight_layout()
-        return fig
+        return combined_df
