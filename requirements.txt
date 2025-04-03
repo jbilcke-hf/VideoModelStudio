@@ -3,15 +3,13 @@
 # For GPU monitoring of NVIDIA chipsets
 pynvml
 
-# eva-decord is missing get_batch it seems
-#eva-decord==0.6.1
-#decord
-
 finetrainers==0.1.0
 #finetrainers @ git+https://github.com/a-r-r-o-w/finetrainers.git@main
 # temporary fix for pip install bug:
 #finetrainers @ git+https://github.com/jbilcke-hf/finetrainers-patches.git@fix_missing_sft_trainer_files
 
+# it is recommended to always use the latest version
+diffusers @ git+https://github.com/huggingface/diffusers.git@main
 
 imageio
 imageio-ffmpeg
