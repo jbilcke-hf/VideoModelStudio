@@ -133,13 +133,19 @@ That said, please see the "RUN" section for info about environement variables.
 
 ### Dev mode on Hugging Face
 
-Enable dev mode in the space, then open VSCode in local or remote and run:
+I recommend to not use the dev mode for a production usage (ie not use dev mode when training a real model), unless you know what you are doing.
+
+That's because the dev mode can be unstable and cause space restarts.
+
+If you still want to open the dev mode in the space, then open VSCode in local or remote and run:
 
 ```
 pip install -r requirements.txt
 ```
 
 As this is not automatic, then click on "Restart" in the space dev mode UI widget.
+
+Important: if you see errors like "API not found" etc, it might indicate an issue with the dev mode and Gradio, not an issue with VMS itself.
 
 ### Full installation somewhere else
 
