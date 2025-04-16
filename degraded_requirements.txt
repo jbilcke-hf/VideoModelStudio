@@ -38,6 +38,7 @@ git+https://github.com/LLaVA-VL/LLaVA-NeXT.git
 # for our frontend
 gradio==5.23.3
 gradio_toggle
+gradio_modal
 
 # used for the monitor
 matplotlib

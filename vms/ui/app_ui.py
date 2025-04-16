@@ -269,8 +269,8 @@ class AppUI:
                 prose_header_text_weight='400'
             ),
 
-            # Let's hack Gradio!
-            css="#main-tabs > .tab-wrapper{ display: none; }",
+            # Let's hack Gradio and gradio_modal!
+            css="#main-tabs > .tab-wrapper{ display: none; } .modal{ z-index: 1000; } .modal-block{ max-width: 420px; }",
             ) as app:
             self.app = app
             

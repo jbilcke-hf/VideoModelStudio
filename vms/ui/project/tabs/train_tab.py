@@ -1118,32 +1118,35 @@ class TrainTab(BaseTab):
         # Create the model version dropdown update
         model_version_update = gr.Dropdown(choices=model_versions, value=default_model_version)
 
-        # Return values in the same order as the output components
+        # Return values in the same order as the output components listed in line 644
+        # Make sure we return exactly 24 values to match what's expected
         return (
-            model_display_name,
-            training_display_name,
-            lora_rank_val,
-            lora_alpha_val,
-            train_steps_val,
-            batch_size_val,
-            learning_rate_val,
-            save_iterations_val,
-            info_text,
-            gr.Row(visible=show_lora_params),
-            num_gpus_val,
-            precomputation_items_val,
-            lr_warmup_steps_val,
-            model_version_update,
+            model_display_name,                             # model_type
+            training_display_name,                          # training_type
+            lora_rank_val,                                 # lora_rank
+            lora_alpha_val,                                # lora_alpha
+            train_steps_val,                               # train_steps
+            batch_size_val,                                # batch_size
+            learning_rate_val,                             # learning_rate
+            save_iterations_val,                           # save_iterations
+            info_text,                                     # preset_info
+            gr.Row(visible=show_lora_params),              # lora_params_row
+            gr.Row(visible=show_lora_params),              # lora_settings_row (added missing row)
+            num_gpus_val,                                  # num_gpus
+            precomputation_items_val,                      # precomputation_items
+            lr_warmup_steps_val,                           # lr_warmup_steps
+            model_version_update,                          # model_version
             # Control parameters rows visibility
-            gr.Row(visible=show_control_params),
-            gr.Row(visible=show_control_params),
-            gr.Row(visible=show_control_params),
+            gr.Row(visible=show_control_params),           # control_params_row
+            gr.Row(visible=show_control_params),           # control_settings_row
+            gr.Row(visible=show_control_params),           # frame_conditioning_row
+            gr.Row(visible=show_control_params),           # control_options_row
             # Control parameter values
-            control_type_val,
-            train_qk_norm_val,
-            frame_conditioning_type_val,
-            frame_conditioning_index_val,
-            frame_conditioning_concatenate_mask_val,
+            control_type_val,                              # control_type
+            train_qk_norm_val,                             # train_qk_norm
+            frame_conditioning_type_val,                   # frame_conditioning_type
+            frame_conditioning_index_val,                  # frame_conditioning_index
+            frame_conditioning_concatenate_mask_val,       # frame_conditioning_concatenate_mask
         )
 
 

@@ -7,6 +7,7 @@ import logging
 import shutil
 from pathlib import Path
 from typing import Dict, Any, List, Optional
+from gradio_modal import Modal
 
 from vms.utils import BaseTab, validate_model_repo
 from vms.config import (
@@ -90,6 +91,20 @@ class ManageTab(BaseTab):
                         interactive=False,
                         visible=False
                     )
+                    
+                    # Modal for dataset deletion confirmation
+                    with Modal(visible=False) as dataset_delete_modal:
+                        gr.Markdown("## ⚠️ Confirm Deletion")
+                        gr.Markdown("Are you sure you want to delete all dataset files (images, videos, captions)?")
+                        gr.Markdown("This action cannot be undone!")
+                        
+                        with gr.Row():
+                            cancel_dataset_btn = gr.Button("🫢 No, cancel", variant="secondary")
+                            confirm_dataset_btn = gr.Button("🚨 Yes, delete", variant="primary")
+
+                    self.components["dataset_delete_modal"] = dataset_delete_modal
+                    self.components["cancel_dataset_btn"] = cancel_dataset_btn
+                    self.components["confirm_dataset_btn"] = confirm_dataset_btn
                 
                 with gr.Column(scale=1):
                     self.components["delete_model_btn"] = gr.Button(
@@ -101,6 +116,20 @@ class ManageTab(BaseTab):
                         interactive=False,
                         visible=False
                     )
+                    
+                    # Modal for model deletion confirmation
+                    with Modal(visible=False) as model_delete_modal:
+                        gr.Markdown("## ⚠️ Confirm Deletion")
+                        gr.Markdown("Are you sure you want to delete all model files (checkpoints, weights, config)?")
+                        gr.Markdown("This action cannot be undone!")
+                        
+                        with gr.Row():
+                            cancel_model_btn = gr.Button("🫢 No, cancel", variant="secondary")
+                            confirm_model_btn = gr.Button("🚨 Yes, delete", variant="primary")
+
+                    self.components["model_delete_modal"] = model_delete_modal
+                    self.components["cancel_model_btn"] = cancel_model_btn
+                    self.components["confirm_model_btn"] = confirm_model_btn
                 
             with gr.Row():
                 with gr.Column():
@@ -117,6 +146,24 @@ class ManageTab(BaseTab):
                     interactive=False,
                     visible=False
                 )
+                
+                # Modal for global deletion confirmation
+                with Modal(visible=False) as global_delete_modal:
+                    gr.Markdown("## ⚠️ Confirm Complete Data Deletion")
+                    gr.Markdown("Are you sure you want to delete ALL project data and models?")
+                    gr.Markdown("This includes:")
+                    gr.Markdown("- All original datasets (images, videos, captions)")
+                    gr.Markdown("- All training datasets")
+                    gr.Markdown("- All model outputs (weights, checkpoints, settings)")
+                    gr.Markdown("This action cannot be undone!")
+                    
+                    with gr.Row():
+                        cancel_global_btn = gr.Button("🫢 No, cancel", variant="secondary")
+                        confirm_global_btn = gr.Button("🚨 Yes, delete", variant="primary")
+
+                self.components["global_delete_modal"] = global_delete_modal
+                self.components["cancel_global_btn"] = cancel_global_btn
+                self.components["confirm_global_btn"] = confirm_global_btn
         
         return tab
     
@@ -140,26 +187,76 @@ class ManageTab(BaseTab):
             outputs=[self.components["download_model_btn"]]
         )
         
-        # New delete dataset button
+        # Dataset deletion with modal
         self.components["delete_dataset_btn"].click(
+            fn=lambda: Modal(visible=True),
+            inputs=[],
+            outputs=[self.components["dataset_delete_modal"]]
+        )
+        
+        # Modal cancel button
+        self.components["cancel_dataset_btn"].click(
+            fn=lambda: Modal(visible=False),
+            inputs=[],
+            outputs=[self.components["dataset_delete_modal"]]
+        )
+        
+        # Modal confirm button
+        self.components["confirm_dataset_btn"].click(
             fn=self.delete_dataset,
             outputs=[
                 self.components["delete_dataset_status"],
                 self.app.tabs["caption_tab"].components["training_dataset"]
             ]
+        ).then(
+            fn=lambda: Modal(visible=False),
+            inputs=[],
+            outputs=[self.components["dataset_delete_modal"]]
         )
         
-        # New delete model button
+        # Model deletion with modal
         self.components["delete_model_btn"].click(
+            fn=lambda: Modal(visible=True),
+            inputs=[],
+            outputs=[self.components["model_delete_modal"]]
+        )
+        
+        # Modal cancel button
+        self.components["cancel_model_btn"].click(
+            fn=lambda: Modal(visible=False),
+            inputs=[],
+            outputs=[self.components["model_delete_modal"]]
+        )
+        
+        # Modal confirm button
+        self.components["confirm_model_btn"].click(
             fn=self.delete_model,
             outputs=[
                 self.components["delete_model_status"],
                 self.app.tabs["train_tab"].components["status_box"]
             ]
+        ).then(
+            fn=lambda: Modal(visible=False),
+            inputs=[],
+            outputs=[self.components["model_delete_modal"]]
         )
         
-        # Global stop button
+        # Global stop button with modal
         self.components["global_stop_btn"].click(
+            fn=lambda: Modal(visible=True),
+            inputs=[],
+            outputs=[self.components["global_delete_modal"]]
+        )
+        
+        # Modal cancel button
+        self.components["cancel_global_btn"].click(
+            fn=lambda: Modal(visible=False),
+            inputs=[],
+            outputs=[self.components["global_delete_modal"]]
+        )
+        
+        # Modal confirm button
+        self.components["confirm_global_btn"].click(
             fn=self.handle_global_stop,
             outputs=[
                 self.components["global_status"],
@@ -169,6 +266,10 @@ class ManageTab(BaseTab):
                 self.app.tabs["import_tab"].components["import_status"],
                 self.app.tabs["caption_tab"].components["preview_status"]
             ]
+        ).then(
+            fn=lambda: Modal(visible=False),
+            inputs=[],
+            outputs=[self.components["global_delete_modal"]]
         )
         
         # Push model button 
