@@ -10,8 +10,8 @@ from typing import Dict, Any, List, Optional
 
 from vms.utils import BaseTab, validate_model_repo
 from vms.config import (
-    HF_API_TOKEN, VIDEOS_TO_SPLIT_PATH, STAGING_PATH, TRAINING_VIDEOS_PATH, 
-    TRAINING_PATH, MODEL_PATH, OUTPUT_PATH, LOG_FILE_PATH, USE_LARGE_DATASET
+    HF_API_TOKEN, VIDEOS_TO_SPLIT_PATH, STAGING_PATH, 
+    USE_LARGE_DATASET
 )
 
 logger = logging.getLogger(__name__)

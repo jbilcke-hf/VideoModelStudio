@@ -11,7 +11,7 @@ from pathlib import Path
 import mimetypes
 
 from vms.utils import BaseTab, is_image_file, is_video_file, copy_files_to_training_dir
-from vms.config import DEFAULT_CAPTIONING_BOT_INSTRUCTIONS, DEFAULT_PROMPT_PREFIX, STAGING_PATH, TRAINING_VIDEOS_PATH, USE_LARGE_DATASET
+from vms.config import DEFAULT_CAPTIONING_BOT_INSTRUCTIONS, DEFAULT_PROMPT_PREFIX, STAGING_PATH, USE_LARGE_DATASET
 
 logger = logging.getLogger(__name__)
 
@@ -52,11 +52,11 @@ class CaptionTab(BaseTab):
                         )
                     with gr.Row():
                         self.components["run_autocaption_btn"] = gr.Button(
-                            "Automatically fill missing captions",
+                            "Automatically caption data",
                             variant="primary"
                         )
                         self.components["copy_files_to_training_dir_btn"] = gr.Button(
-                            "Copy assets to training directory",
+                            "Copy assets to training folder",
                             variant="primary"
                         )
                         self.components["stop_autocaption_btn"] = gr.Button(

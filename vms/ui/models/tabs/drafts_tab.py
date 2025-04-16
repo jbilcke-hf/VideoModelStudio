@@ -88,7 +88,7 @@ class DraftsTab(BaseTab):
                                     edit_btn.click(
                                         fn=lambda model_id=model.id: self.edit_model(model_id),
                                         inputs=[],
-                                        outputs=[]
+                                        outputs=[self.app.main_tabs]
                                     )
                                 with gr.Column(scale=1, min_width=10):
                                     delete_btn = gr.Button("🗑️ Delete", size="sm", variant="stop")
@@ -107,7 +107,7 @@ class DraftsTab(BaseTab):
             # Switch to project view with this model
             self.app.switch_project(model_id)
             # Set main tab to Project (index 0)
-            self.app.switch_to_tab(0)
+            return self.app.main_tabs.update(selected=0)
             
     def delete_model(self, model_id: str) -> gr.Column:
         """Delete a model and refresh the list"""

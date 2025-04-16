@@ -205,7 +205,9 @@ MODEL_TYPES = {
 # Training types
 TRAINING_TYPES = {
     "LoRA Finetune": "lora",
-    "Full Finetune": "full-finetune"
+    "Full Finetune": "full-finetune",
+    "Control LoRA": "control-lora",
+    "Control Full Finetune": "control-full-finetune"
 }
 
 # Model versions for each model type
@@ -287,6 +289,13 @@ DEFAULT_NB_LR_WARMUP_STEPS = math.ceil(0.20 * DEFAULT_NB_TRAINING_STEPS)  # 20% 
 
 # Whether to automatically restart a training job after a server reboot or not
 DEFAULT_AUTO_RESUME = False
+
+# Control training defaults
+DEFAULT_CONTROL_TYPE = "canny"
+DEFAULT_TRAIN_QK_NORM = False
+DEFAULT_FRAME_CONDITIONING_TYPE = "full"
+DEFAULT_FRAME_CONDITIONING_INDEX = 0
+DEFAULT_FRAME_CONDITIONING_CONCATENATE_MASK = False
 
 # For validation
 DEFAULT_VALIDATION_NB_STEPS = 50
@@ -468,6 +477,69 @@ TRAINING_PRESETS = {
         "num_gpus": DEFAULT_NUM_GPUS,
         "precomputation_items": DEFAULT_PRECOMPUTATION_ITEMS,
         "lr_warmup_steps": DEFAULT_NB_LR_WARMUP_STEPS,
+    },
+    "Wan-2.1-I2V (Control LoRA)": {
+        "model_type": "wan",
+        "training_type": "control-lora",
+        "lora_rank": "32",
+        "lora_alpha": "32",
+        "train_steps": DEFAULT_NB_TRAINING_STEPS,
+        "batch_size": DEFAULT_BATCH_SIZE,
+        "learning_rate": 5e-5,
+        "save_iterations": DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
+        "training_buckets": SMALL_TRAINING_BUCKETS,
+        "flow_weighting_scheme": "logit_normal",
+        "num_gpus": DEFAULT_NUM_GPUS,
+        "precomputation_items": DEFAULT_PRECOMPUTATION_ITEMS,
+        "lr_warmup_steps": DEFAULT_NB_LR_WARMUP_STEPS,
+        "control_type": "custom",
+        "train_qk_norm": True,
+        "frame_conditioning_type": "index",
+        "frame_conditioning_index": 0,
+        "frame_conditioning_concatenate_mask": True,
+        "description": "Image-conditioned video generation with LoRA adapters"
+    },
+    "LTX-Video (Control LoRA)": {
+        "model_type": "ltx_video",
+        "training_type": "control-lora",
+        "lora_rank": "128",
+        "lora_alpha": "128",
+        "train_steps": DEFAULT_NB_TRAINING_STEPS,
+        "batch_size": DEFAULT_BATCH_SIZE,
+        "learning_rate": DEFAULT_LEARNING_RATE,
+        "save_iterations": DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
+        "training_buckets": SMALL_TRAINING_BUCKETS,
+        "flow_weighting_scheme": "logit_normal",
+        "num_gpus": DEFAULT_NUM_GPUS,
+        "precomputation_items": DEFAULT_PRECOMPUTATION_ITEMS,
+        "lr_warmup_steps": DEFAULT_NB_LR_WARMUP_STEPS,
+        "control_type": "custom",
+        "train_qk_norm": True,
+        "frame_conditioning_type": "index",
+        "frame_conditioning_index": 0,
+        "frame_conditioning_concatenate_mask": True,
+        "description": "Image-conditioned video generation with LoRA adapters"
+    },
+    "HunyuanVideo (Control LoRA)": {
+        "model_type": "hunyuan_video",
+        "training_type": "control-lora",
+        "lora_rank": "128",
+        "lora_alpha": "128",
+        "train_steps": DEFAULT_NB_TRAINING_STEPS,
+        "batch_size": DEFAULT_BATCH_SIZE,
+        "learning_rate": 2e-5,
+        "save_iterations": DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
+        "training_buckets": SMALL_TRAINING_BUCKETS,
+        "flow_weighting_scheme": "none",
+        "num_gpus": DEFAULT_NUM_GPUS,
+        "precomputation_items": DEFAULT_PRECOMPUTATION_ITEMS,
+        "lr_warmup_steps": DEFAULT_NB_LR_WARMUP_STEPS,
+        "control_type": "custom",
+        "train_qk_norm": True,
+        "frame_conditioning_type": "index",
+        "frame_conditioning_index": 0,
+        "frame_conditioning_concatenate_mask": True,
+        "description": "Image-conditioned video generation with HunyuanVideo and LoRA adapters"
     }
 }
 

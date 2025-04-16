@@ -109,7 +109,7 @@ class TrainingTab(BaseTab):
                                 preview_btn.click(
                                     fn=lambda model_id=model.id: self.preview_model(model_id),
                                     inputs=[],
-                                    outputs=[]
+                                    outputs=[self.app.main_tabs]
                                 )
                                 
                                 download_btn.click(
@@ -147,15 +147,14 @@ class TrainingTab(BaseTab):
         # Refresh the list
         return self.refresh_models()
     
-    def preview_model(self, model_id: str) -> None:
+    def preview_model(self, model_id: str) -> gr.Tabs:
         """Open model preview"""
         if self.app:
             # Switch to project view with this model
             self.app.switch_project(model_id)
             # Set main tab to Project (index 0)
-            self.app.switch_to_tab(0)
-            # Switch to preview tab (index 3)
-            # TODO: Implement proper tab navigation
+            return self.app.main_tabs.update(selected=0)
+            # TODO: Navigate to preview tab
             
     def download_model(self, model_id: str) -> None:
         """Download model weights"""
