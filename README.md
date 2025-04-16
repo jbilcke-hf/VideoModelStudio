@@ -191,18 +191,16 @@ This is because of flash attention, which is defined in the `requirements.txt` u
 ./setup.sh
 ```
 
-### Degraded installation in local
+### macOS is NOT supported
 
-If you cannot meet the requirements, you can:
+Currently macOS is NOT supported due to two separate dependency issues:
 
-- solution 1: fix requirements.txt to use another prebuilt wheel
-- solution 2: manually build/install flash attention
-- solution 3: don't use clip captioning
+- issue with flash attention
+- issue with decord
 
-Here is how to do solution 3:
-```bash
-./setup_no_captions.sh
-```
+However, the paradox is that I actually develop and maintain VMS using macOS!
+
+So don't be surprised by the presence of "degraded_setup.sh" and all, it's just a workaround for me to be able to at least test the web ui on macOS.
 
 ## Run
 
