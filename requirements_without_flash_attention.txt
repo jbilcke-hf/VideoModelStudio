@@ -7,8 +7,9 @@ pynvml
 #eva-decord==0.6.1
 #decord
 
-finetrainers==0.1.0
-#finetrainers @ git+https://github.com/a-r-r-o-w/finetrainers.git@main
+# we are waiting for the next PyPI release
+#finetrainers==0.1.0
+finetrainers @ git+https://github.com/a-r-r-o-w/finetrainers.git@main
 # temporary fix for pip install bug:
 #finetrainers @ git+https://github.com/jbilcke-hf/finetrainers-patches.git@fix_missing_sft_trainer_files
 
