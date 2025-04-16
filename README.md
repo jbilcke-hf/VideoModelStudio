@@ -4,7 +4,7 @@ emoji: 🎥
 colorFrom: gray
 colorTo: gray
 sdk: gradio
-sdk_version: 5.20.1
+sdk_version: 5.23.3
 app_file: app.py
 pinned: true
 license: apache-2.0
@@ -133,13 +133,19 @@ That said, please see the "RUN" section for info about environement variables.
 
 ### Dev mode on Hugging Face
 
-Enable dev mode in the space, then open VSCode in local or remote and run:
+I recommend to not use the dev mode for a production usage (ie not use dev mode when training a real model), unless you know what you are doing.
+
+That's because the dev mode can be unstable and cause space restarts.
+
+If you still want to open the dev mode in the space, then open VSCode in local or remote and run:
 
 ```
 pip install -r requirements.txt
 ```
 
 As this is not automatic, then click on "Restart" in the space dev mode UI widget.
+
+Important: if you see errors like "API not found" etc, it might indicate an issue with the dev mode and Gradio, not an issue with VMS itself.
 
 ### Full installation somewhere else
 
@@ -217,3 +223,15 @@ By default `run.sh` will store stuff in `.data/` (located inside the current wor
 ```bash
 ./run.sh
 ```
+
+### Environment Variables
+
+- `STORAGE_PATH`: Specifies the base storage path (default: '.data')
+- `HF_API_TOKEN`: Your Hugging Face API token for accessing models and publishing
+- `USE_LARGE_DATASET`: Set to "true" or "1" to enable large dataset mode, which:
+  - Hides the caption list in the caption tab
+  - Disables preview and editing of individual captions
+  - Disables the dataset download button
+  - Use this when working with large datasets that would be too slow to display in the UI
+- `PRELOAD_CAPTIONING_MODEL`: Preloads the captioning model at startup
+- `ASK_USER_TO_DUPLICATE_SPACE`: Prompts users to duplicate the space

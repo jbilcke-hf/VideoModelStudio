@@ -11,7 +11,7 @@ from pathlib import Path
 import mimetypes
 
 from vms.utils import BaseTab, is_image_file, is_video_file, copy_files_to_training_dir
-from vms.config import DEFAULT_CAPTIONING_BOT_INSTRUCTIONS, DEFAULT_PROMPT_PREFIX, STAGING_PATH
+from vms.config import DEFAULT_CAPTIONING_BOT_INSTRUCTIONS, DEFAULT_PROMPT_PREFIX, STAGING_PATH, TRAINING_VIDEOS_PATH, USE_LARGE_DATASET
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +28,10 @@ class CaptionTab(BaseTab):
         """Create the Caption tab UI components"""
         with gr.TabItem(self.title, id=self.id) as tab:
             with gr.Row():
-                self.components["caption_title"] = gr.Markdown("## Captioning of 0 files (0 bytes)")
+                if USE_LARGE_DATASET:
+                    self.components["caption_title"] = gr.Markdown("## Captioning (Large Dataset Mode)")
+                else:
+                    self.components["caption_title"] = gr.Markdown("## Captioning of 0 files (0 bytes)")
                 
             with gr.Row():
                 with gr.Column():
@@ -62,7 +65,7 @@ class CaptionTab(BaseTab):
                             interactive=False
                         )
 
-            with gr.Row():
+            with gr.Row(visible=not USE_LARGE_DATASET):
                 with gr.Column():
                     self.components["training_dataset"] = gr.Dataframe(
                         headers=["name", "status"],
@@ -95,6 +98,10 @@ class CaptionTab(BaseTab):
                         visible=True
                     )
                     self.components["original_file_path"] = gr.State(value=None)
+                    
+            with gr.Row(visible=USE_LARGE_DATASET):
+                gr.Markdown("### Large Dataset Mode Active")
+                gr.Markdown("Caption preview and editing is disabled to improve performance with large datasets.")
             
         return tab
     
@@ -174,10 +181,16 @@ class CaptionTab(BaseTab):
     
     def refresh(self) -> Dict[str, Any]:
         """Refresh the dataset list with current data"""
-        training_dataset = self.list_training_files_to_caption()
-        return {
-            "training_dataset": training_dataset
-        }
+        if USE_LARGE_DATASET:
+            # In large dataset mode, we don't attempt to list files
+            return {
+                "training_dataset": [["Large dataset mode enabled", "listing skipped"]]
+            }
+        else:
+            training_dataset = self.list_training_files_to_caption()
+            return {
+                "training_dataset": training_dataset
+            }
     
     def show_refreshing_status(self) -> List[List[str]]:
         """Show a 'Refreshing...' status in the dataframe"""
@@ -318,6 +331,10 @@ class CaptionTab(BaseTab):
 
     def list_training_files_to_caption(self) -> List[List[str]]:
         """List all clips and images - both pending and captioned"""
+        # In large dataset mode, return a placeholder message instead of listing all files
+        if USE_LARGE_DATASET:
+            return [["Large dataset mode enabled", "listing skipped"]]
+            
         files = []
         already_listed = {}
 

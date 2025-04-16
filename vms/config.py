@@ -22,6 +22,9 @@ def parse_bool_env(env_value: Optional[str]) -> bool:
 HF_API_TOKEN = os.getenv("HF_API_TOKEN")
 ASK_USER_TO_DUPLICATE_SPACE = parse_bool_env(os.getenv("ASK_USER_TO_DUPLICATE_SPACE"))
 
+# For large datasets that would be slow to display or download
+USE_LARGE_DATASET = parse_bool_env(os.getenv("USE_LARGE_DATASET"))
+
 # Base storage path
 STORAGE_PATH = Path(os.environ.get('STORAGE_PATH', '.data'))
 
