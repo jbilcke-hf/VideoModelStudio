@@ -9,7 +9,15 @@ diffusers @ git+https://github.com/huggingface/diffusers.git@main
 imageio
 imageio-ffmpeg
 
+#--------------- MACOS HACKS ----------------
+
+# use eva-decord for better compatiblity on macOS
+eva-decord
+
+# don't install flash attention on macOS
 #flash-attn @ https://github.com/Dao-AILab/flash-attention/releases/download/v2.7.4.post1/flash_attn-2.7.4.post1+cu12torch2.4cxx11abiFALSE-cp310-cp310-linux_x86_64.whl
+
+#--------------- / MACOS HACKS --------------
 
 # for youtube video download
 pytube

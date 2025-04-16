@@ -94,7 +94,7 @@ class TrainedTab(BaseTab):
                                 preview_btn.click(
                                     fn=lambda model_id=model.id: self.preview_model(model_id),
                                     inputs=[],
-                                    outputs=[]
+                                    outputs=[self.app.main_tabs]
                                 )
                                 
                                 download_btn.click(
@@ -106,7 +106,7 @@ class TrainedTab(BaseTab):
                                 publish_btn.click(
                                     fn=lambda model_id=model.id: self.publish_model(model_id),
                                     inputs=[],
-                                    outputs=[]
+                                    outputs=[self.app.main_tabs]
                                 )
                                 
                                 delete_btn.click(
@@ -117,28 +117,28 @@ class TrainedTab(BaseTab):
         
         return new_container
     
-    def preview_model(self, model_id: str) -> None:
+    def preview_model(self, model_id: str) -> gr.Tabs:
         """Open model preview"""
         if self.app:
             # Switch to project view with this model
             self.app.switch_project(model_id)
             # Set main tab to Project (index 0)
-            self.app.switch_to_tab(0)
-            # Navigate to preview tab
-            # TODO: Implement proper tab navigation
+            return self.app.main_tabs.update(selected=0)
+            # TODO: Navigate to preview tab
             
     def download_model(self, model_id: str) -> None:
         """Download model weights"""
         # TODO: Implement file download
         gr.Info(f"Download for model {model_id[:8]}... is not yet implemented")
         
-    def publish_model(self, model_id: str) -> None:
+    def publish_model(self, model_id: str) -> gr.Tabs:
         """Publish model to Hugging Face Hub"""
         if self.app:
             # Switch to the selected model project
             self.app.switch_project(model_id)
-            # Navigate to publish tab (typically in Manage tab)
-            # TODO: Implement proper tab navigation
+            # Navigate to the main project tab
+            return self.app.main_tabs.update(selected=0)
+            # TODO: Navigate to publish tab
         
     def delete_model(self, model_id: str) -> gr.Column:
         """Delete a model and refresh the list"""

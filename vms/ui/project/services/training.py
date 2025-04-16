@@ -40,6 +40,9 @@ from vms.config import (
     DEFAULT_NB_TRAINING_STEPS,
     DEFAULT_NB_LR_WARMUP_STEPS,
     DEFAULT_AUTO_RESUME,
+    DEFAULT_CONTROL_TYPE, DEFAULT_TRAIN_QK_NORM,
+    DEFAULT_FRAME_CONDITIONING_TYPE, DEFAULT_FRAME_CONDITIONING_INDEX,
+    DEFAULT_FRAME_CONDITIONING_CONCATENATE_MASK,
     generate_model_project_id
 )
 from vms.utils import (
@@ -229,7 +232,13 @@ class TrainingService:
             "num_gpus": DEFAULT_NUM_GPUS,
             "precomputation_items": DEFAULT_PRECOMPUTATION_ITEMS,
             "lr_warmup_steps": DEFAULT_NB_LR_WARMUP_STEPS,
-            "auto_resume": DEFAULT_AUTO_RESUME
+            "auto_resume": DEFAULT_AUTO_RESUME,
+            # Control parameters
+            "control_type": DEFAULT_CONTROL_TYPE,
+            "train_qk_norm": DEFAULT_TRAIN_QK_NORM,
+            "frame_conditioning_type": DEFAULT_FRAME_CONDITIONING_TYPE,
+            "frame_conditioning_index": DEFAULT_FRAME_CONDITIONING_INDEX,
+            "frame_conditioning_concatenate_mask": DEFAULT_FRAME_CONDITIONING_CONCATENATE_MASK
         }
 
         return default_state
@@ -756,9 +765,37 @@ class TrainingService:
             config.data_root = str(dataset_config_file)
             
             # Update LoRA parameters if using LoRA training type
-            if training_type == "lora":
+            if training_type == "lora" or training_type == "control-lora":
                 config.lora_rank = int(lora_rank)
                 config.lora_alpha = int(lora_alpha)
+                
+            # Update Control parameters if using control training types
+            if training_type in ["control-lora", "control-full-finetune"]:
+                # Get control parameters from UI state
+                current_state = self.load_ui_state()
+                
+                # Add control-specific parameters
+                control_type = current_state.get("control_type", DEFAULT_CONTROL_TYPE)
+                train_qk_norm = current_state.get("train_qk_norm", DEFAULT_TRAIN_QK_NORM)
+                frame_conditioning_type = current_state.get("frame_conditioning_type", DEFAULT_FRAME_CONDITIONING_TYPE)
+                frame_conditioning_index = current_state.get("frame_conditioning_index", DEFAULT_FRAME_CONDITIONING_INDEX)
+                frame_conditioning_concatenate_mask = current_state.get("frame_conditioning_concatenate_mask", DEFAULT_FRAME_CONDITIONING_CONCATENATE_MASK)
+                
+                # Map boolean from UI state to command line args
+                config_args.extend([
+                    "--control_type", control_type,
+                ])
+                
+                if train_qk_norm:
+                    config_args.append("--train_qk_norm")
+                    
+                config_args.extend([
+                    "--frame_conditioning_type", frame_conditioning_type,
+                    "--frame_conditioning_index", str(frame_conditioning_index)
+                ])
+                
+                if frame_conditioning_concatenate_mask:
+                    config_args.append("--frame_conditioning_concatenate_mask")
 
             # Update with resume_from_checkpoint if provided
             if resume_from_checkpoint:
@@ -882,8 +919,11 @@ class TrainingService:
             with open(self.app.output_pid_file, 'w') as f:
                 f.write(str(process.pid))
             
-            # Save session info including repo_id for later hub upload
-            self.save_session({
+            # Get current UI state for all parameters
+            current_state = self.load_ui_state()
+            
+            # Build session data
+            session_data = {
                 "model_type": model_type,
                 "model_version": model_version,
                 "training_type": training_type,
@@ -898,7 +938,20 @@ class TrainingService:
                 "lr_warmup_steps": lr_warmup_steps,
                 "repo_id": repo_id,
                 "start_time": datetime.now().isoformat()
-            })
+            }
+            
+            # Add control parameters if relevant
+            if training_type in ["control-lora", "control-full-finetune"]:
+                session_data.update({
+                    "control_type": current_state.get("control_type", DEFAULT_CONTROL_TYPE),
+                    "train_qk_norm": current_state.get("train_qk_norm", DEFAULT_TRAIN_QK_NORM),
+                    "frame_conditioning_type": current_state.get("frame_conditioning_type", DEFAULT_FRAME_CONDITIONING_TYPE),
+                    "frame_conditioning_index": current_state.get("frame_conditioning_index", DEFAULT_FRAME_CONDITIONING_INDEX),
+                    "frame_conditioning_concatenate_mask": current_state.get("frame_conditioning_concatenate_mask", DEFAULT_FRAME_CONDITIONING_CONCATENATE_MASK)
+                })
+            
+            # Save session
+            self.save_session(session_data)
             
             # Update initial training status
             total_steps = int(train_steps)
