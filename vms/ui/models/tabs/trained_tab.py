@@ -5,6 +5,7 @@ Trained tab for Models view in Video Model Studio UI
 import gradio as gr
 import logging
 from typing import Dict, Any, List, Optional, Tuple
+from gradio_modal import Modal
 
 from vms.utils.base_tab import BaseTab
 
@@ -90,6 +91,16 @@ class TrainedTab(BaseTab):
                                 publish_btn = gr.Button("🌐 Publish", size="sm")
                                 delete_btn = gr.Button("🗑️ Delete", size="sm", variant="stop")
                                 
+                                # Create a modal for this specific model deletion
+                                with Modal(visible=False) as delete_modal:
+                                    gr.Markdown("## ⚠️ Confirm Deletion")
+                                    gr.Markdown(f"Are you sure you want to delete model {model.id[:8]}...?")
+                                    gr.Markdown("This action cannot be undone!")
+                                    
+                                    with gr.Row():
+                                        cancel_btn = gr.Button("🫢 No, cancel", variant="secondary")
+                                        confirm_btn = gr.Button("🚨 Yes, delete", variant="primary")
+
                                 # Connect event handlers for this specific model
                                 preview_btn.click(
                                     fn=lambda model_id=model.id: self.preview_model(model_id),
@@ -109,10 +120,29 @@ class TrainedTab(BaseTab):
                                     outputs=[self.app.main_tabs]
                                 )
                                 
+                                # Connect delete button to show modal
                                 delete_btn.click(
+                                    fn=lambda: Modal(visible=True),
+                                    inputs=[],
+                                    outputs=[delete_modal]
+                                )
+                                
+                                # Connect cancel button to hide modal
+                                cancel_btn.click(
+                                    fn=lambda: Modal(visible=False),
+                                    inputs=[],
+                                    outputs=[delete_modal]
+                                )
+                                
+                                # Connect confirm button to delete and hide modal
+                                confirm_btn.click(
                                     fn=lambda model_id=model.id: self.delete_model(model_id),
                                     inputs=[],
                                     outputs=[new_container]
+                                ).then(
+                                    fn=lambda: Modal(visible=False),
+                                    inputs=[],
+                                    outputs=[delete_modal]
                                 )
         
         return new_container

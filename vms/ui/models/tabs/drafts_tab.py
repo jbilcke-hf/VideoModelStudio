@@ -6,6 +6,7 @@ import gradio as gr
 import logging
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime
+from gradio_modal import Modal
 
 from vms.utils.base_tab import BaseTab
 
@@ -92,22 +93,49 @@ class DraftsTab(BaseTab):
                                     )
                                 with gr.Column(scale=1, min_width=10):
                                     delete_btn = gr.Button("🗑️ Delete", size="sm", variant="stop")
-                                
+                                    
+                                    # Create a modal for this specific model deletion
+                                    with Modal(visible=False) as delete_modal:
+                                        gr.Markdown("## ⚠️ Confirm Deletion")
+                                        gr.Markdown(f"Are you sure you want to delete model {model.id[:8]}...?")
+                                        gr.Markdown("This action cannot be undone!")
+                                        
+                                        with gr.Row():
+                                            cancel_btn = gr.Button("🫢 No, cancel", variant="secondary")
+                                            confirm_btn = gr.Button("🚨 Yes, delete", variant="primary")
+                                    
+                                    # Connect the buttons to the modal
                                     delete_btn.click(
+                                        fn=lambda: Modal(visible=True),
+                                        inputs=[],
+                                        outputs=[delete_modal]
+                                    )
+                                    
+                                    cancel_btn.click(
+                                        fn=lambda: Modal(visible=False),
+                                        inputs=[],
+                                        outputs=[delete_modal]
+                                    )
+                                    
+                                    confirm_btn.click(
                                         fn=lambda model_id=model.id: self.delete_model(model_id),
                                         inputs=[],
                                         outputs=[new_container]
+                                    ).then(
+                                        fn=lambda: Modal(visible=False),
+                                        inputs=[],
+                                        outputs=[delete_modal]
                                     )
         
         return new_container
     
-    def edit_model(self, model_id: str) -> None:
+    def edit_model(self, model_id: str) -> gr.Tabs:
         """Switch to editing the selected model"""
         if self.app:
             # Switch to project view with this model
             self.app.switch_project(model_id)
             # Set main tab to Project (index 0)
-            return self.app.main_tabs.update(selected=0)
+            return gr.Tabs(selected=0)
             
     def delete_model(self, model_id: str) -> gr.Column:
         """Delete a model and refresh the list"""
