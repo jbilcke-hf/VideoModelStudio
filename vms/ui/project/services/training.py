@@ -22,7 +22,7 @@ from typing import Any, Optional, Dict, List, Union, Tuple
 from huggingface_hub import upload_folder, create_repo
 
 from vms.config import (
-    TrainingConfig, TRAINING_PRESETS, 
+    TrainingConfig, RESOLUTION_OPTIONS, SD_TRAINING_BUCKETS, MD_TRAINING_BUCKETS,
     STORAGE_PATH, HF_API_TOKEN, 
     MODEL_TYPES, TRAINING_TYPES, MODEL_VERSIONS,
     DEFAULT_NB_TRAINING_STEPS, DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
@@ -228,7 +228,7 @@ class TrainingService:
             "batch_size": DEFAULT_BATCH_SIZE,
             "learning_rate": DEFAULT_LEARNING_RATE,
             "save_iterations": DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
-            "training_preset": list(TRAINING_PRESETS.keys())[0],
+            "resolution": list(RESOLUTION_OPTIONS.keys())[0],
             "num_gpus": DEFAULT_NUM_GPUS,
             "precomputation_items": DEFAULT_PRECOMPUTATION_ITEMS,
             "lr_warmup_steps": DEFAULT_NB_LR_WARMUP_STEPS,
@@ -354,10 +354,10 @@ class TrainingService:
                             merged_state["training_type"] = default_state["training_type"]
                             logger.warning(f"Invalid training type in saved state, using default")
                     
-                    # Validate training_preset is in available choices
-                    if merged_state["training_preset"] not in TRAINING_PRESETS:
-                        merged_state["training_preset"] = default_state["training_preset"]
-                        logger.warning(f"Invalid training preset in saved state, using default")
+                    # Validate resolution is in available choices
+                    if "resolution" in merged_state and merged_state["resolution"] not in RESOLUTION_OPTIONS:
+                        merged_state["resolution"] = default_state["resolution"]
+                        logger.warning(f"Invalid resolution in saved state, using default")
                         
                     # Validate lora_rank is in allowed values
                     if merged_state.get("lora_rank") not in ["16", "32", "64", "128", "256", "512", "1024"]:
@@ -566,7 +566,6 @@ class TrainingService:
         learning_rate: float,
         save_iterations: int,
         repo_id: str,
-        preset_name: str,
         training_type: str = DEFAULT_TRAINING_TYPE,
         model_version: str = "",
         resume_from_checkpoint: Optional[str] = None,
@@ -577,7 +576,6 @@ class TrainingService:
     ) -> Tuple[str, str]:
         """Start training with finetrainers"""
         
-        training_path
         self.clear_logs()
 
         if not model_type:
@@ -646,11 +644,24 @@ class TrainingService:
             #if progress:
             #    progress(0.25, desc="Creating dataset configuration")
                 
-            # Get preset configuration
-            preset = TRAINING_PRESETS[preset_name]
-            training_buckets = preset["training_buckets"]
-            flow_weighting_scheme = preset.get("flow_weighting_scheme", "none")
-            preset_training_type = preset.get("training_type", "lora")
+            # Get resolution configuration from UI state
+            ui_state = self.load_ui_state()
+            resolution_option = ui_state.get("resolution", list(RESOLUTION_OPTIONS.keys())[0])
+            training_buckets_name = RESOLUTION_OPTIONS.get(resolution_option, "SD_TRAINING_BUCKETS")
+            
+            # Determine which buckets to use based on the selected resolution
+            if training_buckets_name == "SD_TRAINING_BUCKETS":
+                training_buckets = SD_TRAINING_BUCKETS
+            elif training_buckets_name == "MD_TRAINING_BUCKETS":
+                training_buckets = MD_TRAINING_BUCKETS
+            else:
+                training_buckets = SD_TRAINING_BUCKETS  # Default fallback
+            
+            # Determine flow weighting scheme based on model type
+            if model_type == "hunyuan_video":
+                flow_weighting_scheme = "none"
+            else:
+                flow_weighting_scheme = "logit_normal"
 
             # Get the custom prompt prefix from the tabs
             custom_prompt_prefix = None
@@ -1117,7 +1128,7 @@ class TrainingService:
                             "batch_size": ui_state.get("batch_size", DEFAULT_BATCH_SIZE),
                             "learning_rate": ui_state.get("learning_rate", DEFAULT_LEARNING_RATE),
                             "save_iterations": ui_state.get("save_iterations", DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS),
-                            "preset_name": ui_state.get("training_preset", list(TRAINING_PRESETS.keys())[0]),
+                            "resolution": ui_state.get("resolution", list(RESOLUTION_OPTIONS.keys())[0]),
                             "repo_id": "",  # Default empty repo ID,
                             "auto_resume": ui_state.get("auto_resume", DEFAULT_AUTO_RESUME)
                         }
@@ -1190,7 +1201,7 @@ class TrainingService:
                 "batch_size": params.get('batch_size', DEFAULT_BATCH_SIZE),
                 "learning_rate": params.get('learning_rate', DEFAULT_LEARNING_RATE),
                 "save_iterations": params.get('save_iterations', DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS),
-                "training_preset": params.get('preset_name', list(TRAINING_PRESETS.keys())[0]),
+                "resolution": params.get('resolution', list(RESOLUTION_OPTIONS.keys())[0]),
                 "auto_resume": params.get("auto_resume", DEFAULT_AUTO_RESUME)
             })
             
@@ -1211,7 +1222,6 @@ class TrainingService:
                         save_iterations=params.get('save_iterations', DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS),
                         model_version=params.get('model_version', ''),
                         repo_id=params.get('repo_id', ''),
-                        preset_name=params.get('preset_name', list(TRAINING_PRESETS.keys())[0]),
                         training_type=training_type_internal,
                         resume_from_checkpoint="latest"
                     )
