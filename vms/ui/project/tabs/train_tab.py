@@ -13,8 +13,9 @@ from pathlib import Path
 from vms.utils import BaseTab
 from vms.config import (
     ASK_USER_TO_DUPLICATE_SPACE,
-    SMALL_TRAINING_BUCKETS,
-    TRAINING_PRESETS, TRAINING_TYPES, MODEL_TYPES, MODEL_VERSIONS,
+    SD_TRAINING_BUCKETS, MD_TRAINING_BUCKETS,
+    RESOLUTION_OPTIONS,
+    TRAINING_TYPES, MODEL_TYPES, MODEL_VERSIONS,
     DEFAULT_NB_TRAINING_STEPS, DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
     DEFAULT_BATCH_SIZE, DEFAULT_CAPTION_DROPOUT_P,
     DEFAULT_LEARNING_RATE,
@@ -29,7 +30,8 @@ from vms.config import (
     DEFAULT_AUTO_RESUME,
     DEFAULT_CONTROL_TYPE, DEFAULT_TRAIN_QK_NORM,
     DEFAULT_FRAME_CONDITIONING_TYPE, DEFAULT_FRAME_CONDITIONING_INDEX,
-    DEFAULT_FRAME_CONDITIONING_CONCATENATE_MASK
+    DEFAULT_FRAME_CONDITIONING_CONCATENATE_MASK,
+    HUNYUAN_VIDEO_DEFAULTS, LTX_VIDEO_DEFAULTS, WAN_DEFAULTS
 )
 
 logger = logging.getLogger(__name__)
@@ -49,15 +51,6 @@ class TrainTab(BaseTab):
                 with gr.Column():
                     with gr.Row():
                         self.components["train_title"] = gr.Markdown("## 0 files in the training dataset")
-
-                    with gr.Row():
-                        with gr.Column():
-                            self.components["training_preset"] = gr.Dropdown(
-                                choices=list(TRAINING_PRESETS.keys()),
-                                label="Training Preset",
-                                value=list(TRAINING_PRESETS.keys())[0]
-                            )
-                        self.components["preset_info"] = gr.Markdown()
 
                     with gr.Row():
                         with gr.Column():
@@ -115,6 +108,15 @@ class TrainTab(BaseTab):
                         self.components["model_info"] = gr.Markdown(
                             value=self.get_model_info(list(MODEL_TYPES.keys())[0], list(TRAINING_TYPES.keys())[0])
                         )
+                    
+                    with gr.Row():
+                        with gr.Column():
+                            self.components["resolution"] = gr.Dropdown(
+                                choices=list(RESOLUTION_OPTIONS.keys()),
+                                label="Resolution",
+                                value=list(RESOLUTION_OPTIONS.keys())[0],
+                                info="Select the resolution for training videos"
+                            )
 
                     # LoRA specific parameters (will show/hide based on training type)
                     with gr.Row(visible=True) as lora_params_row:
@@ -140,18 +142,18 @@ class TrainTab(BaseTab):
                             
                             with gr.Accordion("What is LoRA Rank?", open=False):
                                 gr.Markdown("""
-                                **LoRA Rank** determines the complexity of the LoRA adapters:
-                                
-                                - **Lower rank (16-32)**: Smaller file size, faster training, but less expressive
-                                - **Medium rank (64-128)**: Good balance between quality and file size
-                                - **Higher rank (256-1024)**: More expressive adapters, better quality but larger file size
-                                
-                                Think of rank as the "capacity" of your adapter. Higher ranks can learn more complex modifications to the base model but require more VRAM during training and result in larger files.
-                                
-                                **Quick guide:**
-                                - For Wan models: Use 32-64 (Wan models work well with lower ranks)
-                                - For LTX-Video: Use 128-256
-                                - For Hunyuan Video: Use 128
+**LoRA Rank** determines the complexity of the LoRA adapters:
+
+- **Lower rank (16-32)**: Smaller file size, faster training, but less expressive
+- **Medium rank (64-128)**: Good balance between quality and file size
+- **Higher rank (256-1024)**: More expressive adapters, better quality but larger file size
+
+Think of rank as the "capacity" of your adapter. Higher ranks can learn more complex modifications to the base model but require more VRAM during training and result in larger files.
+
+**Quick guide:**
+- For Wan models: Use 32-64 (Wan models work well with lower ranks)
+- For LTX-Video: Use 128-256
+- For Hunyuan Video: Use 128
                                 """)
                         
                         with gr.Column():
@@ -162,32 +164,31 @@ class TrainTab(BaseTab):
                                 type="value",
                                 info="Controls the effective learning rate scaling of LoRA adapters. Usually set to same value as rank"
                             )
-                            
                             with gr.Accordion("What is LoRA Alpha?", open=False):
                                 gr.Markdown("""
-                                **LoRA Alpha** controls the effective scale of the LoRA updates:
-                                
-                                - The actual scaling factor is calculated as `alpha ÷ rank`
-                                - Usually set to match the rank value (alpha = rank)
-                                - Higher alpha = stronger effect from the adapters
-                                - Lower alpha = more subtle adapter influence
-                                
-                                **Best practice:**
-                                - For most cases, set alpha equal to rank
-                                - For more aggressive training, set alpha higher than rank
-                                - For more conservative training, set alpha lower than rank
+**LoRA Alpha** controls the effective scale of the LoRA updates:
+
+- The actual scaling factor is calculated as `alpha ÷ rank`
+- Usually set to match the rank value (alpha = rank)
+- Higher alpha = stronger effect from the adapters
+- Lower alpha = more subtle adapter influence
+
+**Best practice:**
+- For most cases, set alpha equal to rank
+- For more aggressive training, set alpha higher than rank
+- For more conservative training, set alpha lower than rank
                                 """)
-                        
+                                
                         
                     # Control specific parameters (will show/hide based on training type)
                     with gr.Row(visible=False) as control_params_row:
                         self.components["control_params_row"] = control_params_row
                         with gr.Column():
                             gr.Markdown("""
-                            ## 🖼️ Control Training Settings
-                            
-                            Control training enables **image-to-video generation** by teaching the model how to use an image as a guide for video creation. 
-                            This is ideal for turning still images into dynamic videos while preserving composition, style, and content.
+## 🖼️ Control Training Settings
+
+Control training enables **image-to-video generation** by teaching the model how to use an image as a guide for video creation. 
+This is ideal for turning still images into dynamic videos while preserving composition, style, and content.
                             """)
                     
                     # Second row for control parameters
@@ -203,10 +204,10 @@ class TrainTab(BaseTab):
                             
                             with gr.Accordion("What is Control Conditioning?", open=False):
                                 gr.Markdown("""
-                                **Control Conditioning** allows the model to be guided by an input image, adapting the video generation based on the image content. This is used for image-to-video generation where you want to turn an image into a moving video while maintaining its style, composition or content.
-                                
-                                - **canny**: Uses edge detection to extract outlines from images for structure-preserving video generation
-                                - **custom**: Direct image conditioning without preprocessing, preserving more image details
+**Control Conditioning** allows the model to be guided by an input image, adapting the video generation based on the image content. This is used for image-to-video generation where you want to turn an image into a moving video while maintaining its style, composition or content.
+
+- **canny**: Uses edge detection to extract outlines from images for structure-preserving video generation
+- **custom**: Direct image conditioning without preprocessing, preserving more image details
                                 """)
                         
                         with gr.Column():
@@ -218,11 +219,11 @@ class TrainTab(BaseTab):
                             
                             with gr.Accordion("What is QK Normalization?", open=False):
                                 gr.Markdown("""
-                                **QK Normalization** refers to normalizing the query and key values in the attention mechanism of transformers.
-                                
-                                - When enabled, allows the model to better integrate control signals with content generation
-                                - Improves training stability for control models
-                                - Generally recommended for control training, especially with image conditioning
+**QK Normalization** refers to normalizing the query and key values in the attention mechanism of transformers.
+
+- When enabled, allows the model to better integrate control signals with content generation
+- Improves training stability for control models
+- Generally recommended for control training, especially with image conditioning
                                 """)
                     
                     with gr.Row(visible=False) as frame_conditioning_row:
@@ -237,15 +238,15 @@ class TrainTab(BaseTab):
                             
                             with gr.Accordion("Frame Conditioning Type Explanation", open=False):
                                 gr.Markdown("""
-                                **Frame Conditioning Types** determine which frames in the video receive image conditioning:
-                                
-                                - **index**: Only applies conditioning to a single frame at the specified index
-                                - **prefix**: Applies conditioning to all frames before a certain point
-                                - **random**: Randomly selects frames to receive conditioning during training
-                                - **first_and_last**: Only applies conditioning to the first and last frames
-                                - **full**: Applies conditioning to all frames in the video
-                                
-                                For image-to-video tasks, 'index' (usually with index 0) is most common as it conditions only the first frame.
+**Frame Conditioning Types** determine which frames in the video receive image conditioning:
+
+- **index**: Only applies conditioning to a single frame at the specified index
+- **prefix**: Applies conditioning to all frames before a certain point
+- **random**: Randomly selects frames to receive conditioning during training
+- **first_and_last**: Only applies conditioning to the first and last frames
+- **full**: Applies conditioning to all frames in the video
+
+For image-to-video tasks, 'index' (usually with index 0) is most common as it conditions only the first frame.
                                 """)
                         
                         with gr.Column():
@@ -267,12 +268,12 @@ class TrainTab(BaseTab):
                             
                             with gr.Accordion("What is Frame Mask Concatenation?", open=False):
                                 gr.Markdown("""
-                                **Frame Mask Concatenation** adds an additional channel to the control signal that indicates which frames are being conditioned:
+**Frame Mask Concatenation** adds an additional channel to the control signal that indicates which frames are being conditioned:
                                 
-                                - Creates a binary mask (0/1) indicating which frames receive conditioning
-                                - Helps the model distinguish between conditioned and unconditioned frames
-                                - Particularly useful for 'index' conditioning where only select frames are conditioned
-                                - Generally improves temporal consistency between conditioned and unconditioned frames
+- Creates a binary mask (0/1) indicating which frames receive conditioning
+- Helps the model distinguish between conditioned and unconditioned frames
+- Particularly useful for 'index' conditioning where only select frames are conditioned
+- Generally improves temporal consistency between conditioned and unconditioned frames
                                 """)
                                 
                         with gr.Column():
@@ -448,7 +449,7 @@ class TrainTab(BaseTab):
         return None
 
     def handle_new_training_start(
-        self, preset, model_type, model_version, training_type, 
+        self, model_type, model_version, training_type, 
         lora_rank, lora_alpha, train_steps, batch_size, learning_rate, 
         save_iterations, repo_id, progress=gr.Progress()
     ):
@@ -469,13 +470,13 @@ class TrainTab(BaseTab):
         
         # Start training normally
         return self.handle_training_start(
-            preset, model_type, model_version, training_type, 
+            model_type, model_version, training_type, 
             lora_rank, lora_alpha, train_steps, batch_size, learning_rate, 
             save_iterations, repo_id, progress
         )
 
     def handle_resume_training(
-        self, preset, model_type, model_version, training_type, 
+        self, model_type, model_version, training_type, 
         lora_rank, lora_alpha, train_steps, batch_size, learning_rate, 
         save_iterations, repo_id, progress=gr.Progress()
     ):
@@ -490,7 +491,7 @@ class TrainTab(BaseTab):
     
         # Start training with the checkpoint
         return self.handle_training_start(
-            preset, model_type, model_version, training_type, 
+            model_type, model_version, training_type, 
             lora_rank, lora_alpha, train_steps, batch_size, learning_rate, 
             save_iterations, repo_id, progress, 
             resume_from_checkpoint="latest"
@@ -498,20 +499,34 @@ class TrainTab(BaseTab):
 
     def connect_events(self) -> None:
         """Connect event handlers to UI components"""
-        # Model type change event - Update model version dropdown choices
+        # Model type change event - Update model version dropdown choices and default parameters
         self.components["model_type"].change(
             fn=self.update_model_versions,
             inputs=[self.components["model_type"]],
             outputs=[self.components["model_version"]]
         ).then(
-            fn=self.update_model_type_and_version,  # Add this new function
+            fn=self.update_model_type_and_version,
             inputs=[self.components["model_type"], self.components["model_version"]],
             outputs=[]
         ).then(
-            # Use get_model_info instead of update_model_info
-            fn=self.get_model_info,
+            # Update model info and recommended default values based on model and training type
+            fn=self.update_model_info,
             inputs=[self.components["model_type"], self.components["training_type"]],
-            outputs=[self.components["model_info"]]
+            outputs=[
+                self.components["model_info"],
+                self.components["train_steps"],
+                self.components["batch_size"],
+                self.components["learning_rate"],
+                self.components["save_iterations"],
+                self.components["lora_params_row"],
+                self.components["lora_settings_row"],
+                self.components["control_params_row"],
+                self.components["control_settings_row"],
+                self.components["frame_conditioning_row"],
+                self.components["control_options_row"],
+                self.components["lora_rank"],
+                self.components["lora_alpha"]
+            ]
         )
         
         # Model version change event
@@ -535,7 +550,14 @@ class TrainTab(BaseTab):
                 self.components["batch_size"],
                 self.components["learning_rate"],
                 self.components["save_iterations"],
-                self.components["lora_params_row"]
+                self.components["lora_params_row"],
+                self.components["lora_settings_row"],
+                self.components["control_params_row"],
+                self.components["control_settings_row"],
+                self.components["frame_conditioning_row"],
+                self.components["control_options_row"],
+                self.components["lora_rank"],
+                self.components["lora_alpha"]
             ]
         )
 
@@ -632,50 +654,17 @@ class TrainTab(BaseTab):
             outputs=[]
         )
         
-        # Training preset change event
-        self.components["training_preset"].change(
-            fn=lambda v: self.app.update_ui_state(training_preset=v),
-            inputs=[self.components["training_preset"]],
+        # Resolution change event
+        self.components["resolution"].change(
+            fn=lambda v: self.app.update_ui_state(resolution=v),
+            inputs=[self.components["resolution"]],
             outputs=[]
-        ).then(
-            fn=self.update_training_params,
-            inputs=[self.components["training_preset"]],
-            outputs=[
-                self.components["model_type"],
-                self.components["training_type"],
-                self.components["lora_rank"],
-                self.components["lora_alpha"],
-                self.components["train_steps"],
-                self.components["batch_size"],
-                self.components["learning_rate"],
-                self.components["save_iterations"],
-                self.components["preset_info"],
-                self.components["lora_params_row"],
-                self.components["lora_settings_row"],
-                self.components["num_gpus"],
-                self.components["precomputation_items"],
-                self.components["lr_warmup_steps"],
-                # Add model_version to the outputs
-                self.components["model_version"],
-                # Control parameters rows visibility
-                self.components["control_params_row"],
-                self.components["control_settings_row"],
-                self.components["frame_conditioning_row"],
-                self.components["control_options_row"],
-                # Control parameter values
-                self.components["control_type"],
-                self.components["train_qk_norm"],
-                self.components["frame_conditioning_type"],
-                self.components["frame_conditioning_index"],
-                self.components["frame_conditioning_concatenate_mask"],
-            ]
         )
         
         # Training control events
         self.components["start_btn"].click(
             fn=self.handle_new_training_start,
             inputs=[
-                self.components["training_preset"],
                 self.components["model_type"],
                 self.components["model_version"],
                 self.components["training_type"],
@@ -696,7 +685,6 @@ class TrainTab(BaseTab):
         self.components["resume_btn"].click(
             fn=self.handle_resume_training,
             inputs=[
-                self.components["training_preset"],
                 self.components["model_type"],
                 self.components["model_version"],
                 self.components["training_type"],
@@ -761,23 +749,25 @@ class TrainTab(BaseTab):
             # Update UI state with proper model_type first
             self.app.update_ui_state(model_type=model_type)
             
-            # Ensure model_versions is a simple list of strings
-            model_versions = [str(version) for version in model_versions]
+            # Create a list of tuples (label, value) for the dropdown choices
+            # This ensures compatibility with Gradio Dropdown component expectations
+            choices_tuples = [(str(version), str(version)) for version in model_versions]
             
             # Create a new dropdown with the updated choices
-            if not model_versions:
+            if not choices_tuples:
                 logger.warning(f"No model versions available for {model_type}, using empty list")
                 # Return empty dropdown to avoid errors
                 return gr.Dropdown(choices=[], value=None)
                     
             # Ensure default_version is in model_versions
-            if default_version not in model_versions and model_versions:
-                default_version = model_versions[0]
+            string_versions = [str(v) for v in model_versions]
+            if default_version not in string_versions and string_versions:
+                default_version = string_versions[0]
                 logger.info(f"Default version not in choices, using first available: {default_version}")
             
             # Return the updated dropdown
-            logger.info(f"Returning dropdown with {len(model_versions)} choices")
-            return gr.Dropdown(choices=model_versions, value=default_version)
+            logger.info(f"Returning dropdown with {len(choices_tuples)} choices")
+            return gr.Dropdown(choices=choices_tuples, value=default_version)
         except Exception as e:
             # Log any exceptions for debugging
             logger.error(f"Error in update_model_versions: {str(e)}")
@@ -785,7 +775,7 @@ class TrainTab(BaseTab):
             return gr.Dropdown(choices=[], value=None)
         
     def handle_training_start(
-        self, preset, model_type, model_version, training_type, 
+        self, model_type, model_version, training_type, 
         lora_rank, lora_alpha, train_steps, batch_size, learning_rate, 
         save_iterations, repo_id,
         progress=gr.Progress(),
@@ -844,7 +834,6 @@ class TrainTab(BaseTab):
                 learning_rate,
                 save_iterations,
                 repo_id,
-                preset_name=preset,
                 training_type=training_internal_type,
                 model_version=model_version,
                 resume_from_checkpoint=resume_from,
@@ -898,14 +887,14 @@ class TrainTab(BaseTab):
         # Add general information about the selected training type
         if training_type == "Full Finetune":
             finetune_info = """
-            ## 🧠 Full Finetune Mode
+## 🧠 Full Finetune Mode
             
-            Full finetune mode trains all parameters of the model, requiring more VRAM but potentially enabling higher quality results.
+Full finetune mode trains all parameters of the model, requiring more VRAM but potentially enabling higher quality results.
             
-            - Requires 20-50GB+ VRAM depending on model
-            - Creates a complete standalone model (~8GB+ file size)
-            - Recommended only for high-end GPUs (A100, H100, etc.)
-            - Not recommended for the larger models like Hunyuan Video on consumer hardware
+- Requires 20-50GB+ VRAM depending on model
+- Creates a complete standalone model (~8GB+ file size)
+- Recommended only for high-end GPUs (A100, H100, etc.)
+- Not recommended for the larger models like Hunyuan Video on consumer hardware
             """
             model_info = finetune_info + "\n\n" + model_info
         
@@ -925,6 +914,8 @@ class TrainTab(BaseTab):
             self.components["batch_size"]: params["batch_size"],
             self.components["learning_rate"]: params["learning_rate"],
             self.components["save_iterations"]: params["save_iterations"],
+            self.components["lora_rank"]: params["lora_rank"],
+            self.components["lora_alpha"]: params["lora_alpha"],
             self.components["lora_params_row"]: gr.Row(visible=show_lora_params),
             self.components["lora_settings_row"]: gr.Row(visible=show_lora_params),
             self.components["control_params_row"]: gr.Row(visible=show_control_params),
@@ -936,11 +927,11 @@ class TrainTab(BaseTab):
     def get_model_info(self, model_type: str, training_type: str) -> str:
         """Get information about the selected model type and training method"""
         if model_type == "HunyuanVideo":
-            base_info = """### HunyuanVideo
-    - Required VRAM: ~48GB minimum
-    - Recommended batch size: 1-2
-    - Typical training time: 2-4 hours
-    - Default resolution: 49x512x768"""
+            base_info = """## HunyuanVideo Training
+- Required VRAM: ~48GB minimum
+- Recommended batch size: 1-2
+- Typical training time: 2-4 hours
+- Default resolution: 49x512x768"""
             
             if training_type == "LoRA Finetune":
                 return base_info + "\n- Required VRAM: ~18GB minimum\n- Default LoRA rank: 128 (~400 MB)"
@@ -952,10 +943,10 @@ class TrainTab(BaseTab):
                 return base_info + "\n- Required VRAM: ~48GB minimum\n- **Full finetune not recommended due to VRAM requirements**"
                 
         elif model_type == "LTX-Video":
-            base_info = """### LTX-Video
-    - Recommended batch size: 1-4
-    - Typical training time: 1-3 hours
-    - Default resolution: 49x512x768"""
+            base_info = """## LTX-Video Training
+- Recommended batch size: 1-4
+- Typical training time: 1-3 hours
+- Default resolution: 49x512x768"""
             
             if training_type == "LoRA Finetune":
                 return base_info + "\n- Required VRAM: ~18GB minimum\n- Default LoRA rank: 128 (~400 MB)"
@@ -967,10 +958,10 @@ class TrainTab(BaseTab):
                 return base_info + "\n- Required VRAM: ~21GB minimum\n- Full model size: ~8GB"
                 
         elif model_type == "Wan":
-            base_info = """### Wan
-    - Recommended batch size: 1-4
-    - Typical training time: 1-3 hours
-    - Default resolution: 49x512x768"""
+            base_info = """## Wan2.1 Training
+- Recommended batch size: 1-4
+- Typical training time: 1-3 hours
+- Default resolution: 49x512x768"""
             
             if training_type == "LoRA Finetune":
                 return base_info + "\n- Required VRAM: ~16GB minimum\n- Default LoRA rank: 32 (~120 MB)"
@@ -986,168 +977,30 @@ class TrainTab(BaseTab):
 
     def get_default_params(self, model_type: str, training_type: str) -> Dict[str, Any]:
         """Get default training parameters for model type"""
-        # Find preset that matches model type and training type
-        matching_presets = [
-            preset for preset_name, preset in TRAINING_PRESETS.items() 
-            if preset["model_type"] == model_type and preset["training_type"] == training_type
-        ]
+        # Use model-specific defaults based on model_type and training_type
+        model_defaults = {}
         
-        if matching_presets:
-            # Use the first matching preset
-            preset = matching_presets[0]
-            return {
-                "train_steps": preset.get("train_steps", DEFAULT_NB_TRAINING_STEPS),
-                "batch_size": preset.get("batch_size", DEFAULT_BATCH_SIZE),
-                "learning_rate": preset.get("learning_rate", DEFAULT_LEARNING_RATE),
-                "save_iterations": preset.get("save_iterations", DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS),
-                "lora_rank": preset.get("lora_rank", DEFAULT_LORA_RANK_STR),
-                "lora_alpha": preset.get("lora_alpha", DEFAULT_LORA_ALPHA_STR)
-            }
+        if model_type == "hunyuan_video" and training_type in HUNYUAN_VIDEO_DEFAULTS:
+            model_defaults = HUNYUAN_VIDEO_DEFAULTS[training_type]
+        elif model_type == "ltx_video" and training_type in LTX_VIDEO_DEFAULTS:
+            model_defaults = LTX_VIDEO_DEFAULTS[training_type]
+        elif model_type == "wan" and training_type in WAN_DEFAULTS:
+            model_defaults = WAN_DEFAULTS[training_type]
         
-        # Default fallbacks
-        if model_type == "hunyuan_video":
-            return {
-                "train_steps": DEFAULT_NB_TRAINING_STEPS,
-                "batch_size": DEFAULT_BATCH_SIZE,
-                "learning_rate": 2e-5,
-                "save_iterations": DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
-                "lora_rank": DEFAULT_LORA_RANK_STR,
-                "lora_alpha": DEFAULT_LORA_ALPHA_STR
-            }
-        elif model_type == "ltx_video":
-            return {
-                "train_steps": DEFAULT_NB_TRAINING_STEPS,
-                "batch_size": DEFAULT_BATCH_SIZE,
-                "learning_rate": DEFAULT_LEARNING_RATE,
-                "save_iterations": DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
-                "lora_rank": DEFAULT_LORA_RANK_STR,
-                "lora_alpha": DEFAULT_LORA_ALPHA_STR
-            }
-        elif model_type == "wan":
-            return {
-                "train_steps": DEFAULT_NB_TRAINING_STEPS,
-                "batch_size": DEFAULT_BATCH_SIZE,
-                "learning_rate": 5e-5,
-                "save_iterations": DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
-                "lora_rank": "32",
-                "lora_alpha": "32"
-            }
-        else:
-            # Generic defaults
-            return {
-                "train_steps": DEFAULT_NB_TRAINING_STEPS,
-                "batch_size": DEFAULT_BATCH_SIZE,
-                "learning_rate": DEFAULT_LEARNING_RATE,
-                "save_iterations": DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
-                "lora_rank": DEFAULT_LORA_RANK_STR,
-                "lora_alpha": DEFAULT_LORA_ALPHA_STR
-            }
-            
-    def update_training_params(self, preset_name: str) -> Tuple:
-        """Update UI components based on selected preset while preserving custom settings"""
-        preset = TRAINING_PRESETS[preset_name]
+        # Build the complete params dict with defaults plus model-specific overrides
+        params = {
+            "train_steps": DEFAULT_NB_TRAINING_STEPS,
+            "batch_size": DEFAULT_BATCH_SIZE,
+            "learning_rate": DEFAULT_LEARNING_RATE,
+            "save_iterations": DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
+            "lora_rank": DEFAULT_LORA_RANK_STR,
+            "lora_alpha": DEFAULT_LORA_ALPHA_STR
+        }
         
-        # Load current UI state to check if user has customized values
-        current_state = self.app.load_ui_values()
+        # Override with model-specific values
+        params.update(model_defaults)
         
-        # Find the display name that maps to our model type
-        model_display_name = next(
-            key for key, value in MODEL_TYPES.items() 
-            if value == preset["model_type"]
-        )
-        
-        # Find the display name that maps to our training type
-        training_display_name = next(
-            key for key, value in TRAINING_TYPES.items() 
-            if value == preset["training_type"]
-        )
-            
-        # Get preset description for display
-        description = preset.get("description", "")
-        
-        # Get max values from buckets
-        buckets = preset["training_buckets"]
-        max_frames = max(frames for frames, _, _ in buckets)
-        max_height = max(height for _, height, _ in buckets)
-        max_width = max(width for _, _, width in buckets)
-        bucket_info = f"\nMaximum video size: {max_frames} frames at {max_width}x{max_height} resolution"
-        
-        info_text = f"{description}{bucket_info}"
-        
-        # Check if LoRA params should be visible
-        training_type_internal = preset["training_type"]
-        show_lora_params = training_type_internal == "lora" or training_type_internal == "control-lora"
-        
-        # Check if Control params should be visible
-        show_control_params = training_type_internal == "control-lora" or training_type_internal == "control-full-finetune"
-        
-        # Use preset defaults but preserve user-modified values if they exist
-        lora_rank_val = current_state.get("lora_rank") if current_state.get("lora_rank") != preset.get("lora_rank", DEFAULT_LORA_RANK_STR) else preset.get("lora_rank", DEFAULT_LORA_RANK_STR)
-        lora_alpha_val = current_state.get("lora_alpha") if current_state.get("lora_alpha") != preset.get("lora_alpha", DEFAULT_LORA_ALPHA_STR) else preset.get("lora_alpha", DEFAULT_LORA_ALPHA_STR)
-        train_steps_val = current_state.get("train_steps") if current_state.get("train_steps") != preset.get("train_steps", DEFAULT_NB_TRAINING_STEPS) else preset.get("train_steps", DEFAULT_NB_TRAINING_STEPS)
-        batch_size_val = current_state.get("batch_size") if current_state.get("batch_size") != preset.get("batch_size", DEFAULT_BATCH_SIZE) else preset.get("batch_size", DEFAULT_BATCH_SIZE)
-        learning_rate_val = current_state.get("learning_rate") if current_state.get("learning_rate") != preset.get("learning_rate", DEFAULT_LEARNING_RATE) else preset.get("learning_rate", DEFAULT_LEARNING_RATE)
-        save_iterations_val = current_state.get("save_iterations") if current_state.get("save_iterations") != preset.get("save_iterations", DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS) else preset.get("save_iterations", DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS)
-        num_gpus_val = current_state.get("num_gpus") if current_state.get("num_gpus") != preset.get("num_gpus", DEFAULT_NUM_GPUS) else preset.get("num_gpus", DEFAULT_NUM_GPUS)
-        precomputation_items_val = current_state.get("precomputation_items") if current_state.get("precomputation_items") != preset.get("precomputation_items", DEFAULT_PRECOMPUTATION_ITEMS) else preset.get("precomputation_items", DEFAULT_PRECOMPUTATION_ITEMS)
-        lr_warmup_steps_val = current_state.get("lr_warmup_steps") if current_state.get("lr_warmup_steps") != preset.get("lr_warmup_steps", DEFAULT_NB_LR_WARMUP_STEPS) else preset.get("lr_warmup_steps", DEFAULT_NB_LR_WARMUP_STEPS)
-        
-        # Control parameters
-        control_type_val = current_state.get("control_type") if current_state.get("control_type") != preset.get("control_type", DEFAULT_CONTROL_TYPE) else preset.get("control_type", DEFAULT_CONTROL_TYPE)
-        train_qk_norm_val = current_state.get("train_qk_norm") if current_state.get("train_qk_norm") != preset.get("train_qk_norm", DEFAULT_TRAIN_QK_NORM) else preset.get("train_qk_norm", DEFAULT_TRAIN_QK_NORM)
-        frame_conditioning_type_val = current_state.get("frame_conditioning_type") if current_state.get("frame_conditioning_type") != preset.get("frame_conditioning_type", DEFAULT_FRAME_CONDITIONING_TYPE) else preset.get("frame_conditioning_type", DEFAULT_FRAME_CONDITIONING_TYPE)
-        frame_conditioning_index_val = current_state.get("frame_conditioning_index") if current_state.get("frame_conditioning_index") != preset.get("frame_conditioning_index", DEFAULT_FRAME_CONDITIONING_INDEX) else preset.get("frame_conditioning_index", DEFAULT_FRAME_CONDITIONING_INDEX)
-        frame_conditioning_concatenate_mask_val = current_state.get("frame_conditioning_concatenate_mask") if current_state.get("frame_conditioning_concatenate_mask") != preset.get("frame_conditioning_concatenate_mask", DEFAULT_FRAME_CONDITIONING_CONCATENATE_MASK) else preset.get("frame_conditioning_concatenate_mask", DEFAULT_FRAME_CONDITIONING_CONCATENATE_MASK)
-        
-        # Get the appropriate model version for the selected model type
-        model_versions = self.get_model_version_choices(model_display_name)
-        default_model_version = self.get_default_model_version(model_display_name)
-
-        # Ensure we have valid choices and values
-        if not model_versions:
-            logger.warning(f"No versions found for {model_display_name}, using empty list")
-            model_versions = []
-            default_model_version = None
-        elif default_model_version not in model_versions and model_versions:
-            default_model_version = model_versions[0]
-            logger.info(f"Reset default version to first available: {default_model_version}")
-
-        # Ensure model_versions is a simple list of strings
-        model_versions = [str(version) for version in model_versions]
-
-        # Create the model version dropdown update
-        model_version_update = gr.Dropdown(choices=model_versions, value=default_model_version)
-
-        # Return values in the same order as the output components listed in line 644
-        # Make sure we return exactly 24 values to match what's expected
-        return (
-            model_display_name,                             # model_type
-            training_display_name,                          # training_type
-            lora_rank_val,                                 # lora_rank
-            lora_alpha_val,                                # lora_alpha
-            train_steps_val,                               # train_steps
-            batch_size_val,                                # batch_size
-            learning_rate_val,                             # learning_rate
-            save_iterations_val,                           # save_iterations
-            info_text,                                     # preset_info
-            gr.Row(visible=show_lora_params),              # lora_params_row
-            gr.Row(visible=show_lora_params),              # lora_settings_row (added missing row)
-            num_gpus_val,                                  # num_gpus
-            precomputation_items_val,                      # precomputation_items
-            lr_warmup_steps_val,                           # lr_warmup_steps
-            model_version_update,                          # model_version
-            # Control parameters rows visibility
-            gr.Row(visible=show_control_params),           # control_params_row
-            gr.Row(visible=show_control_params),           # control_settings_row
-            gr.Row(visible=show_control_params),           # frame_conditioning_row
-            gr.Row(visible=show_control_params),           # control_options_row
-            # Control parameter values
-            control_type_val,                              # control_type
-            train_qk_norm_val,                             # train_qk_norm
-            frame_conditioning_type_val,                   # frame_conditioning_type
-            frame_conditioning_index_val,                  # frame_conditioning_index
-            frame_conditioning_concatenate_mask_val,       # frame_conditioning_concatenate_mask
-        )
+        return params
 
 
     def get_latest_status_message_and_logs(self) -> Tuple[str, str, str]:

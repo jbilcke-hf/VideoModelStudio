@@ -304,39 +304,71 @@ DEFAULT_VALIDATION_WIDTH = 768
 DEFAULT_VALIDATION_NB_FRAMES = 49
 DEFAULT_VALIDATION_FRAMERATE = 8
 
-# it is best to use resolutions that are powers of 8
-# The resolution should be divisible by 32
-# so we cannot use 1080, 540 etc as they are not divisible by 32
-MEDIUM_19_9_RATIO_WIDTH = 768 # 32 * 24
-MEDIUM_19_9_RATIO_HEIGHT = 512 # 32 * 16
+# you should use resolutions that are powers of 8
+# using a 16:9 ratio is also super-recommended
 
-# 1920 = 32 * 60 (divided by 2: 960 = 32 * 30)
-# 1920 = 32 * 60 (divided by 2: 960 = 32 * 30)
-# 1056 = 32 * 33 (divided by 2: 544 = 17 * 32)
-# 1024 = 32 * 32 (divided by 2: 512 = 16 * 32)
+# SD
+SD_16_9_W = 1024 # 8*128
+SD_16_9_H = 576  # 8*72
+SD_9_16_W = 576  # 8*72
+SD_9_16_H = 1024 # 8*128
+
+# MD (720p)
+MD_16_9_W = 1280 # 8*160
+MD_16_9_H = 720  # 8*90
+MD_9_16_W = 720  # 8*90
+MD_9_16_H = 1280 # 8*160
+
+# HD (1080p)
+HD_16_9_W = 1920 # 8*240
+HD_16_9_H = 1080 # 8*135
+HD_9_16_W = 1080 # 8*135
+HD_9_16_H = 1920 # 8*240
+
+# QHD (2K)
+QHD_16_9_W = 2160 # 8*270
+QHD_16_9_H = 1440 # 8*180
+QHD_9_16_W = 1440 # 8*180
+QHD_9_16_H = 2160 # 8*270
+
+# UHD (4K)
+UHD_16_9_W = 3840 # 8*480
+UHD_16_9_H = 2160 # 8*270
+UHD_9_16_W = 2160 # 8*270
+UHD_9_16_H = 3840 # 8*480
+
 # it is important that the resolution buckets properly cover the training dataset,
 # or else that we exclude from the dataset videos that are out of this range
 # right now, finetrainers will crash if that happens, so the workaround is to have more buckets in here
 
-NB_FRAMES_1 = 1  #  1
-NB_FRAMES_9 = 8 + 1 # 8 + 1
-NB_FRAMES_17 = 8 * 2 + 1 # 16 + 1
-NB_FRAMES_33 = 8 * 4 + 1  # 32 + 1
-NB_FRAMES_49 = 8 * 6 + 1 # 48 + 1
-NB_FRAMES_65 = 8 * 8 + 1  # 64 + 1
-NB_FRAMES_81 = 8 * 10 + 1  # 80 + 1
-NB_FRAMES_97 = 8 * 12 + 1  # 96 + 1
+NB_FRAMES_1   =          1  # 1
+NB_FRAMES_9   = 8      + 1  # 8 + 1
+NB_FRAMES_17  = 8 *  2 + 1  # 16 + 1
+NB_FRAMES_33  = 8 *  4 + 1  # 32 + 1
+NB_FRAMES_49  = 8 *  6 + 1  # 48 + 1
+NB_FRAMES_65  = 8 *  8 + 1  # 64 + 1
+NB_FRAMES_73  = 8 *  9 + 1  # 72 + 1
+NB_FRAMES_81  = 8 * 10 + 1  # 80 + 1
+NB_FRAMES_89  = 8 * 11 + 1  # 88 + 1
+NB_FRAMES_97  = 8 * 12 + 1  # 96 + 1
+NB_FRAMES_105 = 8 * 13 + 1  # 104 + 1
 NB_FRAMES_113 = 8 * 14 + 1  # 112 + 1
+NB_FRAMES_121 = 8 * 14 + 1  # 120 + 1
 NB_FRAMES_129 = 8 * 16 + 1  # 128 + 1
+NB_FRAMES_137 = 8 * 16 + 1  # 136 + 1
 NB_FRAMES_145 = 8 * 18 + 1  # 144 + 1
-NB_FRAMES_161  = 8 * 20 + 1  # 160 + 1
+NB_FRAMES_161 = 8 * 20 + 1  # 160 + 1
 NB_FRAMES_177 = 8 * 22 + 1  # 176 + 1
 NB_FRAMES_193 = 8 * 24 + 1  # 192 + 1
+NB_FRAMES_201 = 8 * 25 + 1  # 200 + 1
+NB_FRAMES_209 = 8 * 26 + 1  # 208 + 1
+NB_FRAMES_217 = 8 * 27 + 1  # 216 + 1
 NB_FRAMES_225 = 8 * 28 + 1  # 224 + 1
+NB_FRAMES_233 = 8 * 29 + 1  # 232 + 1
+NB_FRAMES_241 = 8 * 30 + 1  # 240 + 1
+NB_FRAMES_249 = 8 * 31 + 1  # 248 + 1
 NB_FRAMES_257 = 8 * 32 + 1  # 256 + 1
-# 256 isn't a lot by the way, especially with 60 FPS videos.. 
-# can we crank it and put more frames in here?
-
+NB_FRAMES_265 = 8 * 33 + 1  # 264 + 1
 NB_FRAMES_273 = 8 * 34 + 1  # 272 + 1
 NB_FRAMES_289 = 8 * 36 + 1  # 288 + 1
 NB_FRAMES_305 = 8 * 38 + 1  # 304 + 1
@@ -347,199 +379,155 @@ NB_FRAMES_369 = 8 * 46 + 1  # 368 + 1
 NB_FRAMES_385 = 8 * 48 + 1  # 384 + 1
 NB_FRAMES_401 = 8 * 50 + 1  # 400 + 1
 
-SMALL_TRAINING_BUCKETS = [
-    (NB_FRAMES_1,   MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 1
-    (NB_FRAMES_9,   MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 8 + 1
-    (NB_FRAMES_17,  MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 16 + 1
-    (NB_FRAMES_33,  MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 32 + 1
-    (NB_FRAMES_49,  MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 48 + 1
-    (NB_FRAMES_65,  MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 64 + 1
-    (NB_FRAMES_81,  MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 80 + 1
-    (NB_FRAMES_97,  MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 96 + 1
-    (NB_FRAMES_113, MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 112 + 1
-    (NB_FRAMES_129, MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 128 + 1
-    (NB_FRAMES_145, MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 144 + 1
-    (NB_FRAMES_161, MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 160 + 1
-    (NB_FRAMES_177, MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 176 + 1
-    (NB_FRAMES_193, MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 192 + 1
-    (NB_FRAMES_225, MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 224 + 1
-    (NB_FRAMES_257, MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 256 + 1
+# ------ HOW BUCKETS WORK:----------
+# Basically, to train or fine-tune a video model with Finetrainers, we need to specify all the possible accepted videos lengths AND size combinations (buckets), in the form: (BUCKET_CONFIGURATION_1, BUCKET_CONFIGURATION_2, ..., BUCKET_CONFIGURATION_N)
+# Where a bucket is: (NUMBER_OF_FRAMES_PLUS_ONE, HEIGHT_IN_PIXELS, WIDTH_IN_PIXELS)
+# For instance, for 2 seconds of a 1024x576 video at 24 frames per second, plus one frame (I think there is always an extra frame for the initial starting image), we would get:
+#   NUMBER_OF_FRAMES_PLUS_ONE = (2*24) + 1 = 48 + 1 = 49
+#   HEIGHT_IN_PIXELS = 576
+#   WIDTH_IN_PIXELS = 1024
+# -> This would give a bucket like this: (49, 576, 1024)
+#
+
+SD_TRAINING_BUCKETS = [
+    (NB_FRAMES_1,   SD_16_9_H, SD_16_9_W), # 1
+    (NB_FRAMES_9,   SD_16_9_H, SD_16_9_W), # 8 + 1
+    (NB_FRAMES_17,  SD_16_9_H, SD_16_9_W), # 16 + 1
+    (NB_FRAMES_33,  SD_16_9_H, SD_16_9_W), # 32 + 1
+    (NB_FRAMES_49,  SD_16_9_H, SD_16_9_W), # 48 + 1
+    (NB_FRAMES_65,  SD_16_9_H, SD_16_9_W), # 64 + 1
+    (NB_FRAMES_73,  SD_16_9_H, SD_16_9_W), # 72 + 1
+    (NB_FRAMES_81,  SD_16_9_H, SD_16_9_W), # 80 + 1
+    (NB_FRAMES_89,  SD_16_9_H, SD_16_9_W), # 88 + 1
+    (NB_FRAMES_97,  SD_16_9_H, SD_16_9_W), # 96 + 1
+    (NB_FRAMES_105, SD_16_9_H, SD_16_9_W), # 104 + 1
+    (NB_FRAMES_113, SD_16_9_H, SD_16_9_W), # 112 + 1
+    (NB_FRAMES_121, SD_16_9_H, SD_16_9_W), # 121 + 1
+    (NB_FRAMES_129, SD_16_9_H, SD_16_9_W), # 128 + 1
+    (NB_FRAMES_137, SD_16_9_H, SD_16_9_W), # 136 + 1
+    (NB_FRAMES_145, SD_16_9_H, SD_16_9_W), # 144 + 1
+    (NB_FRAMES_161, SD_16_9_H, SD_16_9_W), # 160 + 1
+    (NB_FRAMES_177, SD_16_9_H, SD_16_9_W), # 176 + 1
+    (NB_FRAMES_193, SD_16_9_H, SD_16_9_W), # 192 + 1
+    (NB_FRAMES_201, SD_16_9_H, SD_16_9_W), # 200 + 1
+    (NB_FRAMES_209, SD_16_9_H, SD_16_9_W), # 208 + 1
+    (NB_FRAMES_217, SD_16_9_H, SD_16_9_W), # 216 + 1
+    (NB_FRAMES_225, SD_16_9_H, SD_16_9_W), # 224 + 1
+    (NB_FRAMES_233, SD_16_9_H, SD_16_9_W), # 232 + 1
+    (NB_FRAMES_241, SD_16_9_H, SD_16_9_W), # 240 + 1
+    (NB_FRAMES_249, SD_16_9_H, SD_16_9_W), # 248 + 1
+    (NB_FRAMES_257, SD_16_9_H, SD_16_9_W), # 256 + 1
+    (NB_FRAMES_265, SD_16_9_H, SD_16_9_W), # 264 + 1
+    (NB_FRAMES_273, SD_16_9_H, SD_16_9_W), # 272 + 1
 ]
 
-MEDIUM_19_9_RATIO_WIDTH = 928 # 32 * 29
-MEDIUM_19_9_RATIO_HEIGHT = 512 # 32 * 16
-
-MEDIUM_19_9_RATIO_BUCKETS = [
-    (NB_FRAMES_1,   MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), #  1
-    (NB_FRAMES_9,   MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 8 + 1
-    (NB_FRAMES_17,  MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 16 + 1
-    (NB_FRAMES_33,  MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 32 + 1
-    (NB_FRAMES_49,  MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 48 + 1
-    (NB_FRAMES_65,  MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 64 + 1
-    (NB_FRAMES_81,  MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 80 + 1
-    (NB_FRAMES_97,  MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 96 + 1
-    (NB_FRAMES_113, MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 112 + 1
-    (NB_FRAMES_129, MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 128 + 1
-    (NB_FRAMES_145, MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 144 + 1
-    (NB_FRAMES_161, MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 160 + 1
-    (NB_FRAMES_177, MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 176 + 1
-    (NB_FRAMES_193, MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 192 + 1
-    (NB_FRAMES_225, MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 224 + 1
-    (NB_FRAMES_257, MEDIUM_19_9_RATIO_HEIGHT, MEDIUM_19_9_RATIO_WIDTH), # 256 + 1
+# For 1280x720 images and videos (from 1 frame up to 272)
+MD_TRAINING_BUCKETS = [
+    (NB_FRAMES_1,   MD_16_9_H, MD_16_9_W), # 1
+    (NB_FRAMES_9,   MD_16_9_H, MD_16_9_W), # 8 + 1
+    (NB_FRAMES_17,  MD_16_9_H, MD_16_9_W), # 16 + 1
+    (NB_FRAMES_33,  MD_16_9_H, MD_16_9_W), # 32 + 1
+    (NB_FRAMES_49,  MD_16_9_H, MD_16_9_W), # 48 + 1
+    (NB_FRAMES_65,  MD_16_9_H, MD_16_9_W), # 64 + 1
+    (NB_FRAMES_73,  MD_16_9_H, MD_16_9_W), # 72 + 1
+    (NB_FRAMES_81,  MD_16_9_H, MD_16_9_W), # 80 + 1
+    (NB_FRAMES_89,  MD_16_9_H, MD_16_9_W), # 88 + 1
+    (NB_FRAMES_97,  MD_16_9_H, MD_16_9_W), # 96 + 1
+    (NB_FRAMES_105, MD_16_9_H, MD_16_9_W), # 104 + 1
+    (NB_FRAMES_113, MD_16_9_H, MD_16_9_W), # 112 + 1
+    (NB_FRAMES_121, MD_16_9_H, MD_16_9_W), # 121 + 1
+    (NB_FRAMES_129, MD_16_9_H, MD_16_9_W), # 128 + 1
+    (NB_FRAMES_137, MD_16_9_H, MD_16_9_W), # 136 + 1
+    (NB_FRAMES_145, MD_16_9_H, MD_16_9_W), # 144 + 1
+    (NB_FRAMES_161, MD_16_9_H, MD_16_9_W), # 160 + 1
+    (NB_FRAMES_177, MD_16_9_H, MD_16_9_W), # 176 + 1
+    (NB_FRAMES_193, MD_16_9_H, MD_16_9_W), # 192 + 1
+    (NB_FRAMES_201, MD_16_9_H, MD_16_9_W), # 200 + 1
+    (NB_FRAMES_209, MD_16_9_H, MD_16_9_W), # 208 + 1
+    (NB_FRAMES_217, MD_16_9_H, MD_16_9_W), # 216 + 1
+    (NB_FRAMES_225, MD_16_9_H, MD_16_9_W), # 224 + 1
+    (NB_FRAMES_233, MD_16_9_H, MD_16_9_W), # 232 + 1
+    (NB_FRAMES_241, MD_16_9_H, MD_16_9_W), # 240 + 1
+    (NB_FRAMES_249, MD_16_9_H, MD_16_9_W), # 248 + 1
+    (NB_FRAMES_257, MD_16_9_H, MD_16_9_W), # 256 + 1
+    (NB_FRAMES_265, MD_16_9_H, MD_16_9_W), # 264 + 1
+    (NB_FRAMES_273, MD_16_9_H, MD_16_9_W), # 272 + 1
 ]
 
-# Updated training presets to include Wan-2.1-T2V and support both LoRA and full-finetune
-TRAINING_PRESETS = {
-    "HunyuanVideo (normal)": {
-        "model_type": "hunyuan_video",
-        "training_type": "lora",
-        "lora_rank": DEFAULT_LORA_RANK_STR,
-        "lora_alpha": DEFAULT_LORA_ALPHA_STR,
-        "train_steps": DEFAULT_NB_TRAINING_STEPS,
-        "batch_size": DEFAULT_BATCH_SIZE,
+
+# Model specific default parameters
+# These are used instead of the previous TRAINING_PRESETS
+
+# Resolution buckets for different models
+RESOLUTION_OPTIONS = {
+    "SD (1024x576)": "SD_TRAINING_BUCKETS",
+    "HD (1280x720)": "MD_TRAINING_BUCKETS"
+}
+
+# Default parameters for Hunyuan Video
+HUNYUAN_VIDEO_DEFAULTS = {
+    "lora": {
         "learning_rate": 2e-5,
-        "save_iterations": DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
-        "training_buckets": SMALL_TRAINING_BUCKETS,
         "flow_weighting_scheme": "none",
-        "num_gpus": DEFAULT_NUM_GPUS,
-        "precomputation_items": DEFAULT_PRECOMPUTATION_ITEMS,
-        "lr_warmup_steps": DEFAULT_NB_LR_WARMUP_STEPS,
-    },
-    "LTX-Video (normal)": {
-        "model_type": "ltx_video", 
-        "training_type": "lora",
         "lora_rank": DEFAULT_LORA_RANK_STR,
-        "lora_alpha": DEFAULT_LORA_ALPHA_STR,
-        "train_steps": DEFAULT_NB_TRAINING_STEPS,
-        "batch_size": DEFAULT_BATCH_SIZE,
-        "learning_rate": DEFAULT_LEARNING_RATE,
-        "save_iterations": DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
-        "training_buckets": SMALL_TRAINING_BUCKETS,
+        "lora_alpha": DEFAULT_LORA_ALPHA_STR
+    },
+    "control-lora": {
+        "learning_rate": 2e-5,
         "flow_weighting_scheme": "none",
-        "num_gpus": DEFAULT_NUM_GPUS,
-        "precomputation_items": DEFAULT_PRECOMPUTATION_ITEMS,
-        "lr_warmup_steps": DEFAULT_NB_LR_WARMUP_STEPS,
-    },
-    "LTX-Video (16:9, HQ)": {
-        "model_type": "ltx_video",
-        "training_type": "lora",
-        "lora_rank": "256", 
-        "lora_alpha": DEFAULT_LORA_ALPHA_STR,
-        "train_steps": DEFAULT_NB_TRAINING_STEPS,
-        "batch_size": DEFAULT_BATCH_SIZE,
-        "learning_rate": DEFAULT_LEARNING_RATE,
-        "save_iterations": DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
-        "training_buckets": MEDIUM_19_9_RATIO_BUCKETS,
-        "flow_weighting_scheme": "logit_normal",
-        "num_gpus": DEFAULT_NUM_GPUS,
-        "precomputation_items": DEFAULT_PRECOMPUTATION_ITEMS,
-        "lr_warmup_steps": DEFAULT_NB_LR_WARMUP_STEPS,
-    },
-    "LTX-Video (Full Finetune)": {
-        "model_type": "ltx_video",
-        "training_type": "full-finetune",
-        "train_steps": DEFAULT_NB_TRAINING_STEPS,
-        "batch_size": DEFAULT_BATCH_SIZE,
-        "learning_rate": DEFAULT_LEARNING_RATE,
-        "save_iterations": DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
-        "training_buckets": SMALL_TRAINING_BUCKETS,
-        "flow_weighting_scheme": "logit_normal",
-        "num_gpus": DEFAULT_NUM_GPUS,
-        "precomputation_items": DEFAULT_PRECOMPUTATION_ITEMS,
-        "lr_warmup_steps": DEFAULT_NB_LR_WARMUP_STEPS,
-    },
-    "Wan-2.1-T2V (normal)": {
-        "model_type": "wan",
-        "training_type": "lora",
-        "lora_rank": "32",
-        "lora_alpha": "32",
-        "train_steps": DEFAULT_NB_TRAINING_STEPS,
-        "batch_size": DEFAULT_BATCH_SIZE,
-        "learning_rate": 5e-5,
-        "save_iterations": DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
-        "training_buckets": SMALL_TRAINING_BUCKETS,
-        "flow_weighting_scheme": "logit_normal",
-        "num_gpus": DEFAULT_NUM_GPUS,
-        "precomputation_items": DEFAULT_PRECOMPUTATION_ITEMS,
-        "lr_warmup_steps": DEFAULT_NB_LR_WARMUP_STEPS,
-    },
-    "Wan-2.1-T2V (HQ)": {
-        "model_type": "wan",
-        "training_type": "lora",
-        "lora_rank": "64",
-        "lora_alpha": "64",
-        "train_steps": DEFAULT_NB_TRAINING_STEPS,
-        "batch_size": DEFAULT_BATCH_SIZE,
-        "learning_rate": DEFAULT_LEARNING_RATE,
-        "save_iterations": DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
-        "training_buckets": MEDIUM_19_9_RATIO_BUCKETS,
-        "flow_weighting_scheme": "logit_normal",
-        "num_gpus": DEFAULT_NUM_GPUS,
-        "precomputation_items": DEFAULT_PRECOMPUTATION_ITEMS,
-        "lr_warmup_steps": DEFAULT_NB_LR_WARMUP_STEPS,
-    },
-    "Wan-2.1-I2V (Control LoRA)": {
-        "model_type": "wan",
-        "training_type": "control-lora",
-        "lora_rank": "32",
-        "lora_alpha": "32",
-        "train_steps": DEFAULT_NB_TRAINING_STEPS,
-        "batch_size": DEFAULT_BATCH_SIZE,
-        "learning_rate": 5e-5,
-        "save_iterations": DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
-        "training_buckets": SMALL_TRAINING_BUCKETS,
-        "flow_weighting_scheme": "logit_normal",
-        "num_gpus": DEFAULT_NUM_GPUS,
-        "precomputation_items": DEFAULT_PRECOMPUTATION_ITEMS,
-        "lr_warmup_steps": DEFAULT_NB_LR_WARMUP_STEPS,
-        "control_type": "custom",
-        "train_qk_norm": True,
-        "frame_conditioning_type": "index",
-        "frame_conditioning_index": 0,
-        "frame_conditioning_concatenate_mask": True,
-        "description": "Image-conditioned video generation with LoRA adapters"
-    },
-    "LTX-Video (Control LoRA)": {
-        "model_type": "ltx_video",
-        "training_type": "control-lora",
         "lora_rank": "128",
         "lora_alpha": "128",
-        "train_steps": DEFAULT_NB_TRAINING_STEPS,
-        "batch_size": DEFAULT_BATCH_SIZE,
-        "learning_rate": DEFAULT_LEARNING_RATE,
-        "save_iterations": DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
-        "training_buckets": SMALL_TRAINING_BUCKETS,
-        "flow_weighting_scheme": "logit_normal",
-        "num_gpus": DEFAULT_NUM_GPUS,
-        "precomputation_items": DEFAULT_PRECOMPUTATION_ITEMS,
-        "lr_warmup_steps": DEFAULT_NB_LR_WARMUP_STEPS,
         "control_type": "custom",
         "train_qk_norm": True,
         "frame_conditioning_type": "index",
         "frame_conditioning_index": 0,
-        "frame_conditioning_concatenate_mask": True,
-        "description": "Image-conditioned video generation with LoRA adapters"
+        "frame_conditioning_concatenate_mask": True
+    }
+}
+
+# Default parameters for LTX Video
+LTX_VIDEO_DEFAULTS = {
+    "lora": {
+        "learning_rate": DEFAULT_LEARNING_RATE,
+        "flow_weighting_scheme": "none",
+        "lora_rank": DEFAULT_LORA_RANK_STR,
+        "lora_alpha": DEFAULT_LORA_ALPHA_STR
     },
-    "HunyuanVideo (Control LoRA)": {
-        "model_type": "hunyuan_video",
-        "training_type": "control-lora",
+    "full-finetune": {
+        "learning_rate": DEFAULT_LEARNING_RATE,
+        "flow_weighting_scheme": "logit_normal"
+    },
+    "control-lora": {
+        "learning_rate": DEFAULT_LEARNING_RATE,
+        "flow_weighting_scheme": "logit_normal",
         "lora_rank": "128",
         "lora_alpha": "128",
-        "train_steps": DEFAULT_NB_TRAINING_STEPS,
-        "batch_size": DEFAULT_BATCH_SIZE,
-        "learning_rate": 2e-5,
-        "save_iterations": DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
-        "training_buckets": SMALL_TRAINING_BUCKETS,
-        "flow_weighting_scheme": "none",
-        "num_gpus": DEFAULT_NUM_GPUS,
-        "precomputation_items": DEFAULT_PRECOMPUTATION_ITEMS,
-        "lr_warmup_steps": DEFAULT_NB_LR_WARMUP_STEPS,
         "control_type": "custom",
         "train_qk_norm": True,
         "frame_conditioning_type": "index",
         "frame_conditioning_index": 0,
-        "frame_conditioning_concatenate_mask": True,
-        "description": "Image-conditioned video generation with HunyuanVideo and LoRA adapters"
+        "frame_conditioning_concatenate_mask": True
+    }
+}
+
+# Default parameters for Wan
+WAN_DEFAULTS = {
+    "lora": {
+        "learning_rate": 5e-5,
+        "flow_weighting_scheme": "logit_normal",
+        "lora_rank": "32",
+        "lora_alpha": "32"
+    },
+    "control-lora": {
+        "learning_rate": 5e-5,
+        "flow_weighting_scheme": "logit_normal",
+        "lora_rank": "32",
+        "lora_alpha": "32",
+        "control_type": "custom",
+        "train_qk_norm": True,
+        "frame_conditioning_type": "index",
+        "frame_conditioning_index": 0,
+        "frame_conditioning_concatenate_mask": True
     }
 }
 
@@ -567,7 +555,7 @@ class TrainingConfig:
     caption_column: str = "prompts.txt"
 
     id_token: Optional[str] = None
-    video_resolution_buckets: List[Tuple[int, int, int]] = field(default_factory=lambda: SMALL_TRAINING_BUCKETS)
+    video_resolution_buckets: List[Tuple[int, int, int]] = field(default_factory=lambda: SD_TRAINING_BUCKETS)
     video_reshape_mode: str = "center"
     caption_dropout_p: float = DEFAULT_CAPTION_DROPOUT_P
     caption_dropout_technique: str = "empty"
@@ -632,7 +620,7 @@ class TrainingConfig:
             gradient_accumulation_steps=1,
             lora_rank=DEFAULT_LORA_RANK,
             lora_alpha=DEFAULT_LORA_ALPHA,
-            video_resolution_buckets=buckets or SMALL_TRAINING_BUCKETS,
+            video_resolution_buckets=buckets or SD_TRAINING_BUCKETS,
             caption_dropout_p=DEFAULT_CAPTION_DROPOUT_P,
             flow_weighting_scheme="none",  # Hunyuan specific
             training_type="lora"
@@ -654,7 +642,7 @@ class TrainingConfig:
             gradient_accumulation_steps=4,
             lora_rank=DEFAULT_LORA_RANK,
             lora_alpha=DEFAULT_LORA_ALPHA,
-            video_resolution_buckets=buckets or SMALL_TRAINING_BUCKETS,
+            video_resolution_buckets=buckets or SD_TRAINING_BUCKETS,
             caption_dropout_p=DEFAULT_CAPTION_DROPOUT_P,
             flow_weighting_scheme="logit_normal",  # LTX specific
             training_type="lora"
@@ -674,7 +662,7 @@ class TrainingConfig:
             gradient_checkpointing=True,
             id_token=None,
             gradient_accumulation_steps=1,
-            video_resolution_buckets=buckets or SMALL_TRAINING_BUCKETS,
+            video_resolution_buckets=buckets or SD_TRAINING_BUCKETS,
             caption_dropout_p=DEFAULT_CAPTION_DROPOUT_P,
             flow_weighting_scheme="logit_normal",  # LTX specific
             training_type="full-finetune"
@@ -697,7 +685,7 @@ class TrainingConfig:
             lora_rank=32,
             lora_alpha=32,
             target_modules=["blocks.*(to_q|to_k|to_v|to_out.0)"],  # Wan-specific target modules
-            video_resolution_buckets=buckets or SMALL_TRAINING_BUCKETS,
+            video_resolution_buckets=buckets or SD_TRAINING_BUCKETS,
             caption_dropout_p=DEFAULT_CAPTION_DROPOUT_P,
             flow_weighting_scheme="logit_normal",  # Wan specific
             training_type="lora"

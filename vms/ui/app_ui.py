@@ -9,8 +9,8 @@ from typing import Any, Optional, Dict, List, Union, Tuple
 
 from vms.config import (
     STORAGE_PATH, VIDEOS_TO_SPLIT_PATH, STAGING_PATH,
-    TRAINING_PRESETS,
-    MODEL_TYPES, SMALL_TRAINING_BUCKETS, TRAINING_TYPES, MODEL_VERSIONS,
+    MODEL_TYPES, SD_TRAINING_BUCKETS, MD_TRAINING_BUCKETS, TRAINING_TYPES, MODEL_VERSIONS,
+    RESOLUTION_OPTIONS,
     DEFAULT_NB_TRAINING_STEPS, DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
     DEFAULT_BATCH_SIZE, DEFAULT_CAPTION_DROPOUT_P,
     DEFAULT_LEARNING_RATE,
@@ -23,6 +23,7 @@ from vms.config import (
     DEFAULT_NB_TRAINING_STEPS,
     DEFAULT_NB_LR_WARMUP_STEPS,
     DEFAULT_AUTO_RESUME,
+    HUNYUAN_VIDEO_DEFAULTS, LTX_VIDEO_DEFAULTS, WAN_DEFAULTS,
 
     get_project_paths,
     generate_model_project_id,
@@ -363,7 +364,6 @@ class AppUI:
                     self.project_tabs["train_tab"].components["resume_btn"],
                     self.project_tabs["train_tab"].components["stop_btn"],
                     self.project_tabs["train_tab"].components["delete_checkpoints_btn"],
-                    self.project_tabs["train_tab"].components["training_preset"],
                     self.project_tabs["train_tab"].components["model_type"],
                     self.project_tabs["train_tab"].components["model_version"],
                     self.project_tabs["train_tab"].components["training_type"],
@@ -377,7 +377,8 @@ class AppUI:
                     self.project_tabs["train_tab"].components["num_gpus"],
                     self.project_tabs["train_tab"].components["precomputation_items"],
                     self.project_tabs["train_tab"].components["lr_warmup_steps"],
-                    self.project_tabs["train_tab"].components["auto_resume"]
+                    self.project_tabs["train_tab"].components["auto_resume"],
+                    self.project_tabs["train_tab"].components["resolution"]
                 ]
             )
         
@@ -485,7 +486,7 @@ class AppUI:
             
             # Copy other parameters
             for param in ["lora_rank", "lora_alpha", "train_steps", 
-                        "batch_size", "learning_rate", "save_iterations", "training_preset"]:
+                        "batch_size", "learning_rate", "save_iterations"]:
                 if param in recovery_ui:
                     ui_state[param] = recovery_ui[param]
             
@@ -544,21 +545,22 @@ class AppUI:
                 model_version_val = available_model_versions[0]
                 logger.info(f"Using first available model version: {model_version_val}")
             
-            # IMPORTANT: Create a new list of simple strings for the dropdown choices
-            # This ensures each choice is a single string, not a tuple or other structure
-            simple_choices = [str(version) for version in available_model_versions]
+            # IMPORTANT: Create a new list of tuples (label, value) for the dropdown choices
+            # This ensures compatibility with Gradio Dropdown component expectations
+            choices_tuples = [(str(version), str(version)) for version in available_model_versions]
             
             # Update the dropdown choices directly in the UI component
             try:
-                self.project_tabs["train_tab"].components["model_version"].choices = simple_choices
-                logger.info(f"Updated model_version dropdown choices: {len(simple_choices)} options")
+                self.project_tabs["train_tab"].components["model_version"].choices = choices_tuples
+                logger.info(f"Updated model_version dropdown choices: {len(choices_tuples)} options")
             except Exception as e:
                 logger.error(f"Error updating model_version dropdown: {str(e)}")
         else:
             logger.warning(f"No versions available for model type: {model_type_val}")
-            # Set empty choices to avoid errors
+            # Set empty choices as an empty list of tuples to avoid errors
             try:
                 self.project_tabs["train_tab"].components["model_version"].choices = []
+                logger.info("Set empty model_version dropdown choices")
             except Exception as e:
                 logger.error(f"Error setting empty model_version choices: {str(e)}")
             
@@ -577,11 +579,8 @@ class AppUI:
                 training_type_val = list(TRAINING_TYPES.keys())[0]
                 logger.warning(f"Invalid training type '{training_type_val}', using default: {training_type_val}")
         
-        # Validate training preset
-        training_preset = ui_state.get("training_preset", list(TRAINING_PRESETS.keys())[0])
-        if training_preset not in TRAINING_PRESETS:
-            training_preset = list(TRAINING_PRESETS.keys())[0]
-            logger.warning(f"Invalid training preset '{training_preset}', using default: {training_preset}")
+        # Get resolution value
+        resolution_val = ui_state.get("resolution", list(RESOLUTION_OPTIONS.keys())[0])
         
         lora_rank_val = ui_state.get("lora_rank", DEFAULT_LORA_RANK_STR)
         lora_alpha_val = ui_state.get("lora_alpha", DEFAULT_LORA_ALPHA_STR)
@@ -616,7 +615,6 @@ class AppUI:
             resume_btn,
             stop_btn, 
             delete_checkpoints_btn,
-            training_preset, 
             model_type_val,
             model_version_val,
             training_type_val,
@@ -630,7 +628,8 @@ class AppUI:
             num_gpus_val,
             precomputation_items_val,
             lr_warmup_steps_val,
-            auto_resume_val
+            auto_resume_val,
+            resolution_val
         )
     
     def initialize_ui_from_state(self):
@@ -650,7 +649,6 @@ class AppUI:
                 
         # Return values in order matching the outputs in app.load
         return (
-            ui_state.get("training_preset", list(TRAINING_PRESETS.keys())[0]),
             model_type,
             model_version,
             ui_state.get("training_type", list(TRAINING_TYPES.keys())[0]),
@@ -659,7 +657,8 @@ class AppUI:
             ui_state.get("train_steps", DEFAULT_NB_TRAINING_STEPS),
             ui_state.get("batch_size", DEFAULT_BATCH_SIZE),
             ui_state.get("learning_rate", DEFAULT_LEARNING_RATE),
-            ui_state.get("save_iterations", DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS)
+            ui_state.get("save_iterations", DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS),
+            ui_state.get("resolution", list(RESOLUTION_OPTIONS.keys())[0])
         )
 
     def update_ui_state(self, **kwargs):
