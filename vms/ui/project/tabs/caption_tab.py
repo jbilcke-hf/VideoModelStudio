@@ -265,8 +265,7 @@ class CaptionTab(BaseTab):
         self._should_stop_captioning = False
 
         try:
-            # Pass the training_videos_path from the app state
-            copy_files_to_training_dir(prompt_prefix, training_videos_path=self.app.training_videos_path)
+            copy_files_to_training_dir(prompt_prefix)
         except Exception as e:
             traceback.print_exc()
             raise gr.Error(f"Error copying assets to training dir: {str(e)}")
