@@ -55,14 +55,24 @@ class Model:
                     status = ui_state.get('project_status', 'draft')
                     
                     # Get model type from UI state
-                    model_type_display = ui_state.get('model_type', '')
+                    model_type_value = ui_state.get('model_type', '')
                     
-                    # Map display name to internal name
+                    # First check if model_type_value is a display name
+                    display_name_found = False
                     for display_name, internal_name in MODEL_TYPES.items():
-                        if display_name == model_type_display:
+                        if display_name == model_type_value:
                             model_type = internal_name
                             model_display_name = display_name
+                            display_name_found = True
                             break
+                    
+                    # If not a display name, check if it's an internal name
+                    if not display_name_found:
+                        for display_name, internal_name in MODEL_TYPES.items():
+                            if internal_name == model_type_value:
+                                model_type = internal_name
+                                model_display_name = display_name
+                                break
             except Exception as e:
                 logger.error(f"Error loading UI state for model {model_id}: {str(e)}")
         

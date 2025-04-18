@@ -2,6 +2,7 @@ import gradio as gr
 from pathlib import Path
 import logging
 import shutil
+import json
 from typing import Any, Optional, Dict, List, Union, Tuple
 
 from ..config import (
@@ -11,7 +12,8 @@ from ..config import (
     DEFAULT_VALIDATION_HEIGHT,
     DEFAULT_VALIDATION_WIDTH,
     DEFAULT_VALIDATION_NB_FRAMES,
-    DEFAULT_VALIDATION_FRAMERATE
+    DEFAULT_VALIDATION_FRAMERATE,
+    load_global_config, get_project_paths
 )
 from .utils import get_video_fps, extract_scene_info, make_archive, is_image_file, is_video_file
 
@@ -39,6 +41,26 @@ def prepare_finetrainers_dataset(training_path=None, training_videos_path=None) 
     Returns:
         Tuple of (videos_file_path, prompts_file_path)
     """
+    # Get project ID from global config if paths not provided
+    if training_path is None or training_videos_path is None:
+        config = load_global_config()
+        project_id = config.get("latest_model_project_id")
+        
+        if not project_id:
+            logger.error("No active project found in global config")
+            return None, None
+            
+        # Get paths for this project
+        project_training_path, project_videos_path, _, _ = get_project_paths(project_id)
+        
+        # Use provided paths or defaults
+        training_path = training_path or project_training_path
+        training_videos_path = training_videos_path or project_videos_path
+
+    # Validate paths
+    if training_path is None or training_videos_path is None:
+        logger.error("Could not determine training paths")
+        return None, None
 
     # Verifies the videos subdirectory
     training_videos_path.mkdir(exist_ok=True)
@@ -67,6 +89,20 @@ def prepare_finetrainers_dataset(training_path=None, training_videos_path=None) 
             relative_path = f"videos/{file.name}"
             media_files.append(relative_path)
             captions.append(caption)
+    
+    # Also include image files if present (for image conditioning)
+    for idx, file in enumerate(sorted(training_videos_path.glob("*"))):
+        if is_image_file(file):
+            caption_file = file.with_suffix('.txt')
+            if caption_file.exists():
+                # Normalize caption to single line
+                caption = caption_file.read_text().strip()
+                caption = ' '.join(caption.split())
+                
+                # Use relative path from training root
+                relative_path = f"videos/{file.name}"
+                media_files.append(relative_path)
+                captions.append(caption)
 
     # Write files if we have content
     if media_files and captions:
@@ -101,6 +137,24 @@ def copy_files_to_training_dir(prompt_prefix: str, training_videos_path=None) ->
     """
 
     gr.Info("Copying assets to the training dataset..")
+
+    # Get project ID from global config
+    config = load_global_config()
+    project_id = config.get("latest_model_project_id")
+    
+    if not project_id:
+        logger.error("No active project found in global config")
+        raise ValueError("No active project found. Please create or select a project first.")
+    
+    # Get paths for this project if not provided
+    if training_videos_path is None:
+        _, training_videos_path, _, _ = get_project_paths(project_id)
+        
+    if training_videos_path is None:
+        logger.error("Could not determine training videos path")
+        raise ValueError("Training videos path is not set or could not be determined")
+        
+    logger.info(f"Using training videos path: {training_videos_path}")
 
     # Find files needing captions
     video_files = list(STAGING_PATH.glob("*.mp4"))
@@ -155,7 +209,9 @@ def copy_files_to_training_dir(prompt_prefix: str, training_videos_path=None) ->
                 print(f"failed to copy one of the pairs: {e}")
                 pass
 
-    prepare_finetrainers_dataset()
+    # Get training_path for prepare_finetrainers_dataset
+    training_path, _, _, _ = get_project_paths(project_id)
+    prepare_finetrainers_dataset(training_path, training_videos_path)
 
     gr.Info(f"Successfully generated the training dataset ({nb_copied_pairs} pairs)")
 
