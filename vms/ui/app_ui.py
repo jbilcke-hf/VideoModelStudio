@@ -281,7 +281,13 @@ class AppUI:
                 # Sidebar for navigation
                 with gr.Sidebar(position="left", open=True):
                     gr.Markdown("# 🎞️ VideoModelStudio")
-                    self.components["current_project_btn"] = gr.Button("📂 New Project", variant="primary")
+                    
+                    self.components["current_project_btn"] = gr.Button(
+                        "📂 Current Project",
+                        variant="primary",
+                        #visible=False # for now we disable this button
+                    )
+                    
                     self.components["models_btn"] = gr.Button("🎞️ My Models")
                     self.components["system_monitoring_btn"] = gr.Button("🌡️ Monitoring")
 
@@ -292,7 +298,7 @@ class AppUI:
                         self.main_tabs = main_tabs
                         
                         # Project View Tab
-                        with gr.Tab("📁 New Project", id=0) as project_view:
+                        with gr.Tab("📁 Current Project", id=0) as project_view:
                             # Create project tabs
                             with gr.Tabs() as project_tabs:
                                 # Store reference to project tabs component
