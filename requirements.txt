@@ -2,7 +2,7 @@
 # so we use pytorch 2.6
 torch==2.6.0
 torchvision==0.21.0
-torchdata==0.10.0
+torchdata==0.10.1
 torchao==0.9.0
 
 # For GPU monitoring of NVIDIA chipsets
