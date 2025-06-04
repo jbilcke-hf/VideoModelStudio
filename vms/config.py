@@ -232,6 +232,11 @@ MODEL_VERSIONS = {
             "name": "Wan 2.1 I2V 720p (image+text)",
             "type": "image-to-video",
             "description": "Image conditioning at 720p resolution"
+        },
+        "Wan-AI/Wan2.1-FLF2V-14B-720P-diffusers": {
+            "name": "Wan 2.1 FLF2V 720p (frame conditioning)",
+            "type": "frame-to-video",
+            "description": "Frame conditioning (first/last frame to video) at 720p resolution"
         }
     },
     "ltx_video": {

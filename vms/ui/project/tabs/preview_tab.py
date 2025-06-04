@@ -103,8 +103,15 @@ class PreviewTab(BaseTab):
                             )
 
                     # Add image input for image-to-video models
-                    self.components["conditioning_image"] = gr.Image(
-                        label="Conditioning Image (for Image-to-Video models)",
+                    self.components["first_frame_image"] = gr.Image(
+                        label="First Frame Image (for Image-to-Video models)",
+                        type="filepath",
+                        visible=False
+                    )
+                    
+                    # Add second image input for frame conditioning models (last frame)
+                    self.components["last_frame_image"] = gr.Image(
+                        label="Last Frame Image (for Frame conditioning models)",
                         type="filepath",
                         visible=False
                     )
@@ -371,7 +378,8 @@ class PreviewTab(BaseTab):
                 self.components["model_version"]
             ],
             outputs=[
-                self.components["conditioning_image"]
+                self.components["first_frame_image"],
+                self.components["last_frame_image"]
             ]
         )
         
@@ -437,7 +445,8 @@ class PreviewTab(BaseTab):
                 self.components["inference_steps"],
                 self.components["enable_cpu_offload"],
                 self.components["fps"],
-                self.components["conditioning_image"],
+                self.components["first_frame_image"],
+                self.components["last_frame_image"],
                 self.components["seed"],
                 self.components["use_lora"]
             ],
@@ -452,11 +461,26 @@ class PreviewTab(BaseTab):
         """Update UI based on the selected model version"""
         model_version_type = self.get_model_version_type(model_type, model_version)
         
-        # Show conditioning image input only for image-to-video models
-        show_conditioning_image = model_version_type == "image-to-video"
+        # Show conditioning image input for image-to-video and frame-to-video models
+        show_conditioning_image = model_version_type in ["image-to-video", "frame-to-video"]
+        
+        # Show last frame image input only for frame-to-video models
+        show_last_frame_image = model_version_type == "frame-to-video"
+        
+        # Update labels based on model type
+        if model_version_type == "frame-to-video":
+            first_frame_label = "First Frame Image (for Frame conditioning models)"
+            last_frame_label = "Last Frame Image (for Frame conditioning models)"
+        elif model_version_type == "image-to-video":
+            first_frame_label = "Conditioning Image (for Image-to-Video models)"
+            last_frame_label = "Last Frame Image (for Frame conditioning models)"
+        else:
+            first_frame_label = "Conditioning Image (for Image-to-Video models)"
+            last_frame_label = "Last Frame Image (for Frame conditioning models)"
         
         return {
-            self.components["conditioning_image"]: gr.Image(visible=show_conditioning_image)
+            self.components["first_frame_image"]: gr.Image(visible=show_conditioning_image, label=first_frame_label),
+            self.components["last_frame_image"]: gr.Image(visible=show_last_frame_image, label=last_frame_label)
         }
     
     def sync_model_type_and_versions(self) -> Tuple[str, str]:
@@ -607,7 +631,8 @@ class PreviewTab(BaseTab):
         inference_steps: int,
         enable_cpu_offload: bool,
         fps: int,
-        conditioning_image: Optional[str] = None,
+        first_frame_image: Optional[str] = None,
+        last_frame_image: Optional[str] = None,
         seed: int = -1,
         use_lora: str = "Use LoRA model"
     ) -> Tuple[Optional[str], str, str]:
@@ -675,7 +700,8 @@ class PreviewTab(BaseTab):
             inference_steps=inference_steps,
             enable_cpu_offload=enable_cpu_offload,
             fps=fps,
-            conditioning_image=conditioning_image,
+            first_frame_image=first_frame_image,
+            last_frame_image=last_frame_image,
             seed=seed
         )
         
