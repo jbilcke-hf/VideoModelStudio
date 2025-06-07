@@ -46,7 +46,7 @@ class PreviewingService:
             if not checkpoints:
                 return None
             
-            latest_checkpoint = max(checkpoints, key=lambda x: int(x.name.split("-")[1]))
+            latest_checkpoint = max(checkpoints, key=lambda x: int(x.name.split("_")[-1]))
             lora_path = latest_checkpoint / "pytorch_lora_weights.safetensors"
             
             if lora_path.exists():

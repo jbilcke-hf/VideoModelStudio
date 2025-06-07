@@ -1480,16 +1480,33 @@ class TrainingService:
             self.append_log(f"Error uploading to hub: {str(e)}")
             return False
 
-    def get_model_output_safetensors(self) -> str:
+    def get_model_output_safetensors(self) -> Optional[str]:
         """Return the path to the model safetensors
         
-            
         Returns:
-            Path to created ZIP file
+            Path to safetensors file or None if not found
         """
         
+        # Check if the root level file exists (this should be the primary location)
         model_output_safetensors_path = self.app.output_path / "pytorch_lora_weights.safetensors"
-        return str(model_output_safetensors_path)
+        if model_output_safetensors_path.exists():
+            return str(model_output_safetensors_path)
+        
+        # If not found in root, log the issue and return None
+        logger.warning(f"Model weights not found at expected location: {model_output_safetensors_path}")
+        logger.info(f"Checking output directory contents: {list(self.app.output_path.glob('*'))}")
+        
+        # Check if there are any checkpoint directories as a fallback
+        checkpoints = list(self.app.output_path.glob("finetrainers_step_*"))
+        if checkpoints:
+            logger.info(f"Found {len(checkpoints)} checkpoint directories, but main weights file is missing")
+            latest_checkpoint = max(checkpoints, key=lambda x: int(x.name.split("_")[-1]))
+            checkpoint_weights = latest_checkpoint / "pytorch_lora_weights.safetensors"
+            if checkpoint_weights.exists():
+                logger.info(f"Found weights in latest checkpoint: {checkpoint_weights}")
+                return str(checkpoint_weights)
+        
+        return None
 
     def create_training_dataset_zip(self) -> str:
         """Create a ZIP file containing all training data
