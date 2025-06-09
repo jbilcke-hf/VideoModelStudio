@@ -13,6 +13,8 @@ short_description: All-in-one tool for AI video training
 
 # 🎥 Video Model Studio (VMS)
 
+![example](https://media.githubusercontent.com/media/jbilcke-hf/VideoModelStudio/main/docs/screenshots/importing-a-video-dataset.jpg)
+
 ## Presentation
 
 ### What is this project?
