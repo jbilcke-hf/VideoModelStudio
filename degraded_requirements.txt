@@ -36,7 +36,7 @@ av==14.1.0
 git+https://github.com/LLaVA-VL/LLaVA-NeXT.git
 
 # for our frontend
-gradio==5.32.1
+gradio==5.33.1
 gradio_toggle
 gradio_modal
 

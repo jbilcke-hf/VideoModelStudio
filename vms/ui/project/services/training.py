@@ -1496,9 +1496,45 @@ class TrainingService:
         lora_weights_dir = self.app.output_path / "lora_weights"
         if lora_weights_dir.exists():
             logger.info(f"Found lora_weights directory: {lora_weights_dir}")
-            lora_weights_contents = list(lora_weights_dir.glob("*"))
-            logger.info(f"Contents of lora_weights directory: {lora_weights_contents}")
             
+            # Look for the latest checkpoint directory in lora_weights
+            lora_checkpoints = [d for d in lora_weights_dir.glob("*") if d.is_dir() and d.name.isdigit()]
+            if lora_checkpoints:
+                latest_lora_checkpoint = max(lora_checkpoints, key=lambda x: int(x.name))
+                logger.info(f"Found latest LoRA checkpoint: {latest_lora_checkpoint}")
+                
+                # List contents of the latest checkpoint directory
+                checkpoint_contents = list(latest_lora_checkpoint.glob("*"))
+                logger.info(f"Contents of LoRA checkpoint {latest_lora_checkpoint.name}: {checkpoint_contents}")
+                
+                # Check for weights in the latest LoRA checkpoint
+                lora_safetensors = latest_lora_checkpoint / "pytorch_lora_weights.safetensors"
+                if lora_safetensors.exists():
+                    logger.info(f"Found weights in latest LoRA checkpoint: {lora_safetensors}")
+                    return str(lora_safetensors)
+                
+                # Also check for other common weight file names
+                possible_weight_files = [
+                    "pytorch_lora_weights.safetensors",
+                    "adapter_model.safetensors", 
+                    "pytorch_model.safetensors",
+                    "model.safetensors"
+                ]
+                
+                for weight_file in possible_weight_files:
+                    weight_path = latest_lora_checkpoint / weight_file
+                    if weight_path.exists():
+                        logger.info(f"Found weights file {weight_file} in latest LoRA checkpoint: {weight_path}")
+                        return str(weight_path)
+                
+                # Check if any .safetensors files exist
+                safetensors_files = list(latest_lora_checkpoint.glob("*.safetensors"))
+                if safetensors_files:
+                    logger.info(f"Found .safetensors files in LoRA checkpoint: {safetensors_files}")
+                    # Return the first .safetensors file found
+                    return str(safetensors_files[0])
+            
+            # Fallback: check for direct safetensors file in lora_weights root
             lora_safetensors = lora_weights_dir / "pytorch_lora_weights.safetensors"
             if lora_safetensors.exists():
                 logger.info(f"Found weights in lora_weights directory: {lora_safetensors}")
