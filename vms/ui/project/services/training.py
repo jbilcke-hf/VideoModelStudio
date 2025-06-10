@@ -1492,7 +1492,15 @@ class TrainingService:
         if model_output_safetensors_path.exists():
             return str(model_output_safetensors_path)
         
-        # If not found in root, log the issue and return None
+        # Check in lora_weights directory
+        lora_weights_dir = self.app.output_path / "lora_weights"
+        if lora_weights_dir.exists():
+            lora_safetensors = lora_weights_dir / "pytorch_lora_weights.safetensors"
+            if lora_safetensors.exists():
+                logger.info(f"Found weights in lora_weights directory: {lora_safetensors}")
+                return str(lora_safetensors)
+        
+        # If not found in root or lora_weights, log the issue
         logger.warning(f"Model weights not found at expected location: {model_output_safetensors_path}")
         logger.info(f"Checking output directory contents: {list(self.app.output_path.glob('*'))}")
         
