@@ -4,7 +4,7 @@ emoji: 🎥
 colorFrom: gray
 colorTo: gray
 sdk: gradio
-sdk_version: 5.32.1
+sdk_version: 5.33.1
 app_file: app.py
 pinned: true
 license: apache-2.0
@@ -30,6 +30,7 @@ VideoModelStudio is 100% open-source project, I develop and maintain it during b
 <a href="https://www.buymeacoffee.com/flngr" target="_blank"><img src="https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png" alt="Buy Me A Coffee" style="height: 41px !important;width: 174px !important;box-shadow: 0px 3px 2px 0px rgba(190, 190, 190, 0.5) !important;-webkit-box-shadow: 0px 3px 2px 0px rgba(190, 190, 190, 0.5) !important;" ></a>
 
 ## News
+- 🔥 **2025-06-10**: Fixed a bug with model download, upgrade to 5.33.1
 - 🔥 **2025-06-04**: Upgrade to Cuda 12.8, Pytorch 2.6, Gradio 5.32
 - 🔥 **2025-03-12**: VMS now officially supports Wan!
 - 🔥 **2025-03-11**: I have added a tab to preview a model!
