@@ -114,7 +114,7 @@ class AppUI:
         self.splitting = SplittingService()
         self.importing = ImportingService()
         self.captioning = CaptioningService()
-        self.previewing = PreviewingService()
+        self.previewing = PreviewingService(self)
 
         # Initialize models tab
         self.models_tab = ModelsTab(self)
