@@ -35,22 +35,44 @@ class PreviewingService:
     def find_latest_lora_weights(self) -> Optional[str]:
         """Find the latest LoRA weights file"""
         try:
+            # Check if the root level file exists (this should be the primary location)
             lora_path = self.app.output_path / "pytorch_lora_weights.safetensors"
             if lora_path.exists():
                 return str(lora_path)
             
-            # If not found in the expected location, try to find in checkpoints
+            # Check in lora_weights directory
+            lora_weights_dir = self.app.output_path / "lora_weights"
+            if lora_weights_dir.exists():
+                # Look for the latest checkpoint directory in lora_weights
+                lora_checkpoints = [d for d in lora_weights_dir.glob("*") if d.is_dir() and d.name.isdigit()]
+                if lora_checkpoints:
+                    latest_lora_checkpoint = max(lora_checkpoints, key=lambda x: int(x.name))
+                    
+                    # Check for weights in the latest LoRA checkpoint
+                    possible_weight_files = [
+                        "pytorch_lora_weights.safetensors",
+                        "adapter_model.safetensors", 
+                        "pytorch_model.safetensors",
+                        "model.safetensors"
+                    ]
+                    
+                    for weight_file in possible_weight_files:
+                        weight_path = latest_lora_checkpoint / weight_file
+                        if weight_path.exists():
+                            return str(weight_path)
+                    
+                    # Check if any .safetensors files exist
+                    safetensors_files = list(latest_lora_checkpoint.glob("*.safetensors"))
+                    if safetensors_files:
+                        return str(safetensors_files[0])
+            
+            # If not found in lora_weights, try to find in finetrainers checkpoints
             checkpoints = list(self.app.output_path.glob("finetrainers_step_*"))
-            has_checkpoints = len(checkpoints) > 0
-
-            if not checkpoints:
-                return None
-            
-            latest_checkpoint = max(checkpoints, key=lambda x: int(x.name.split("_")[-1]))
-            lora_path = latest_checkpoint / "pytorch_lora_weights.safetensors"
-            
-            if lora_path.exists():
-                return str(lora_path)
+            if checkpoints:
+                latest_checkpoint = max(checkpoints, key=lambda x: int(x.name.split("_")[-1]))
+                lora_path = latest_checkpoint / "pytorch_lora_weights.safetensors"
+                if lora_path.exists():
+                    return str(lora_path)
             
             return None
         except Exception as e:
