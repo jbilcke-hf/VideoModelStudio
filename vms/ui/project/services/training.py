@@ -1495,10 +1495,16 @@ class TrainingService:
         # Check in lora_weights directory
         lora_weights_dir = self.app.output_path / "lora_weights"
         if lora_weights_dir.exists():
+            logger.info(f"Found lora_weights directory: {lora_weights_dir}")
+            lora_weights_contents = list(lora_weights_dir.glob("*"))
+            logger.info(f"Contents of lora_weights directory: {lora_weights_contents}")
+            
             lora_safetensors = lora_weights_dir / "pytorch_lora_weights.safetensors"
             if lora_safetensors.exists():
                 logger.info(f"Found weights in lora_weights directory: {lora_safetensors}")
                 return str(lora_safetensors)
+            else:
+                logger.info(f"pytorch_lora_weights.safetensors not found in lora_weights directory")
         
         # If not found in root or lora_weights, log the issue
         logger.warning(f"Model weights not found at expected location: {model_output_safetensors_path}")
@@ -1509,10 +1515,18 @@ class TrainingService:
         if checkpoints:
             logger.info(f"Found {len(checkpoints)} checkpoint directories, but main weights file is missing")
             latest_checkpoint = max(checkpoints, key=lambda x: int(x.name.split("_")[-1]))
+            logger.info(f"Latest checkpoint directory: {latest_checkpoint}")
+            
+            # Log contents of latest checkpoint
+            checkpoint_contents = list(latest_checkpoint.glob("*"))
+            logger.info(f"Contents of latest checkpoint {latest_checkpoint.name}: {checkpoint_contents}")
+            
             checkpoint_weights = latest_checkpoint / "pytorch_lora_weights.safetensors"
             if checkpoint_weights.exists():
                 logger.info(f"Found weights in latest checkpoint: {checkpoint_weights}")
                 return str(checkpoint_weights)
+            else:
+                logger.info(f"pytorch_lora_weights.safetensors not found in checkpoint directory")
         
         return None
 
