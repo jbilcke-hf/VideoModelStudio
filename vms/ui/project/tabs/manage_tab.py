@@ -79,7 +79,8 @@ class ManageTab(BaseTab):
                         self.components["download_output_btn"] = gr.DownloadButton(
                             "📁 Download output directory (.zip)",
                             variant="secondary",
-                            size="lg"
+                            size="lg",
+                            visible=False
                         )
             with gr.Row():
                 with gr.Column():
