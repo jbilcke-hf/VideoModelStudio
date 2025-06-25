@@ -1118,32 +1118,22 @@ class TrainingService:
             step_num = int(checkpoint_dir.name.split("_")[-1])
             logger.info(f"Validating checkpoint at step {step_num}: {checkpoint_dir}")
             
-            # Check if the .metadata file exists
+            # Check if the .metadata file exists (indicator of complete checkpoint)
             metadata_file = checkpoint_dir / ".metadata"
             if not metadata_file.exists():
                 logger.warning(f"Checkpoint {checkpoint_dir.name} is corrupted: missing .metadata file")
                 corrupted_checkpoints.append(checkpoint_dir)
                 continue
             
-            # Try to read the metadata file to ensure it's not corrupted
-            try:
-                with open(metadata_file, 'r') as f:
-                    metadata = json.load(f)
-                    # Basic validation - metadata should have expected structure
-                    if not isinstance(metadata, dict):
-                        raise ValueError("Invalid metadata format")
-                logger.info(f"Checkpoint {checkpoint_dir.name} is valid")
-                
-                # Clean up any corrupted checkpoints we found before this valid one
-                if corrupted_checkpoints:
-                    self.cleanup_corrupted_checkpoints(corrupted_checkpoints)
-                
-                return str(checkpoint_dir)
-                
-            except (json.JSONDecodeError, IOError, ValueError) as e:
-                logger.warning(f"Checkpoint {checkpoint_dir.name} is corrupted: failed to read .metadata: {e}")
-                corrupted_checkpoints.append(checkpoint_dir)
-                continue
+            # .metadata file exists, checkpoint is considered valid
+            # We don't read the file contents to avoid encoding/parsing issues
+            logger.info(f"Checkpoint {checkpoint_dir.name} is valid")
+            
+            # Clean up any corrupted checkpoints we found before this valid one
+            if corrupted_checkpoints:
+                self.cleanup_corrupted_checkpoints(corrupted_checkpoints)
+            
+            return str(checkpoint_dir)
         
         # If we reach here, all checkpoints are corrupted
         if corrupted_checkpoints:
@@ -1685,3 +1675,21 @@ class TrainingService:
             except Exception as e:
                 print(f"Failed to create zip: {str(e)}")
                 raise gr.Error(f"Failed to create zip: {str(e)}")
+
+    def create_output_directory_zip(self) -> str:
+        """Create a ZIP file containing all output data (checkpoints, models, etc.)
+        
+        Returns:
+            Path to created ZIP file
+        """
+        # Create temporary zip file
+        with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as temp_zip:
+            temp_zip_path = str(temp_zip.name)
+            print(f"Creating zip file for {self.app.output_path}..")
+            try:
+                make_archive(self.app.output_path, temp_zip_path)
+                print(f"Output zip file created!")
+                return temp_zip_path
+            except Exception as e:
+                print(f"Failed to create output zip: {str(e)}")
+                raise gr.Error(f"Failed to create output zip: {str(e)}")

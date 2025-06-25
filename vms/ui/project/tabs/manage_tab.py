@@ -75,6 +75,12 @@ class ManageTab(BaseTab):
                             variant="secondary",
                             size="lg"
                         )
+                        
+                        self.components["download_output_btn"] = gr.DownloadButton(
+                            "📁 Download output directory (.zip)",
+                            variant="secondary",
+                            size="lg"
+                        )
             with gr.Row():
                 with gr.Column():
                     gr.Markdown("## 📡 Publish your model")
@@ -211,6 +217,11 @@ class ManageTab(BaseTab):
         self.components["download_model_btn"].click(
             fn=self.app.training.get_model_output_safetensors,
             outputs=[self.components["download_model_btn"]]
+        )
+        
+        self.components["download_output_btn"].click(
+            fn=self.app.training.create_output_directory_zip,
+            outputs=[self.components["download_output_btn"]]
         )
         
         # Dataset deletion with modal
