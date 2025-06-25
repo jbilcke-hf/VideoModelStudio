@@ -39,6 +39,14 @@ class ManageTab(BaseTab):
             logger.warning(f"Error getting model info for button text: {e}")
             return "🧠 Download weights (.safetensors)"
 
+    def get_checkpoint_button_text(self) -> str:
+        """Get the dynamic text for the download checkpoint button"""
+        try:
+            return self.app.training.get_checkpoint_button_text()
+        except Exception as e:
+            logger.warning(f"Error getting checkpoint button text: {e}")
+            return "📥 Download checkpoints (not available)"
+
     def update_download_button_text(self) -> gr.update:
         """Update the download button text"""
         return gr.update(value=self.get_download_button_text())
@@ -72,6 +80,12 @@ class ManageTab(BaseTab):
                             
                         self.components["download_model_btn"] = gr.DownloadButton(
                             self.get_download_button_text(),
+                            variant="secondary",
+                            size="lg"
+                        )
+                        
+                        self.components["download_checkpoint_btn"] = gr.DownloadButton(
+                            self.get_checkpoint_button_text(),
                             variant="secondary",
                             size="lg"
                         )
@@ -230,6 +244,11 @@ class ManageTab(BaseTab):
         self.components["download_model_btn"].click(
             fn=self.app.training.get_model_output_safetensors,
             outputs=[self.components["download_model_btn"]]
+        )
+        
+        self.components["download_checkpoint_btn"].click(
+            fn=self.app.training.create_checkpoint_zip,
+            outputs=[self.components["download_checkpoint_btn"]]
         )
         
         self.components["download_output_btn"].click(

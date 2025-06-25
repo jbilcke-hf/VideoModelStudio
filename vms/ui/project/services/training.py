@@ -54,7 +54,6 @@ from vms.utils import (
     prepare_finetrainers_dataset,
     copy_files_to_training_dir
 )
-from vms.patches.finetrainers_lora_loading import apply_lora_loading_patch
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -73,11 +72,6 @@ class TrainingService:
         self.setup_logging()
         self.ensure_valid_ui_state_file()
         
-        # Apply Finetrainers patches for LoRA weight loading
-        try:
-            apply_lora_loading_patch()
-        except Exception as e:
-            logger.warning(f"Failed to apply Finetrainers LoRA loading patch: {e}")
 
         # Start background cleanup task
         self._cleanup_stop_event = threading.Event()
@@ -585,7 +579,6 @@ class TrainingService:
         precomputation_items: int = DEFAULT_PRECOMPUTATION_ITEMS,
         lr_warmup_steps: int = DEFAULT_NB_LR_WARMUP_STEPS,
         progress: Optional[gr.Progress] = None,
-        pretrained_lora_path: Optional[str] = None,
     ) -> Tuple[str, str]:
         """Start training with finetrainers"""
         
@@ -836,29 +829,6 @@ class TrainingService:
                     self.append_log(error_msg)
                     return error_msg, "No valid checkpoints available"
             
-            # Add pretrained LoRA path if provided (for starting fresh training with existing weights)
-            if pretrained_lora_path:
-                # Validate the LoRA path exists and contains required files
-                lora_path = Path(pretrained_lora_path)
-                lora_weights_file = lora_path / "pytorch_lora_weights.safetensors"
-                
-                if not lora_path.exists():
-                    error_msg = f"Pretrained LoRA path does not exist: {pretrained_lora_path}"
-                    logger.error(error_msg)
-                    self.append_log(error_msg)
-                    return error_msg, "LoRA path not found"
-                
-                if not lora_weights_file.exists():
-                    error_msg = f"LoRA weights file not found: {lora_weights_file}"
-                    logger.error(error_msg)
-                    self.append_log(error_msg)
-                    return error_msg, "LoRA weights file missing"
-                
-                # Set the pretrained LoRA path for the patched Finetrainers
-                config.pretrained_lora_path = str(lora_path)
-                self.append_log(f"Starting training with pretrained LoRA weights from: {lora_path}")
-                logger.info(f"Using pretrained LoRA weights: {lora_path}")
-                
             # Common settings for both models
             config.mixed_precision = DEFAULT_MIXED_PRECISION
             config.seed = DEFAULT_SEED
@@ -1824,3 +1794,46 @@ class TrainingService:
             except Exception as e:
                 print(f"Failed to create output zip: {str(e)}")
                 raise gr.Error(f"Failed to create output zip: {str(e)}")
+
+    def create_checkpoint_zip(self) -> Optional[str]:
+        """Create a ZIP file containing the latest finetrainers checkpoint
+        
+        Returns:
+            Path to created ZIP file or None if no checkpoint found
+        """
+        # Find all checkpoint directories
+        checkpoints = list(self.app.output_path.glob("finetrainers_step_*"))
+        if not checkpoints:
+            logger.info("No checkpoint directories found")
+            raise gr.Error("No checkpoint directories found")
+        
+        # Get the latest checkpoint by step number
+        latest_checkpoint = max(checkpoints, key=lambda x: int(x.name.split("_")[-1]))
+        step_num = int(latest_checkpoint.name.split("_")[-1])
+        
+        # Create temporary zip file
+        with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as temp_zip:
+            temp_zip_path = str(temp_zip.name)
+            print(f"Creating zip file for checkpoint {latest_checkpoint.name}..")
+            try:
+                make_archive(latest_checkpoint, temp_zip_path)
+                print(f"Checkpoint zip file created for step {step_num}!")
+                return temp_zip_path
+            except Exception as e:
+                print(f"Failed to create checkpoint zip: {str(e)}")
+                raise gr.Error(f"Failed to create checkpoint zip: {str(e)}")
+
+    def get_checkpoint_button_text(self) -> str:
+        """Get the dynamic text for the download checkpoint button based on available checkpoints"""
+        try:
+            checkpoints = list(self.app.output_path.glob("finetrainers_step_*"))
+            if not checkpoints:
+                return "📥 Download checkpoints (not available)"
+            
+            # Get the latest checkpoint by step number
+            latest_checkpoint = max(checkpoints, key=lambda x: int(x.name.split("_")[-1]))
+            step_num = int(latest_checkpoint.name.split("_")[-1])
+            return f"📥 Download checkpoints (step {step_num})"
+        except Exception as e:
+            logger.warning(f"Error getting checkpoint info for button text: {e}")
+            return "📥 Download checkpoints (not available)"

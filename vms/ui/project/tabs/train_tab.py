@@ -369,11 +369,12 @@ For image-to-video tasks, 'index' (usually with index 0) is most common as it co
                                         interactive=has_checkpoints and not ASK_USER_TO_DUPLICATE_SPACE
                                     )
                                     
-                                    # Add new button for starting from LoRA weights
+                                    # Starting from LoRA weights is DISABLED for now
                                     self.components["start_from_lora_btn"] = gr.Button(
                                         "🔄 Start over using latest LoRA weights",
                                         variant="secondary",
-                                        interactive=has_lora_weights and not ASK_USER_TO_DUPLICATE_SPACE
+                                        interactive=has_lora_weights and not ASK_USER_TO_DUPLICATE_SPACE,
+                                        visible=False,
                                     )
                                     
                                 with gr.Row():
