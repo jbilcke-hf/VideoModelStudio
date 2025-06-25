@@ -54,6 +54,7 @@ from vms.utils import (
     prepare_finetrainers_dataset,
     copy_files_to_training_dir
 )
+from vms.patches.finetrainers_lora_loading import apply_lora_loading_patch
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -71,6 +72,17 @@ class TrainingService:
         self.file_handler = None
         self.setup_logging()
         self.ensure_valid_ui_state_file()
+        
+        # Apply Finetrainers patches for LoRA weight loading
+        try:
+            apply_lora_loading_patch()
+        except Exception as e:
+            logger.warning(f"Failed to apply Finetrainers LoRA loading patch: {e}")
+
+        # Start background cleanup task
+        self._cleanup_stop_event = threading.Event()
+        self._cleanup_thread = threading.Thread(target=self._background_cleanup_task, daemon=True)
+        self._cleanup_thread.start()
 
         logger.info("Training service initialized")
 
@@ -573,6 +585,7 @@ class TrainingService:
         precomputation_items: int = DEFAULT_PRECOMPUTATION_ITEMS,
         lr_warmup_steps: int = DEFAULT_NB_LR_WARMUP_STEPS,
         progress: Optional[gr.Progress] = None,
+        pretrained_lora_path: Optional[str] = None,
     ) -> Tuple[str, str]:
         """Start training with finetrainers"""
         
@@ -822,6 +835,29 @@ class TrainingService:
                     logger.error(error_msg)
                     self.append_log(error_msg)
                     return error_msg, "No valid checkpoints available"
+            
+            # Add pretrained LoRA path if provided (for starting fresh training with existing weights)
+            if pretrained_lora_path:
+                # Validate the LoRA path exists and contains required files
+                lora_path = Path(pretrained_lora_path)
+                lora_weights_file = lora_path / "pytorch_lora_weights.safetensors"
+                
+                if not lora_path.exists():
+                    error_msg = f"Pretrained LoRA path does not exist: {pretrained_lora_path}"
+                    logger.error(error_msg)
+                    self.append_log(error_msg)
+                    return error_msg, "LoRA path not found"
+                
+                if not lora_weights_file.exists():
+                    error_msg = f"LoRA weights file not found: {lora_weights_file}"
+                    logger.error(error_msg)
+                    self.append_log(error_msg)
+                    return error_msg, "LoRA weights file missing"
+                
+                # Set the pretrained LoRA path for the patched Finetrainers
+                config.pretrained_lora_path = str(lora_path)
+                self.append_log(f"Starting training with pretrained LoRA weights from: {lora_path}")
+                logger.info(f"Using pretrained LoRA weights: {lora_path}")
                 
             # Common settings for both models
             config.mixed_precision = DEFAULT_MIXED_PRECISION
@@ -1158,6 +1194,94 @@ class TrainingService:
                 logger.error(f"Failed to remove corrupted checkpoint {checkpoint_dir}: {e}")
                 self.append_log(f"Failed to remove corrupted checkpoint {checkpoint_dir.name}: {e}")
 
+    def cleanup_old_lora_weights(self, max_to_keep: int = 2) -> None:
+        """Remove old LoRA weight directories, keeping only the most recent ones
+        
+        Args:
+            max_to_keep: Maximum number of LoRA weight directories to keep (default: 2)
+        """
+        lora_weights_path = self.app.output_path / "lora_weights"
+        
+        if not lora_weights_path.exists():
+            logger.debug("LoRA weights directory does not exist, nothing to clean up")
+            return
+        
+        # Find all LoRA weight directories (should be named with step numbers)
+        lora_dirs = []
+        for item in lora_weights_path.iterdir():
+            if item.is_dir() and item.name.isdigit():
+                lora_dirs.append(item)
+        
+        if len(lora_dirs) <= max_to_keep:
+            logger.debug(f"Found {len(lora_dirs)} LoRA weight directories, no cleanup needed (keeping {max_to_keep})")
+            return
+        
+        # Sort by step number (directory name) in descending order (newest first)
+        lora_dirs_sorted = sorted(lora_dirs, key=lambda x: int(x.name), reverse=True)
+        
+        # Keep the most recent max_to_keep directories, remove the rest
+        dirs_to_keep = lora_dirs_sorted[:max_to_keep]
+        dirs_to_remove = lora_dirs_sorted[max_to_keep:]
+        
+        logger.info(f"Cleaning up old LoRA weights: keeping {len(dirs_to_keep)}, removing {len(dirs_to_remove)}")
+        self.append_log(f"Cleaning up old LoRA weights: keeping latest {max_to_keep} directories")
+        
+        for lora_dir in dirs_to_remove:
+            try:
+                step_num = int(lora_dir.name)
+                logger.info(f"Removing old LoRA weights at step {step_num}: {lora_dir}")
+                shutil.rmtree(lora_dir)
+                self.append_log(f"Removed old LoRA weights: step {step_num}")
+            except Exception as e:
+                logger.error(f"Failed to remove old LoRA weights {lora_dir}: {e}")
+                self.append_log(f"Failed to remove old LoRA weights {lora_dir.name}: {e}")
+        
+        # Log what we kept
+        kept_steps = [int(d.name) for d in dirs_to_keep]
+        kept_steps.sort(reverse=True)
+        logger.info(f"Kept LoRA weights for steps: {kept_steps}")
+        self.append_log(f"Kept LoRA weights for steps: {kept_steps}")
+
+    def _background_cleanup_task(self) -> None:
+        """Background task that runs every 10 minutes to clean up old LoRA weights"""
+        cleanup_interval = 600  # 10 minutes in seconds
+        
+        logger.info("Started background LoRA cleanup task (runs every 10 minutes)")
+        
+        while not self._cleanup_stop_event.is_set():
+            try:
+                # Wait for 10 minutes or until stop event is set
+                if self._cleanup_stop_event.wait(timeout=cleanup_interval):
+                    break  # Stop event was set
+                
+                # Only run cleanup if we have an output path
+                if hasattr(self.app, 'output_path') and self.app.output_path:
+                    lora_weights_path = self.app.output_path / "lora_weights"
+                    
+                    # Only cleanup if the directory exists and has content
+                    if lora_weights_path.exists():
+                        lora_dirs = [d for d in lora_weights_path.iterdir() if d.is_dir() and d.name.isdigit()]
+                        
+                        if len(lora_dirs) > 2:
+                            logger.info(f"Background cleanup: Found {len(lora_dirs)} LoRA weight directories, cleaning up old ones")
+                            self.cleanup_old_lora_weights(max_to_keep=2)
+                        else:
+                            logger.debug(f"Background cleanup: Found {len(lora_dirs)} LoRA weight directories, no cleanup needed")
+                
+            except Exception as e:
+                logger.error(f"Background LoRA cleanup task error: {e}")
+                # Continue running despite errors
+        
+        logger.info("Background LoRA cleanup task stopped")
+
+    def stop_background_cleanup(self) -> None:
+        """Stop the background cleanup task"""
+        if hasattr(self, '_cleanup_stop_event'):
+            self._cleanup_stop_event.set()
+        if hasattr(self, '_cleanup_thread') and self._cleanup_thread.is_alive():
+            self._cleanup_thread.join(timeout=5)
+            logger.info("Background cleanup task stopped")
+
     def recover_interrupted_training(self) -> Dict[str, Any]:
         """Attempt to recover interrupted training
         
@@ -1492,6 +1616,13 @@ class TrainingService:
                 self.append_log(success_msg)
                 gr.Info(success_msg)
                 self.save_status(state='completed', message=success_msg)
+                
+                # Clean up old LoRA weights to save disk space
+                try:
+                    self.cleanup_old_lora_weights(max_to_keep=2)
+                except Exception as e:
+                    logger.warning(f"Failed to cleanup old LoRA weights: {e}")
+                    self.append_log(f"Warning: Failed to cleanup old LoRA weights: {e}")
                 
                 # Upload final model if repository was specified
                 session = self.load_session()

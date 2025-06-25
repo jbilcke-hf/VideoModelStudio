@@ -104,6 +104,18 @@ class ManageTab(BaseTab):
 
             with gr.Row():
                 with gr.Column():
+                    gr.Markdown("## 🧹 Maintenance")
+                    gr.Markdown("Clean up old files to free disk space.")
+                    
+                    with gr.Row():
+                        self.components["cleanup_lora_btn"] = gr.Button(
+                            "🔄 Keep last 2 LoRA weights and clean up older ones",
+                            variant="secondary",
+                            size="lg"
+                        )
+
+            with gr.Row():
+                with gr.Column():
                     gr.Markdown("## ♻️ Delete your data")
                     gr.Markdown("Make sure you have made a backup first.")
                     gr.Markdown("If you are deleting because of a bug, remember you can use the Developer Mode on HF to inspect the working directory (in /data or .data)")
@@ -223,6 +235,12 @@ class ManageTab(BaseTab):
         self.components["download_output_btn"].click(
             fn=self.app.training.create_output_directory_zip,
             outputs=[self.components["download_output_btn"]]
+        )
+        
+        # LoRA cleanup button
+        self.components["cleanup_lora_btn"].click(
+            fn=self.cleanup_old_lora_weights,
+            outputs=[]
         )
         
         # Dataset deletion with modal
@@ -345,6 +363,16 @@ class ManageTab(BaseTab):
             return f"Successfully uploaded model to {repo_id}"
         else:
             return f"Failed to upload model to {repo_id}"
+    
+    def cleanup_old_lora_weights(self):
+        """Clean up old LoRA weight directories, keeping only the latest 2"""
+        try:
+            self.app.training.cleanup_old_lora_weights(max_to_keep=2)
+            gr.Info("✅ Successfully cleaned up old LoRA weights")
+        except Exception as e:
+            error_msg = f"❌ Failed to cleanup LoRA weights: {str(e)}"
+            gr.Error(error_msg)
+            logger.error(f"LoRA cleanup failed: {e}")
     
     def delete_dataset(self):
         """Delete dataset files (images, videos, captions)"""

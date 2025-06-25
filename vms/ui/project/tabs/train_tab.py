@@ -341,12 +341,20 @@ For image-to-video tasks, 'index' (usually with index 0) is most common as it co
                                 ## ⚗️ Train your model on your dataset
                                 - **🚀 Start new training**: Begins training from scratch (clears previous checkpoints)
                                 - **🛸 Start from latest checkpoint**: Continues training from the most recent checkpoint
+                                - **🔄 Start over using latest LoRA weights**: Start fresh training but use existing LoRA weights as initialization
                                 """)
                                 
                                 with gr.Row():
                                     # Check for existing checkpoints to determine button text
                                     checkpoints = list(self.app.output_path.glob("finetrainers_step_*"))
                                     has_checkpoints = len(checkpoints) > 0
+                                    
+                                    # Check for existing LoRA weights
+                                    lora_weights_path = self.app.output_path / "lora_weights"
+                                    has_lora_weights = False
+                                    if lora_weights_path.exists():
+                                        lora_dirs = [d for d in lora_weights_path.iterdir() if d.is_dir()]
+                                        has_lora_weights = len(lora_dirs) > 0
 
                                     self.components["start_btn"] = gr.Button(
                                         "🚀 Start new training",
@@ -359,6 +367,13 @@ For image-to-video tasks, 'index' (usually with index 0) is most common as it co
                                         "🛸 Start from latest checkpoint",
                                         variant="primary", 
                                         interactive=has_checkpoints and not ASK_USER_TO_DUPLICATE_SPACE
+                                    )
+                                    
+                                    # Add new button for starting from LoRA weights
+                                    self.components["start_from_lora_btn"] = gr.Button(
+                                        "🔄 Start over using latest LoRA weights",
+                                        variant="secondary",
+                                        interactive=has_lora_weights and not ASK_USER_TO_DUPLICATE_SPACE
                                     )
                                     
                                 with gr.Row():
@@ -495,6 +510,52 @@ For image-to-video tasks, 'index' (usually with index 0) is most common as it co
             lora_rank, lora_alpha, train_steps, batch_size, learning_rate, 
             save_iterations, repo_id, progress, 
             resume_from_checkpoint="latest"
+        )
+
+    def handle_start_from_lora_training(
+        self, model_type, model_version, training_type, 
+        lora_rank, lora_alpha, train_steps, batch_size, learning_rate, 
+        save_iterations, repo_id, progress=gr.Progress()
+    ):
+        """Handle starting training from existing LoRA weights"""
+        # Find the latest LoRA weights
+        lora_weights_path = self.app.output_path / "lora_weights"
+        
+        if not lora_weights_path.exists():
+            return "No LoRA weights found", "Please train a model first or start a new training session"
+        
+        # Find the latest LoRA checkpoint directory
+        lora_dirs = sorted([d for d in lora_weights_path.iterdir() if d.is_dir()], 
+                          key=lambda x: int(x.name), reverse=True)
+        
+        if not lora_dirs:
+            return "No LoRA weight directories found", "Please train a model first or start a new training session"
+        
+        latest_lora_dir = lora_dirs[0]
+        
+        # Verify the LoRA weights file exists
+        lora_weights_file = latest_lora_dir / "pytorch_lora_weights.safetensors"
+        if not lora_weights_file.exists():
+            return f"LoRA weights file not found in {latest_lora_dir}", "Please check your LoRA weights directory"
+        
+        # Clear checkpoints to start fresh (but keep LoRA weights)
+        for checkpoint in self.app.output_path.glob("finetrainers_step_*"):
+            if checkpoint.is_dir():
+                shutil.rmtree(checkpoint)
+                
+        # Delete session.json to start fresh
+        session_file = self.app.output_path / "session.json"
+        if session_file.exists():
+            session_file.unlink()
+        
+        self.app.training.append_log(f"Starting training from LoRA weights: {latest_lora_dir}")
+        
+        # Start training with the LoRA weights
+        return self.handle_training_start(
+            model_type, model_version, training_type, 
+            lora_rank, lora_alpha, train_steps, batch_size, learning_rate, 
+            save_iterations, repo_id, progress, 
+            pretrained_lora_path=str(latest_lora_dir)
         )
 
     def connect_events(self) -> None:
@@ -701,6 +762,26 @@ For image-to-video tasks, 'index' (usually with index 0) is most common as it co
                 self.components["log_box"]
             ]
         )
+
+        self.components["start_from_lora_btn"].click(
+            fn=self.handle_start_from_lora_training,
+            inputs=[
+                self.components["model_type"],
+                self.components["model_version"],
+                self.components["training_type"],
+                self.components["lora_rank"],
+                self.components["lora_alpha"],
+                self.components["train_steps"],
+                self.components["batch_size"],
+                self.components["learning_rate"],
+                self.components["save_iterations"],
+                self.app.tabs["manage_tab"].components["repo_id"]
+            ],
+            outputs=[
+                self.components["status_box"],
+                self.components["log_box"]
+            ]
+        )
         
 
         # Use simplified event handlers for pause/resume and stop
@@ -780,6 +861,7 @@ For image-to-video tasks, 'index' (usually with index 0) is most common as it co
         save_iterations, repo_id,
         progress=gr.Progress(),
         resume_from_checkpoint=None,
+        pretrained_lora_path=None,
     ):
         """Handle training start with proper log parser reset and checkpoint detection"""
         
@@ -840,7 +922,8 @@ For image-to-video tasks, 'index' (usually with index 0) is most common as it co
                 num_gpus=num_gpus,
                 precomputation_items=precomputation_items,
                 lr_warmup_steps=lr_warmup_steps,
-                progress=progress
+                progress=progress,
+                pretrained_lora_path=pretrained_lora_path
             )
         except Exception as e:
             logger.exception("Error starting training")
