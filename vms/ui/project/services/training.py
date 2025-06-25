@@ -810,9 +810,18 @@ class TrainingService:
 
             # Update with resume_from_checkpoint if provided
             if resume_from_checkpoint:
-                config.resume_from_checkpoint = resume_from_checkpoint
-                self.append_log(f"Resuming from checkpoint: {resume_from_checkpoint} (will use 'latest')")
-                config.resume_from_checkpoint = "latest"
+                # Validate checkpoints and find a valid one to resume from
+                valid_checkpoint = self.validate_and_find_valid_checkpoint()
+                if valid_checkpoint:
+                    config.resume_from_checkpoint = "latest"
+                    checkpoint_step = int(Path(valid_checkpoint).name.split("_")[-1])
+                    self.append_log(f"Resuming from validated checkpoint at step {checkpoint_step}")
+                    logger.info(f"Resuming from validated checkpoint: {valid_checkpoint}")
+                else:
+                    error_msg = "No valid checkpoints found to resume from"
+                    logger.error(error_msg)
+                    self.append_log(error_msg)
+                    return error_msg, "No valid checkpoints available"
                 
             # Common settings for both models
             config.mixed_precision = DEFAULT_MIXED_PRECISION
@@ -1088,6 +1097,77 @@ class TrainingService:
         except:
             return False
 
+    def validate_and_find_valid_checkpoint(self) -> Optional[str]:
+        """Validate checkpoint directories and find the most recent valid one
+        
+        Returns:
+            Path to valid checkpoint directory or None if no valid checkpoint found
+        """
+        # Find all checkpoint directories
+        checkpoints = list(self.app.output_path.glob("finetrainers_step_*"))
+        if not checkpoints:
+            logger.info("No checkpoint directories found")
+            return None
+            
+        # Sort by step number in descending order (latest first)
+        sorted_checkpoints = sorted(checkpoints, key=lambda x: int(x.name.split("_")[-1]), reverse=True)
+        
+        corrupted_checkpoints = []
+        
+        for checkpoint_dir in sorted_checkpoints:
+            step_num = int(checkpoint_dir.name.split("_")[-1])
+            logger.info(f"Validating checkpoint at step {step_num}: {checkpoint_dir}")
+            
+            # Check if the .metadata file exists
+            metadata_file = checkpoint_dir / ".metadata"
+            if not metadata_file.exists():
+                logger.warning(f"Checkpoint {checkpoint_dir.name} is corrupted: missing .metadata file")
+                corrupted_checkpoints.append(checkpoint_dir)
+                continue
+            
+            # Try to read the metadata file to ensure it's not corrupted
+            try:
+                with open(metadata_file, 'r') as f:
+                    metadata = json.load(f)
+                    # Basic validation - metadata should have expected structure
+                    if not isinstance(metadata, dict):
+                        raise ValueError("Invalid metadata format")
+                logger.info(f"Checkpoint {checkpoint_dir.name} is valid")
+                
+                # Clean up any corrupted checkpoints we found before this valid one
+                if corrupted_checkpoints:
+                    self.cleanup_corrupted_checkpoints(corrupted_checkpoints)
+                
+                return str(checkpoint_dir)
+                
+            except (json.JSONDecodeError, IOError, ValueError) as e:
+                logger.warning(f"Checkpoint {checkpoint_dir.name} is corrupted: failed to read .metadata: {e}")
+                corrupted_checkpoints.append(checkpoint_dir)
+                continue
+        
+        # If we reach here, all checkpoints are corrupted
+        if corrupted_checkpoints:
+            logger.error("All checkpoint directories are corrupted")
+            self.cleanup_corrupted_checkpoints(corrupted_checkpoints)
+        
+        return None
+
+    def cleanup_corrupted_checkpoints(self, corrupted_checkpoints: List[Path]) -> None:
+        """Remove corrupted checkpoint directories
+        
+        Args:
+            corrupted_checkpoints: List of corrupted checkpoint directory paths
+        """
+        for checkpoint_dir in corrupted_checkpoints:
+            try:
+                step_num = int(checkpoint_dir.name.split("_")[-1])
+                logger.info(f"Removing corrupted checkpoint at step {step_num}: {checkpoint_dir}")
+                shutil.rmtree(checkpoint_dir)
+                self.append_log(f"Removed corrupted checkpoint: {checkpoint_dir.name}")
+            except Exception as e:
+                logger.error(f"Failed to remove corrupted checkpoint {checkpoint_dir}: {e}")
+                self.append_log(f"Failed to remove corrupted checkpoint {checkpoint_dir.name}: {e}")
+
     def recover_interrupted_training(self) -> Dict[str, Any]:
         """Attempt to recover interrupted training
         
@@ -1097,9 +1177,9 @@ class TrainingService:
         status = self.get_status()
         ui_updates = {}
         
-        # Check for any checkpoints, even if status doesn't indicate training
-        checkpoints = list(self.app.output_path.glob("finetrainers_step_*"))
-        has_checkpoints = len(checkpoints) > 0
+        # Check for any valid checkpoints, even if status doesn't indicate training
+        valid_checkpoint = self.validate_and_find_valid_checkpoint()
+        has_checkpoints = valid_checkpoint is not None
         
         # If status indicates training but process isn't running, or if we have checkpoints
         # and no active training process, try to recover
@@ -1145,15 +1225,13 @@ class TrainingService:
                     }
                     return {"status": "idle", "message": "No training in progress", "ui_updates": ui_updates}
                 
-            # Find the latest checkpoint if we have checkpoints
+            # Use the valid checkpoint we found
             latest_checkpoint = None
             checkpoint_step = 0
             
-            if has_checkpoints:
-                # Find the latest checkpoint by step number
-                latest_checkpoint = max(checkpoints, key=lambda x: int(x.name.split("_")[-1]))
-                checkpoint_step = int(latest_checkpoint.name.split("_")[-1])
-                logger.info(f"Found checkpoint at step {checkpoint_step}")
+            if has_checkpoints and valid_checkpoint:
+                checkpoint_step = int(Path(valid_checkpoint).name.split("_")[-1])
+                logger.info(f"Found valid checkpoint at step {checkpoint_step}")
 
                 # both options are valid, but imho it is easier to just return "latest"
                 # under the hood Finetrainers will convert ("latest") to (-1)
@@ -1480,17 +1558,20 @@ class TrainingService:
             self.append_log(f"Error uploading to hub: {str(e)}")
             return False
 
-    def get_model_output_safetensors(self) -> Optional[str]:
-        """Return the path to the model safetensors
+    def get_model_output_info(self) -> Dict[str, Any]:
+        """Return info about the model safetensors including path and step count
         
         Returns:
-            Path to safetensors file or None if not found
+            Dict with 'path' (str or None) and 'steps' (int or None)
         """
+        result = {"path": None, "steps": None}
         
         # Check if the root level file exists (this should be the primary location)
         model_output_safetensors_path = self.app.output_path / "pytorch_lora_weights.safetensors"
         if model_output_safetensors_path.exists():
-            return str(model_output_safetensors_path)
+            result["path"] = str(model_output_safetensors_path) 
+            # For root level, we can't determine steps easily, so return None
+            return result
         
         # Check in lora_weights directory
         lora_weights_dir = self.app.output_path / "lora_weights"
@@ -1503,6 +1584,9 @@ class TrainingService:
                 latest_lora_checkpoint = max(lora_checkpoints, key=lambda x: int(x.name))
                 logger.info(f"Found latest LoRA checkpoint: {latest_lora_checkpoint}")
                 
+                # Extract step count from directory name
+                result["steps"] = int(latest_lora_checkpoint.name)
+                
                 # List contents of the latest checkpoint directory
                 checkpoint_contents = list(latest_lora_checkpoint.glob("*"))
                 logger.info(f"Contents of LoRA checkpoint {latest_lora_checkpoint.name}: {checkpoint_contents}")
@@ -1511,7 +1595,8 @@ class TrainingService:
                 lora_safetensors = latest_lora_checkpoint / "pytorch_lora_weights.safetensors"
                 if lora_safetensors.exists():
                     logger.info(f"Found weights in latest LoRA checkpoint: {lora_safetensors}")
-                    return str(lora_safetensors)
+                    result["path"] = str(lora_safetensors)
+                    return result
                 
                 # Also check for other common weight file names
                 possible_weight_files = [
@@ -1525,24 +1610,27 @@ class TrainingService:
                     weight_path = latest_lora_checkpoint / weight_file
                     if weight_path.exists():
                         logger.info(f"Found weights file {weight_file} in latest LoRA checkpoint: {weight_path}")
-                        return str(weight_path)
+                        result["path"] = str(weight_path)
+                        return result
                 
                 # Check if any .safetensors files exist
                 safetensors_files = list(latest_lora_checkpoint.glob("*.safetensors"))
                 if safetensors_files:
                     logger.info(f"Found .safetensors files in LoRA checkpoint: {safetensors_files}")
                     # Return the first .safetensors file found
-                    return str(safetensors_files[0])
+                    result["path"] = str(safetensors_files[0])
+                    return result
             
             # Fallback: check for direct safetensors file in lora_weights root
             lora_safetensors = lora_weights_dir / "pytorch_lora_weights.safetensors"
             if lora_safetensors.exists():
                 logger.info(f"Found weights in lora_weights directory: {lora_safetensors}")
-                return str(lora_safetensors)
+                result["path"] = str(lora_safetensors)
+                return result
             else:
                 logger.info(f"pytorch_lora_weights.safetensors not found in lora_weights directory")
         
-        # If not found in root or lora_weights, log the issue
+        # If not found in root or lora_weights, log the issue and check fallback
         logger.warning(f"Model weights not found at expected location: {model_output_safetensors_path}")
         logger.info(f"Checking output directory contents: {list(self.app.output_path.glob('*'))}")
         
@@ -1553,6 +1641,9 @@ class TrainingService:
             latest_checkpoint = max(checkpoints, key=lambda x: int(x.name.split("_")[-1]))
             logger.info(f"Latest checkpoint directory: {latest_checkpoint}")
             
+            # Extract step count from checkpoint directory name
+            result["steps"] = int(latest_checkpoint.name.split("_")[-1])
+            
             # Log contents of latest checkpoint
             checkpoint_contents = list(latest_checkpoint.glob("*"))
             logger.info(f"Contents of latest checkpoint {latest_checkpoint.name}: {checkpoint_contents}")
@@ -1560,11 +1651,20 @@ class TrainingService:
             checkpoint_weights = latest_checkpoint / "pytorch_lora_weights.safetensors"
             if checkpoint_weights.exists():
                 logger.info(f"Found weights in latest checkpoint: {checkpoint_weights}")
-                return str(checkpoint_weights)
+                result["path"] = str(checkpoint_weights)
+                return result
             else:
                 logger.info(f"pytorch_lora_weights.safetensors not found in checkpoint directory")
         
-        return None
+        return result
+
+    def get_model_output_safetensors(self) -> Optional[str]:
+        """Return the path to the model safetensors
+        
+        Returns:
+            Path to safetensors file or None if not found
+        """
+        return self.get_model_output_info()["path"]
 
     def create_training_dataset_zip(self) -> str:
         """Create a ZIP file containing all training data

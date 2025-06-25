@@ -25,6 +25,32 @@ class ManageTab(BaseTab):
         self.id = "manage_tab"
         self.title = "5️⃣ Storage"
     
+    def get_download_button_text(self) -> str:
+        """Get the dynamic text for the download button based on current model state"""
+        try:
+            model_info = self.app.training.get_model_output_info()
+            if model_info["path"] and model_info["steps"]:
+                return f"🧠 Download weights ({model_info['steps']} steps)"
+            elif model_info["path"]:
+                return "🧠 Download weights (.safetensors)"
+            else:
+                return "🧠 Download weights (not available)"
+        except Exception as e:
+            logger.warning(f"Error getting model info for button text: {e}")
+            return "🧠 Download weights (.safetensors)"
+
+    def update_download_button_text(self) -> gr.update:
+        """Update the download button text"""
+        return gr.update(value=self.get_download_button_text())
+    
+    def download_and_update_button(self):
+        """Handle download and return updated button with current text"""
+        # Get the safetensors path for download
+        path = self.app.training.get_model_output_safetensors()
+        # For DownloadButton, we need to return the file path directly for download
+        # The button text will be updated on next render
+        return path
+    
     def create(self, parent=None) -> gr.TabItem:
         """Create the Manage tab UI components"""
         with gr.TabItem(self.title, id=self.id) as tab:
@@ -45,7 +71,7 @@ class ManageTab(BaseTab):
                             gr.Markdown("📦 Training dataset download disabled for large datasets")
                             
                         self.components["download_model_btn"] = gr.DownloadButton(
-                            "🧠 Download weights (.safetensors)",
+                            self.get_download_button_text(),
                             variant="secondary",
                             size="lg"
                         )
