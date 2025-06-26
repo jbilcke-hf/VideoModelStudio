@@ -141,7 +141,8 @@ class HubTab(BaseTab):
             inputs=[
                 self.components["dataset_id"],
                 self.components["enable_automatic_video_split"],
-                self.components["file_type"]
+                self.components["file_type"],
+                self.app.tabs["caption_tab"].components["custom_prompt_prefix"]
             ],
             outputs=[
                 self.components["status_output"],
@@ -172,7 +173,8 @@ class HubTab(BaseTab):
             inputs=[
                 self.components["dataset_id"],
                 self.components["enable_automatic_video_split"],
-                self.components["file_type"]
+                self.components["file_type"],
+                self.app.tabs["caption_tab"].components["custom_prompt_prefix"]
             ],
             outputs=[
                 self.components["status_output"],
