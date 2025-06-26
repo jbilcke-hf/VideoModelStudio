@@ -267,7 +267,7 @@ class HubTab(BaseTab):
                 ""                                             # status_output
             )
 
-    async def _download_with_progress(self, dataset_id, file_type, enable_splitting, progress_callback):
+    async def _download_with_progress(self, dataset_id, file_type, enable_splitting, progress_callback, custom_prompt_prefix=None):
         """Wrapper for download_file_group that integrates with progress tracking"""
         try:
             # Set up the progress callback adapter
@@ -289,7 +289,8 @@ class HubTab(BaseTab):
                 dataset_id, 
                 file_type, 
                 enable_splitting,
-                progress_callback=progress_adapter
+                progress_callback=progress_adapter,
+                custom_prompt_prefix=custom_prompt_prefix
             )
             
             return result
@@ -298,7 +299,7 @@ class HubTab(BaseTab):
             logger.error(f"Error in download with progress: {str(e)}", exc_info=True)
             return f"Error: {str(e)}"
 
-    def download_file_group(self, dataset_id: str, enable_splitting: bool, file_type: str, progress=gr.Progress()) -> Tuple:
+    def download_file_group(self, dataset_id: str, enable_splitting: bool, file_type: str, custom_prompt_prefix: str = None, progress=gr.Progress()) -> Tuple:
         """Handle download of a group of files (videos or WebDatasets) with progress tracking"""
         try:
             if not dataset_id:
@@ -323,7 +324,8 @@ class HubTab(BaseTab):
                 dataset_id, 
                 file_type, 
                 enable_splitting,
-                progress
+                progress,
+                custom_prompt_prefix
             ))
             
             # When download is complete, update the UI

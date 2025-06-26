@@ -169,7 +169,8 @@ class HubDatasetBrowser:
         dataset_id: str, 
         file_type: str, 
         enable_splitting: bool,
-        progress_callback: Optional[Callable] = None
+        progress_callback: Optional[Callable] = None,
+        custom_prompt_prefix: str = None
     ) -> str:
         """Download all files of a specific type from the dataset
         
@@ -329,7 +330,8 @@ class HubDatasetBrowser:
         self, 
         dataset_id: str, 
         enable_splitting: bool,
-        progress_callback: Optional[Callable] = None
+        progress_callback: Optional[Callable] = None,
+        custom_prompt_prefix: str = None
     ) -> Tuple[str, str]:
         """Download a dataset and process its video/image content
         
@@ -555,7 +557,7 @@ class HubDatasetBrowser:
                                     txt_path = file_path.with_suffix('.txt')
                                     if txt_path.exists():
                                         caption = txt_path.read_text()
-                                        caption = add_prefix_to_caption(caption, DEFAULT_PROMPT_PREFIX)
+                                        caption = add_prefix_to_caption(caption, custom_prompt_prefix or DEFAULT_PROMPT_PREFIX)
                                         target_path.with_suffix('.txt').write_text(caption)
                                         logger.info(f"Processed caption for {file_path.name}")
                                     

@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 class FileUploadHandler:
     """Handles processing of uploaded files"""
     
-    def process_uploaded_files(self, file_paths: List[str], enable_splitting: bool) -> str:
+    def process_uploaded_files(self, file_paths: List[str], enable_splitting: bool, custom_prompt_prefix: str = None) -> str:
         """Process uploaded file (ZIP, TAR, MP4, or image)
         
         Args:
@@ -48,7 +48,7 @@ class FileUploadHandler:
                 file_ext = file_path.suffix.lower()
 
                 if file_ext == '.zip':
-                    return self.process_zip_file(file_path, enable_splitting)
+                    return self.process_zip_file(file_path, enable_splitting, custom_prompt_prefix)
                 elif file_ext == '.tar':
                     return self.process_tar_file(file_path, enable_splitting)
                 elif file_ext == '.mp4' or file_ext == '.webm':
@@ -63,7 +63,7 @@ class FileUploadHandler:
                 logger.error(f"Error processing file {file_path}: {str(e)}", exc_info=True)
                 raise gr.Error(f"Error processing file: {str(e)}")
 
-    def process_zip_file(self, file_path: Path, enable_splitting: bool) -> str:
+    def process_zip_file(self, file_path: Path, enable_splitting: bool, custom_prompt_prefix: str = None) -> str:
         """Process uploaded ZIP file containing media files or WebDataset tar files
         
         Args:
@@ -138,7 +138,7 @@ class FileUploadHandler:
                                     logger.info(f"Copied caption file for {file}")
                                 elif is_image_file(file_path):
                                     caption = txt_path.read_text()
-                                    caption = add_prefix_to_caption(caption, DEFAULT_PROMPT_PREFIX)
+                                    caption = add_prefix_to_caption(caption, custom_prompt_prefix or DEFAULT_PROMPT_PREFIX)
                                     target_path.with_suffix('.txt').write_text(caption)
                                     logger.info(f"Processed caption for {file}")
                                     

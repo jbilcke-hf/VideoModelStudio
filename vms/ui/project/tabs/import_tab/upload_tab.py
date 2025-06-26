@@ -65,7 +65,7 @@ class UploadTab(BaseTab):
         # File upload event with enable_splitting parameter
         upload_event = self.components["files"].upload(
             fn=self.app.importing.process_uploaded_files,
-            inputs=[self.components["files"], self.components["enable_automatic_video_split"]],
+            inputs=[self.components["files"], self.components["enable_automatic_video_split"], self.app.tabs["caption_tab"].components["custom_prompt_prefix"]],
             outputs=[self.components["import_status"]]
         ).success(
             fn=self.app.tabs["import_tab"].on_import_success,

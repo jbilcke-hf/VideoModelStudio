@@ -906,6 +906,13 @@ For image-to-video tasks, 'index' (usually with index 0) is most common as it co
         precomputation_items = int(self.components["precomputation_items"].value)
         lr_warmup_steps = int(self.components["lr_warmup_steps"].value)
         
+        # Get custom prompt prefix from caption tab
+        custom_prompt_prefix = None
+        if hasattr(self.app, 'tabs') and 'caption_tab' in self.app.tabs:
+            caption_tab = self.app.tabs['caption_tab']
+            if hasattr(caption_tab, 'components') and 'custom_prompt_prefix' in caption_tab.components:
+                custom_prompt_prefix = caption_tab.components['custom_prompt_prefix'].value
+        
         # Start training (it will automatically use the checkpoint if provided)
         try:
             return self.app.training.start_training(
@@ -924,7 +931,8 @@ For image-to-video tasks, 'index' (usually with index 0) is most common as it co
                 precomputation_items=precomputation_items,
                 lr_warmup_steps=lr_warmup_steps,
                 progress=progress,
-                pretrained_lora_path=pretrained_lora_path
+                pretrained_lora_path=pretrained_lora_path,
+                custom_prompt_prefix=custom_prompt_prefix
             )
         except Exception as e:
             logger.exception("Error starting training")

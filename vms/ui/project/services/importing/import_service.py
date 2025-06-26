@@ -28,7 +28,7 @@ class ImportingService:
         self.youtube_handler = YouTubeDownloader()
         self.hub_browser = HubDatasetBrowser(self.hf_api)
     
-    def process_uploaded_files(self, file_paths: List[str], enable_splitting: bool) -> str:
+    def process_uploaded_files(self, file_paths: List[str], enable_splitting: bool, custom_prompt_prefix: str = None) -> str:
         """Process uploaded file (ZIP, TAR, MP4, or image)
         
         Args:
@@ -45,7 +45,7 @@ class ImportingService:
         
         print(f"process_uploaded_files(..., enable_splitting = {enable_splitting:})")
         print(f"process_uploaded_files: calling self.file_handler.process_uploaded_files")
-        return self.file_handler.process_uploaded_files(file_paths, enable_splitting)
+        return self.file_handler.process_uploaded_files(file_paths, enable_splitting, custom_prompt_prefix)
     
     def download_youtube_video(self, url: str, enable_splitting: bool, progress=None) -> str:
         """Download a video from YouTube
@@ -86,7 +86,8 @@ class ImportingService:
         self, 
         dataset_id: str, 
         enable_splitting: bool,
-        progress_callback: Optional[Callable] = None
+        progress_callback: Optional[Callable] = None,
+        custom_prompt_prefix: str = None
     ) -> Tuple[str, str]:
         """Download a dataset and process its video/image content
         
@@ -98,14 +99,15 @@ class ImportingService:
         Returns:
             Tuple of (loading_msg, status_msg)
         """
-        return await self.hub_browser.download_dataset(dataset_id, enable_splitting, progress_callback)
+        return await self.hub_browser.download_dataset(dataset_id, enable_splitting, progress_callback, custom_prompt_prefix)
     
     async def download_file_group(
         self, 
         dataset_id: str, 
         file_type: str, 
         enable_splitting: bool,
-        progress_callback: Optional[Callable] = None
+        progress_callback: Optional[Callable] = None,
+        custom_prompt_prefix: str = None
     ) -> str:
         """Download a group of files (videos or WebDatasets)
         
@@ -118,4 +120,4 @@ class ImportingService:
         Returns:
             Status message
         """
-        return await self.hub_browser.download_file_group(dataset_id, file_type, enable_splitting, progress_callback)
+        return await self.hub_browser.download_file_group(dataset_id, file_type, enable_splitting, progress_callback, custom_prompt_prefix)

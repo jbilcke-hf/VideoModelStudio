@@ -579,6 +579,7 @@ class TrainingService:
         precomputation_items: int = DEFAULT_PRECOMPUTATION_ITEMS,
         lr_warmup_steps: int = DEFAULT_NB_LR_WARMUP_STEPS,
         progress: Optional[gr.Progress] = None,
+        custom_prompt_prefix: Optional[str] = None,
     ) -> Tuple[str, str]:
         """Start training with finetrainers"""
         
@@ -669,16 +670,10 @@ class TrainingService:
             else:
                 flow_weighting_scheme = "logit_normal"
 
-            # Get the custom prompt prefix from the tabs
-            custom_prompt_prefix = None
-            if hasattr(self, 'app') and self.app is not None:
-                if hasattr(self.app, 'tabs') and 'caption_tab' in self.app.tabs:
-                    if hasattr(self.app.tabs['caption_tab'], 'components') and 'custom_prompt_prefix' in self.app.tabs['caption_tab'].components:
-                        # Get the value and clean it
-                        prefix = self.app.tabs['caption_tab'].components['custom_prompt_prefix'].value
-                        if prefix:
-                            # Clean the prefix - remove trailing comma, space or comma+space
-                            custom_prompt_prefix = prefix.rstrip(', ')
+            # Use the custom prompt prefix passed as parameter
+            # Clean the prefix - remove trailing comma, space or comma+space
+            if custom_prompt_prefix:
+                custom_prompt_prefix = custom_prompt_prefix.rstrip(', ')
 
             # Create a proper dataset configuration JSON file
             dataset_config_file = self.app.output_path / "dataset_config.json"
