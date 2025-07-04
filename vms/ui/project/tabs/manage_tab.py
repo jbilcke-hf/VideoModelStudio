@@ -6,7 +6,7 @@ import gradio as gr
 import logging
 import shutil
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 from gradio_modal import Modal
 
 from vms.utils import BaseTab, validate_model_repo
@@ -50,6 +50,17 @@ class ManageTab(BaseTab):
     def update_download_button_text(self) -> gr.update:
         """Update the download button text"""
         return gr.update(value=self.get_download_button_text())
+    
+    def update_checkpoint_button_text(self) -> gr.update:
+        """Update the checkpoint button text"""
+        return gr.update(value=self.get_checkpoint_button_text())
+    
+    def update_both_download_buttons(self) -> Tuple[gr.update, gr.update]:
+        """Update both download button texts"""
+        return (
+            gr.update(value=self.get_download_button_text()),
+            gr.update(value=self.get_checkpoint_button_text())
+        )
     
     def download_and_update_button(self):
         """Handle download and return updated button with current text"""
