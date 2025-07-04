@@ -555,8 +555,7 @@ For image-to-video tasks, 'index' (usually with index 0) is most common as it co
         return self.handle_training_start(
             model_type, model_version, training_type, 
             lora_rank, lora_alpha, train_steps, batch_size, learning_rate, 
-            save_iterations, repo_id, progress, 
-            pretrained_lora_path=str(latest_lora_dir)
+            save_iterations, repo_id, progress,
         )
 
     def connect_events(self) -> None:
@@ -862,7 +861,6 @@ For image-to-video tasks, 'index' (usually with index 0) is most common as it co
         save_iterations, repo_id,
         progress=gr.Progress(),
         resume_from_checkpoint=None,
-        pretrained_lora_path=None,
     ):
         """Handle training start with proper log parser reset and checkpoint detection"""
         
@@ -931,7 +929,6 @@ For image-to-video tasks, 'index' (usually with index 0) is most common as it co
                 precomputation_items=precomputation_items,
                 lr_warmup_steps=lr_warmup_steps,
                 progress=progress,
-                pretrained_lora_path=pretrained_lora_path,
                 custom_prompt_prefix=custom_prompt_prefix
             )
         except Exception as e:
