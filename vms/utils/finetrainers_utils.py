@@ -136,7 +136,7 @@ def copy_files_to_training_dir(prompt_prefix: str, training_videos_path=None) ->
         Number of copied pairs
     """
 
-    gr.Info("Copying assets to the training dataset..")
+    gr.Info("Copying new assets to the training dataset..")
 
     # Get project ID from global config
     config = load_global_config()
@@ -162,8 +162,17 @@ def copy_files_to_training_dir(prompt_prefix: str, training_videos_path=None) ->
     all_files = video_files + image_files
     
     nb_copied_pairs = 0
+    nb_skipped_pairs = 0
 
     for file_path in all_files:
+        target_file_path = training_videos_path / file_path.name
+        target_caption_path = target_file_path.with_suffix('.txt')
+        
+        # Skip if both file and caption already exist in training directory
+        if target_file_path.exists() and target_caption_path.exists():
+            logger.debug(f"Skipping {file_path.name} - already exists in training directory")
+            nb_skipped_pairs += 1
+            continue
 
         caption = ""
         file_caption_path = file_path.with_suffix('.txt')
@@ -180,10 +189,6 @@ def copy_files_to_training_dir(prompt_prefix: str, training_videos_path=None) ->
             if parent_caption_path.exists():
                 logger.debug(f"Found parent caption file: {parent_caption_path}")
                 parent_caption = parent_caption_path.read_text().strip()
-
-        target_file_path = training_videos_path / file_path.name
-
-        target_caption_path = target_file_path.with_suffix('.txt')
 
         if parent_caption and not caption.endswith(parent_caption):
             caption = f"{caption}\n{parent_caption}"
@@ -213,7 +218,10 @@ def copy_files_to_training_dir(prompt_prefix: str, training_videos_path=None) ->
     training_path, _, _, _ = get_project_paths(project_id)
     prepare_finetrainers_dataset(training_path, training_videos_path)
 
-    gr.Info(f"Successfully generated the training dataset ({nb_copied_pairs} pairs)")
+    if nb_skipped_pairs > 0:
+        gr.Info(f"Successfully updated the training dataset ({nb_copied_pairs} new pairs, {nb_skipped_pairs} already existed)")
+    else:
+        gr.Info(f"Successfully generated the training dataset ({nb_copied_pairs} pairs)")
 
     return nb_copied_pairs
 
