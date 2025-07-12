@@ -1240,12 +1240,7 @@ Full finetune mode trains all parameters of the model, requiring more VRAM but p
             variant="stop"
         )
         
-        # Update download button texts
-        manage_tab = self.app.tabs["manage_tab"]
-        download_btn_text = gr.update(value=manage_tab.get_download_button_text())
-        checkpoint_btn_text = gr.update(value=manage_tab.get_checkpoint_button_text())
-        
-        return start_btn, resume_btn, stop_btn, delete_checkpoints_btn, download_btn_text, checkpoint_btn_text
+        return start_btn, resume_btn, stop_btn, delete_checkpoints_btn
             
     def update_training_ui(self, training_state: Dict[str, Any]):
         """Update UI components based on training state"""
