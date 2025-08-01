@@ -399,7 +399,9 @@ class AppUI:
             outputs=[
                 self.project_tabs["train_tab"].components["status_box"],
                 self.project_tabs["train_tab"].components["log_box"],
-                self.project_tabs["train_tab"].components["current_task_box"] if "current_task_box" in self.project_tabs["train_tab"].components else None
+                self.project_tabs["train_tab"].components["current_task_box"] if "current_task_box" in self.project_tabs["train_tab"].components else None,
+                self.project_tabs["manage_tab"].components["download_model_btn"],
+                self.project_tabs["manage_tab"].components["download_checkpoint_btn"]
             ]
         )
         

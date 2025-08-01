@@ -1201,7 +1201,12 @@ Full finetune mode trains all parameters of the model, requiring more VRAM but p
         if hasattr(self.app, 'log_parser') and self.app.log_parser is not None:
             current_task = self.app.log_parser.get_current_task_display()
         
-        return message, logs, current_task
+        # Update download button texts
+        manage_tab = self.app.tabs["manage_tab"]
+        download_btn_text = gr.update(value=manage_tab.get_download_button_text())
+        checkpoint_btn_text = gr.update(value=manage_tab.get_checkpoint_button_text())
+        
+        return message, logs, current_task, download_btn_text, checkpoint_btn_text
 
     def get_button_updates(self):
         """Get button updates (with variant property)"""
