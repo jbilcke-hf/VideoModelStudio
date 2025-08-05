@@ -1823,12 +1823,9 @@ class TrainingService:
         try:
             checkpoints = list(self.app.output_path.glob("finetrainers_step_*"))
             if not checkpoints:
-                return "📥 Download checkpoints (not available)"
+                return "No checkpoints available"
             
-            # Get the latest checkpoint by step number
-            latest_checkpoint = max(checkpoints, key=lambda x: int(x.name.split("_")[-1]))
-            step_num = int(latest_checkpoint.name.split("_")[-1])
-            return f"📥 Download checkpoints (step {step_num})"
+            return f"💽 Download checkpoints"
         except Exception as e:
             logger.warning(f"Error getting checkpoint info for button text: {e}")
-            return "📥 Download checkpoints (not available)"
+            return "No checkpoints available"

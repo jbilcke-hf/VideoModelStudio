@@ -494,12 +494,7 @@ For image-to-video tasks, 'index' (usually with index 0) is most common as it co
             save_iterations, repo_id, progress
         )
         
-        # Update download button texts
-        manage_tab = self.app.tabs["manage_tab"]
-        download_btn_text = gr.update(value=manage_tab.get_download_button_text())
-        checkpoint_btn_text = gr.update(value=manage_tab.get_checkpoint_button_text())
-        
-        return status, logs, download_btn_text, checkpoint_btn_text
+        return status, logs
 
     def handle_resume_training(
         self, model_type, model_version, training_type, 
@@ -511,10 +506,7 @@ For image-to-video tasks, 'index' (usually with index 0) is most common as it co
         checkpoints = list(self.app.output_path.glob("finetrainers_step_*"))
 
         if not checkpoints:
-            manage_tab = self.app.tabs["manage_tab"]
-            download_btn_text = gr.update(value=manage_tab.get_download_button_text())
-            checkpoint_btn_text = gr.update(value=manage_tab.get_checkpoint_button_text())
-            return "No checkpoints found to resume from", "Please start a new training session instead", download_btn_text, checkpoint_btn_text
+            return "No checkpoints found to resume from", "Please start a new training session instead"
         
         self.app.training.append_log(f"Resuming training from latest checkpoint")
     
@@ -526,12 +518,7 @@ For image-to-video tasks, 'index' (usually with index 0) is most common as it co
             resume_from_checkpoint="latest"
         )
         
-        # Update download button texts
-        manage_tab = self.app.tabs["manage_tab"]
-        download_btn_text = gr.update(value=manage_tab.get_download_button_text())
-        checkpoint_btn_text = gr.update(value=manage_tab.get_checkpoint_button_text())
-        
-        return status, logs, download_btn_text, checkpoint_btn_text
+        return status, logs
 
     def handle_start_from_lora_training(
         self, model_type, model_version, training_type, 
@@ -542,26 +529,22 @@ For image-to-video tasks, 'index' (usually with index 0) is most common as it co
         # Find the latest LoRA weights
         lora_weights_path = self.app.output_path / "lora_weights"
         
-        manage_tab = self.app.tabs["manage_tab"]
-        download_btn_text = gr.update(value=manage_tab.get_download_button_text())
-        checkpoint_btn_text = gr.update(value=manage_tab.get_checkpoint_button_text())
-        
         if not lora_weights_path.exists():
-            return "No LoRA weights found", "Please train a model first or start a new training session", download_btn_text, checkpoint_btn_text
+            return "No LoRA weights found", "Please train a model first or start a new training session"
         
         # Find the latest LoRA checkpoint directory
         lora_dirs = sorted([d for d in lora_weights_path.iterdir() if d.is_dir()], 
                           key=lambda x: int(x.name), reverse=True)
         
         if not lora_dirs:
-            return "No LoRA weight directories found", "Please train a model first or start a new training session", download_btn_text, checkpoint_btn_text
+            return "No LoRA weight directories found", "Please train a model first or start a new training session"
         
         latest_lora_dir = lora_dirs[0]
         
         # Verify the LoRA weights file exists
         lora_weights_file = latest_lora_dir / "pytorch_lora_weights.safetensors"
         if not lora_weights_file.exists():
-            return f"LoRA weights file not found in {latest_lora_dir}", "Please check your LoRA weights directory", download_btn_text, checkpoint_btn_text
+            return f"LoRA weights file not found in {latest_lora_dir}", "Please check your LoRA weights directory"
         
         # Clear checkpoints to start fresh (but keep LoRA weights)
         for checkpoint in self.app.output_path.glob("finetrainers_step_*"):
@@ -582,11 +565,7 @@ For image-to-video tasks, 'index' (usually with index 0) is most common as it co
             save_iterations, repo_id, progress,
         )
         
-        # Update download button texts
-        download_btn_text = gr.update(value=manage_tab.get_download_button_text())
-        checkpoint_btn_text = gr.update(value=manage_tab.get_checkpoint_button_text())
-        
-        return status, logs, download_btn_text, checkpoint_btn_text
+        return status, logs
 
     def connect_events(self) -> None:
         """Connect event handlers to UI components"""
@@ -769,9 +748,7 @@ For image-to-video tasks, 'index' (usually with index 0) is most common as it co
             ],
             outputs=[
                 self.components["status_box"],
-                self.components["log_box"],
-                self.app.tabs["manage_tab"].components["download_model_btn"],
-                self.app.tabs["manage_tab"].components["download_checkpoint_btn"]
+                self.components["log_box"]
             ]
         )
 
@@ -791,9 +768,7 @@ For image-to-video tasks, 'index' (usually with index 0) is most common as it co
             ],
             outputs=[
                 self.components["status_box"],
-                self.components["log_box"],
-                self.app.tabs["manage_tab"].components["download_model_btn"],
-                self.app.tabs["manage_tab"].components["download_checkpoint_btn"]
+                self.components["log_box"]
             ]
         )
 
@@ -813,9 +788,7 @@ For image-to-video tasks, 'index' (usually with index 0) is most common as it co
             ],
             outputs=[
                 self.components["status_box"],
-                self.components["log_box"],
-                self.app.tabs["manage_tab"].components["download_model_btn"],
-                self.app.tabs["manage_tab"].components["download_checkpoint_btn"]
+                self.components["log_box"]
             ]
         )
         
@@ -831,9 +804,7 @@ For image-to-video tasks, 'index' (usually with index 0) is most common as it co
                 self.components["current_task_box"],
                 self.components["start_btn"],
                 self.components["stop_btn"],
-                third_btn,
-                self.app.tabs["manage_tab"].components["download_model_btn"],
-                self.app.tabs["manage_tab"].components["download_checkpoint_btn"]
+                third_btn
             ]
         )
 
@@ -845,9 +816,7 @@ For image-to-video tasks, 'index' (usually with index 0) is most common as it co
                 self.components["current_task_box"],
                 self.components["start_btn"],
                 self.components["stop_btn"],
-                third_btn,
-                self.app.tabs["manage_tab"].components["download_model_btn"],
-                self.app.tabs["manage_tab"].components["download_checkpoint_btn"]
+                third_btn
             ]
         )
 
@@ -1201,12 +1170,7 @@ Full finetune mode trains all parameters of the model, requiring more VRAM but p
         if hasattr(self.app, 'log_parser') and self.app.log_parser is not None:
             current_task = self.app.log_parser.get_current_task_display()
         
-        # Update download button texts
-        manage_tab = self.app.tabs["manage_tab"]
-        download_btn_text = gr.update(value=manage_tab.get_download_button_text())
-        checkpoint_btn_text = gr.update(value=manage_tab.get_checkpoint_button_text())
-        
-        return message, logs, current_task, download_btn_text, checkpoint_btn_text
+        return message, logs, current_task
 
     def get_button_updates(self):
         """Get button updates (with variant property)"""
