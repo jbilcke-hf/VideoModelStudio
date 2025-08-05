@@ -88,8 +88,9 @@ class TrainingTab(BaseTab):
                             gr.Markdown(model.model_display_name or "Unknown")
                         
                         with gr.Column(scale=2, min_width=20):
-                            progress_text = f"Step {model.current_step}/{model.total_steps} ({model.training_progress:.1f}%)"
+                            progress_text = f"Step {model.current_step}/{model.total_steps}"
                             gr.Markdown(progress_text)
+                            gr.Progress(value=model.training_progress/100)
                         
                         with gr.Column(scale=2, min_width=20):
                             with gr.Row():

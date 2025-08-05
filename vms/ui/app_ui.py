@@ -403,7 +403,6 @@ class AppUI:
             ]
         )
         
-        
         # Button update timer for button components (every 1 second)
         button_timer = gr.Timer(value=1)
         button_outputs = [
