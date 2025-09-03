@@ -318,17 +318,17 @@ SD_16_9_H = 576  # 8*72
 SD_9_16_W = 576  # 8*72
 SD_9_16_H = 1024 # 8*128
 
-# MD (720p)
-MD_16_9_W = 1280 # 8*160
-MD_16_9_H = 720  # 8*90
-MD_9_16_W = 720  # 8*90
-MD_9_16_H = 1280 # 8*160
+# HD (720p)
+HD_16_9_W = 1280 # 8*160
+HD_16_9_H = 720  # 8*90
+HD_9_16_W = 720  # 8*90
+HD_9_16_H = 1280 # 8*160
 
-# HD (1080p)
-HD_16_9_W = 1920 # 8*240
-HD_16_9_H = 1080 # 8*135
-HD_9_16_W = 1080 # 8*135
-HD_9_16_H = 1920 # 8*240
+# FHD (1080p)
+FHD_16_9_W = 1920 # 8*240
+FHD_16_9_H = 1080 # 8*135
+FHD_9_16_W = 1080 # 8*135
+FHD_9_16_H = 1920 # 8*240
 
 # QHD (2K)
 QHD_16_9_W = 2160 # 8*270
@@ -383,6 +383,11 @@ NB_FRAMES_353 = 8 * 44 + 1  # 352 + 1
 NB_FRAMES_369 = 8 * 46 + 1  # 368 + 1
 NB_FRAMES_385 = 8 * 48 + 1  # 384 + 1
 NB_FRAMES_401 = 8 * 50 + 1  # 400 + 1
+NB_FRAMES_417 = 8 * 52 + 1  # 416 + 1
+NB_FRAMES_433 = 8 * 54 + 1  # 432 + 1
+NB_FRAMES_449 = 8 * 56 + 1  # 448 + 1
+NB_FRAMES_465 = 8 * 58 + 1  # 464 + 1
+NB_FRAMES_481 = 8 * 60 + 1  # 480 + 1
 
 # ------ HOW BUCKETS WORK:----------
 # Basically, to train or fine-tune a video model with Finetrainers, we need to specify all the possible accepted videos lengths AND size combinations (buckets), in the form: (BUCKET_CONFIGURATION_1, BUCKET_CONFIGURATION_2, ..., BUCKET_CONFIGURATION_N)
@@ -424,39 +429,111 @@ SD_TRAINING_BUCKETS = [
     (NB_FRAMES_257, SD_16_9_H, SD_16_9_W), # 256 + 1
     (NB_FRAMES_265, SD_16_9_H, SD_16_9_W), # 264 + 1
     (NB_FRAMES_273, SD_16_9_H, SD_16_9_W), # 272 + 1
+    (NB_FRAMES_289, SD_16_9_H, SD_16_9_W), # 288 + 1
+    (NB_FRAMES_305, SD_16_9_H, SD_16_9_W), # 304 + 1
+    (NB_FRAMES_321, SD_16_9_H, SD_16_9_W), # 320 + 1
+    (NB_FRAMES_337, SD_16_9_H, SD_16_9_W), # 336 + 1
+    (NB_FRAMES_353, SD_16_9_H, SD_16_9_W), # 352 + 1
+    (NB_FRAMES_369, SD_16_9_H, SD_16_9_W), # 368 + 1
+    (NB_FRAMES_385, SD_16_9_H, SD_16_9_W), # 384 + 1
+    (NB_FRAMES_401, SD_16_9_H, SD_16_9_W), # 400 + 1
+    (NB_FRAMES_417, SD_16_9_H, SD_16_9_W), # 416 + 1
+    (NB_FRAMES_433, SD_16_9_H, SD_16_9_W), # 432 + 1
+    (NB_FRAMES_449, SD_16_9_H, SD_16_9_W), # 448 + 1
+    (NB_FRAMES_465, SD_16_9_H, SD_16_9_W), # 464 + 1
+    (NB_FRAMES_481, SD_16_9_H, SD_16_9_W), # 480 + 1
 ]
 
 # For 1280x720 images and videos (from 1 frame up to 272)
-MD_TRAINING_BUCKETS = [
-    (NB_FRAMES_1,   MD_16_9_H, MD_16_9_W), # 1
-    (NB_FRAMES_9,   MD_16_9_H, MD_16_9_W), # 8 + 1
-    (NB_FRAMES_17,  MD_16_9_H, MD_16_9_W), # 16 + 1
-    (NB_FRAMES_33,  MD_16_9_H, MD_16_9_W), # 32 + 1
-    (NB_FRAMES_49,  MD_16_9_H, MD_16_9_W), # 48 + 1
-    (NB_FRAMES_65,  MD_16_9_H, MD_16_9_W), # 64 + 1
-    (NB_FRAMES_73,  MD_16_9_H, MD_16_9_W), # 72 + 1
-    (NB_FRAMES_81,  MD_16_9_H, MD_16_9_W), # 80 + 1
-    (NB_FRAMES_89,  MD_16_9_H, MD_16_9_W), # 88 + 1
-    (NB_FRAMES_97,  MD_16_9_H, MD_16_9_W), # 96 + 1
-    (NB_FRAMES_105, MD_16_9_H, MD_16_9_W), # 104 + 1
-    (NB_FRAMES_113, MD_16_9_H, MD_16_9_W), # 112 + 1
-    (NB_FRAMES_121, MD_16_9_H, MD_16_9_W), # 121 + 1
-    (NB_FRAMES_129, MD_16_9_H, MD_16_9_W), # 128 + 1
-    (NB_FRAMES_137, MD_16_9_H, MD_16_9_W), # 136 + 1
-    (NB_FRAMES_145, MD_16_9_H, MD_16_9_W), # 144 + 1
-    (NB_FRAMES_161, MD_16_9_H, MD_16_9_W), # 160 + 1
-    (NB_FRAMES_177, MD_16_9_H, MD_16_9_W), # 176 + 1
-    (NB_FRAMES_193, MD_16_9_H, MD_16_9_W), # 192 + 1
-    (NB_FRAMES_201, MD_16_9_H, MD_16_9_W), # 200 + 1
-    (NB_FRAMES_209, MD_16_9_H, MD_16_9_W), # 208 + 1
-    (NB_FRAMES_217, MD_16_9_H, MD_16_9_W), # 216 + 1
-    (NB_FRAMES_225, MD_16_9_H, MD_16_9_W), # 224 + 1
-    (NB_FRAMES_233, MD_16_9_H, MD_16_9_W), # 232 + 1
-    (NB_FRAMES_241, MD_16_9_H, MD_16_9_W), # 240 + 1
-    (NB_FRAMES_249, MD_16_9_H, MD_16_9_W), # 248 + 1
-    (NB_FRAMES_257, MD_16_9_H, MD_16_9_W), # 256 + 1
-    (NB_FRAMES_265, MD_16_9_H, MD_16_9_W), # 264 + 1
-    (NB_FRAMES_273, MD_16_9_H, MD_16_9_W), # 272 + 1
+HD_TRAINING_BUCKETS = [
+    (NB_FRAMES_1,   HD_16_9_H, HD_16_9_W), # 1
+    (NB_FRAMES_9,   HD_16_9_H, HD_16_9_W), # 8 + 1
+    (NB_FRAMES_17,  HD_16_9_H, HD_16_9_W), # 16 + 1
+    (NB_FRAMES_33,  HD_16_9_H, HD_16_9_W), # 32 + 1
+    (NB_FRAMES_49,  HD_16_9_H, HD_16_9_W), # 48 + 1
+    (NB_FRAMES_65,  HD_16_9_H, HD_16_9_W), # 64 + 1
+    (NB_FRAMES_73,  HD_16_9_H, HD_16_9_W), # 72 + 1
+    (NB_FRAMES_81,  HD_16_9_H, HD_16_9_W), # 80 + 1
+    (NB_FRAMES_89,  HD_16_9_H, HD_16_9_W), # 88 + 1
+    (NB_FRAMES_97,  HD_16_9_H, HD_16_9_W), # 96 + 1
+    (NB_FRAMES_105, HD_16_9_H, HD_16_9_W), # 104 + 1
+    (NB_FRAMES_113, HD_16_9_H, HD_16_9_W), # 112 + 1
+    (NB_FRAMES_121, HD_16_9_H, HD_16_9_W), # 121 + 1
+    (NB_FRAMES_129, HD_16_9_H, HD_16_9_W), # 128 + 1
+    (NB_FRAMES_137, HD_16_9_H, HD_16_9_W), # 136 + 1
+    (NB_FRAMES_145, HD_16_9_H, HD_16_9_W), # 144 + 1
+    (NB_FRAMES_161, HD_16_9_H, HD_16_9_W), # 160 + 1
+    (NB_FRAMES_177, HD_16_9_H, HD_16_9_W), # 176 + 1
+    (NB_FRAMES_193, HD_16_9_H, HD_16_9_W), # 192 + 1
+    (NB_FRAMES_201, HD_16_9_H, HD_16_9_W), # 200 + 1
+    (NB_FRAMES_209, HD_16_9_H, HD_16_9_W), # 208 + 1
+    (NB_FRAMES_217, HD_16_9_H, HD_16_9_W), # 216 + 1
+    (NB_FRAMES_225, HD_16_9_H, HD_16_9_W), # 224 + 1
+    (NB_FRAMES_233, HD_16_9_H, HD_16_9_W), # 232 + 1
+    (NB_FRAMES_241, HD_16_9_H, HD_16_9_W), # 240 + 1
+    (NB_FRAMES_249, HD_16_9_H, HD_16_9_W), # 248 + 1
+    (NB_FRAMES_257, HD_16_9_H, HD_16_9_W), # 256 + 1
+    (NB_FRAMES_265, HD_16_9_H, HD_16_9_W), # 264 + 1
+    (NB_FRAMES_273, HD_16_9_H, HD_16_9_W), # 272 + 1
+    (NB_FRAMES_289, HD_16_9_H, HD_16_9_W), # 288 + 1
+    (NB_FRAMES_305, HD_16_9_H, HD_16_9_W), # 304 + 1
+    (NB_FRAMES_321, HD_16_9_H, HD_16_9_W), # 320 + 1
+    (NB_FRAMES_337, HD_16_9_H, HD_16_9_W), # 336 + 1
+    (NB_FRAMES_353, HD_16_9_H, HD_16_9_W), # 352 + 1
+    (NB_FRAMES_369, HD_16_9_H, HD_16_9_W), # 368 + 1
+    (NB_FRAMES_385, HD_16_9_H, HD_16_9_W), # 384 + 1
+    (NB_FRAMES_401, HD_16_9_H, HD_16_9_W), # 400 + 1
+    (NB_FRAMES_417, HD_16_9_H, HD_16_9_W), # 416 + 1
+    (NB_FRAMES_433, HD_16_9_H, HD_16_9_W), # 432 + 1
+    (NB_FRAMES_449, HD_16_9_H, HD_16_9_W), # 448 + 1
+    (NB_FRAMES_465, HD_16_9_H, HD_16_9_W), # 464 + 1
+    (NB_FRAMES_481, HD_16_9_H, HD_16_9_W), # 480 + 1
+]
+
+# For 1920x1080 images and videos (from 1 frame up to 272)
+FHD_TRAINING_BUCKETS = [
+    (NB_FRAMES_1,   FHD_16_9_H, FHD_16_9_W), # 1
+    (NB_FRAMES_9,   FHD_16_9_H, FHD_16_9_W), # 8 + 1
+    (NB_FRAMES_17,  FHD_16_9_H, FHD_16_9_W), # 16 + 1
+    (NB_FRAMES_33,  FHD_16_9_H, FHD_16_9_W), # 32 + 1
+    (NB_FRAMES_49,  FHD_16_9_H, FHD_16_9_W), # 48 + 1
+    (NB_FRAMES_65,  FHD_16_9_H, FHD_16_9_W), # 64 + 1
+    (NB_FRAMES_73,  FHD_16_9_H, FHD_16_9_W), # 72 + 1
+    (NB_FRAMES_81,  FHD_16_9_H, FHD_16_9_W), # 80 + 1
+    (NB_FRAMES_89,  FHD_16_9_H, FHD_16_9_W), # 88 + 1
+    (NB_FRAMES_97,  FHD_16_9_H, FHD_16_9_W), # 96 + 1
+    (NB_FRAMES_105, FHD_16_9_H, FHD_16_9_W), # 104 + 1
+    (NB_FRAMES_113, FHD_16_9_H, FHD_16_9_W), # 112 + 1
+    (NB_FRAMES_121, FHD_16_9_H, FHD_16_9_W), # 121 + 1
+    (NB_FRAMES_129, FHD_16_9_H, FHD_16_9_W), # 128 + 1
+    (NB_FRAMES_137, FHD_16_9_H, FHD_16_9_W), # 136 + 1
+    (NB_FRAMES_145, FHD_16_9_H, FHD_16_9_W), # 144 + 1
+    (NB_FRAMES_161, FHD_16_9_H, FHD_16_9_W), # 160 + 1
+    (NB_FRAMES_177, FHD_16_9_H, FHD_16_9_W), # 176 + 1
+    (NB_FRAMES_193, FHD_16_9_H, FHD_16_9_W), # 192 + 1
+    (NB_FRAMES_201, FHD_16_9_H, FHD_16_9_W), # 200 + 1
+    (NB_FRAMES_209, FHD_16_9_H, FHD_16_9_W), # 208 + 1
+    (NB_FRAMES_217, FHD_16_9_H, FHD_16_9_W), # 216 + 1
+    (NB_FRAMES_225, FHD_16_9_H, FHD_16_9_W), # 224 + 1
+    (NB_FRAMES_233, FHD_16_9_H, FHD_16_9_W), # 232 + 1
+    (NB_FRAMES_241, FHD_16_9_H, FHD_16_9_W), # 240 + 1
+    (NB_FRAMES_249, FHD_16_9_H, FHD_16_9_W), # 248 + 1
+    (NB_FRAMES_257, FHD_16_9_H, FHD_16_9_W), # 256 + 1
+    (NB_FRAMES_265, FHD_16_9_H, FHD_16_9_W), # 264 + 1
+    (NB_FRAMES_273, FHD_16_9_H, FHD_16_9_W), # 272 + 1
+    (NB_FRAMES_289, FHD_16_9_H, FHD_16_9_W), # 288 + 1
+    (NB_FRAMES_305, FHD_16_9_H, FHD_16_9_W), # 304 + 1
+    (NB_FRAMES_321, FHD_16_9_H, FHD_16_9_W), # 320 + 1
+    (NB_FRAMES_337, FHD_16_9_H, FHD_16_9_W), # 336 + 1
+    (NB_FRAMES_353, FHD_16_9_H, FHD_16_9_W), # 352 + 1
+    (NB_FRAMES_369, FHD_16_9_H, FHD_16_9_W), # 368 + 1
+    (NB_FRAMES_385, FHD_16_9_H, FHD_16_9_W), # 384 + 1
+    (NB_FRAMES_401, FHD_16_9_H, FHD_16_9_W), # 400 + 1
+    (NB_FRAMES_417, FHD_16_9_H, FHD_16_9_W), # 416 + 1
+    (NB_FRAMES_433, FHD_16_9_H, FHD_16_9_W), # 432 + 1
+    (NB_FRAMES_449, FHD_16_9_H, FHD_16_9_W), # 448 + 1
+    (NB_FRAMES_465, FHD_16_9_H, FHD_16_9_W), # 464 + 1
+    (NB_FRAMES_481, FHD_16_9_H, FHD_16_9_W), # 480 + 1
 ]
 
 
@@ -466,7 +543,8 @@ MD_TRAINING_BUCKETS = [
 # Resolution buckets for different models
 RESOLUTION_OPTIONS = {
     "SD (1024x576)": "SD_TRAINING_BUCKETS",
-    "HD (1280x720)": "MD_TRAINING_BUCKETS"
+    "HD (1280x720)": "HD_TRAINING_BUCKETS",
+    "FHD (1920x1080)": "FHD_TRAINING_BUCKETS"
 }
 
 # Default parameters for Hunyuan Video

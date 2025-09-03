@@ -22,7 +22,7 @@ from typing import Any, Optional, Dict, List, Union, Tuple
 from huggingface_hub import upload_folder, create_repo
 
 from vms.config import (
-    TrainingConfig, RESOLUTION_OPTIONS, SD_TRAINING_BUCKETS, MD_TRAINING_BUCKETS,
+    TrainingConfig, RESOLUTION_OPTIONS, SD_TRAINING_BUCKETS, HD_TRAINING_BUCKETS, FHD_TRAINING_BUCKETS,
     STORAGE_PATH, HF_API_TOKEN, 
     MODEL_TYPES, TRAINING_TYPES, MODEL_VERSIONS,
     DEFAULT_NB_TRAINING_STEPS, DEFAULT_SAVE_CHECKPOINT_EVERY_N_STEPS,
@@ -659,8 +659,10 @@ class TrainingService:
             # Determine which buckets to use based on the selected resolution
             if training_buckets_name == "SD_TRAINING_BUCKETS":
                 training_buckets = SD_TRAINING_BUCKETS
-            elif training_buckets_name == "MD_TRAINING_BUCKETS":
-                training_buckets = MD_TRAINING_BUCKETS
+            elif training_buckets_name == "HD_TRAINING_BUCKETS":
+                training_buckets = HD_TRAINING_BUCKETS
+            elif training_buckets_name == "FHD_TRAINING_BUCKETS":
+                training_buckets = FHD_TRAINING_BUCKETS
             else:
                 training_buckets = SD_TRAINING_BUCKETS  # Default fallback
             
