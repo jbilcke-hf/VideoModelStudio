@@ -5,12 +5,15 @@ torchvision==0.21.0
 torchdata==0.10.1
 torchao==0.9.0
 
+# something broke in Transformers > 4.55.4
+transformers==4.55.4
+
 # For GPU monitoring of NVIDIA chipsets
 pynvml
 
 # we are waiting for the next PyPI release
 #finetrainers==0.1.0
-finetrainers @ git+https://github.com/a-r-r-o-w/finetrainers.git@main
+finetrainers @ git+https://github.com/huggingface/finetrainers.git@main
 # temporary fix for pip install bug:
 #finetrainers @ git+https://github.com/jbilcke-hf/finetrainers-patches.git@fix_missing_sft_trainer_files
 
@@ -38,8 +41,8 @@ open_clip_torch
 av==14.1.0
 
 # for some reason LLaVA-NeXT has ceased to work,
-# let's try to use an older version by using a git commit hash
-git+https://github.com/LLaVA-VL/LLaVA-NeXT.git#45f2d920a6c678777da1d5141a82135f43825ae1
+# but I think it it due to a breaking change in Transformers
+git+https://github.com/LLaVA-VL/LLaVA-NeXT.git
 
 # for our frontend
 gradio==5.33.1

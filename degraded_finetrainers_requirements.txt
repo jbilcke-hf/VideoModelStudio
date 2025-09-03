@@ -1,8 +1,15 @@
 accelerate
+
+# cannot be installed on mac
+# triton
+
 bitsandbytes
 datasets>=3.3.2
 diffusers>=0.32.1
-transformers>=4.45.2
+
+# something broke in transformers > 4.55.4
+transformers==4.55.4
+
 huggingface_hub
 hf_transfer>=0.1.8
 peft>=0.13.0
@@ -11,7 +18,7 @@ wandb
 pandas
 torch==2.6.0
 torchvision==0.21.0
-torchdata==0.1.0
+torchdata==0.10.1
 torchao==0.9.0
 sentencepiece>=0.2.0
 imageio-ffmpeg>=0.5.1

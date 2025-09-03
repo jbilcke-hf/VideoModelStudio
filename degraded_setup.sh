@@ -16,7 +16,7 @@ source .venv/bin/activate
 python3.10 -m pip install -r degraded_requirements.txt
 
 # :((
-finetrainers @ git+https://github.com/a-r-r-o-w/finetrainers.git@main --no-deps
+#python3.10 -m pip install finetrainers @ git+https://github.com/a-r-r-o-w/finetrainers.git@main --no-deps
 
 # :(((
 python3.10 -m pip install -r degraded_finetrainers_requirements.txt
