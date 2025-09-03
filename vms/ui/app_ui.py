@@ -410,8 +410,8 @@ class AppUI:
             self.project_tabs["train_tab"].components["resume_btn"],
             self.project_tabs["train_tab"].components["stop_btn"],
             self.project_tabs["train_tab"].components["delete_checkpoints_btn"],
-            self.app.tabs["manage_tab"].components["download_model_btn"],
-            self.app.tabs["manage_tab"].components["download_checkpoint_btn"]
+            self.project_tabs["manage_tab"].components["download_model_btn"],
+            self.project_tabs["manage_tab"].components["download_checkpoint_btn"]
         ]
 
         button_timer.tick(
