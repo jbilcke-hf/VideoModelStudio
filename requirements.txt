@@ -40,6 +40,10 @@ transformers==4.55.4
 # For GPU monitoring of NVIDIA chipsets
 pynvml
 
+# Pin datasets to 3.6.0 to avoid VideoDecoder issues with 4.0.0
+# see https://github.com/huggingface/finetrainers/issues/424#issuecomment-3255342554
+datasets==3.6.0
+
 # we are waiting for the next PyPI release
 #finetrainers==0.1.0
 finetrainers @ git+https://github.com/huggingface/finetrainers.git@main

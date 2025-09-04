@@ -4,7 +4,8 @@ accelerate
 # triton
 
 bitsandbytes
-datasets>=3.3.2
+# Pin datasets to 3.6.0 to avoid VideoDecoder issues with 4.0.0
+datasets==3.6.0
 diffusers>=0.32.1
 
 # something broke in transformers > 4.55.4
