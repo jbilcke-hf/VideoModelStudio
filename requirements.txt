@@ -1,14 +1,11 @@
-# we don't have a flash attention binary yet for Pytorch 2.7
-# so we use pytorch 2.6
-torch==2.6.0
-torchvision==0.21.0
-torchdata==0.10.1
-torchao==0.9.0
-
-# for video decoding
-# Note: We need to install torchcodec with CUDA support for A100
-# This will be handled in the Dockerfile with the correct index-url
+--find-links https://download.pytorch.org/whl/torch_stable.html
+torch==2.8.0
+torchvision==0.23.0
+torchdata==0.11.0
+torchao==0.12.0
 torchcodec
+
+flash-attn @ https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3/flash_attn-2.8.3+cu12torch2.8cxx11abiFALSE-cp310-cp310-linux_x86_64.whl
 
 # something broke in Transformers > 4.55.4
 transformers==4.55.4
@@ -27,8 +24,6 @@ diffusers @ git+https://github.com/huggingface/diffusers.git@main
 
 imageio
 imageio-ffmpeg
-
-flash-attn @ https://github.com/Dao-AILab/flash-attention/releases/download/v2.7.4.post1/flash_attn-2.7.4.post1+cu12torch2.6cxx11abiFALSE-cp310-cp310-linux_x86_64.whl
 
 # for youtube video download
 pytube

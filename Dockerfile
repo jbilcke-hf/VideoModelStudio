@@ -32,13 +32,9 @@ RUN apt-get update && apt-get install -y \
 # Create app directory
 WORKDIR /app
 
-# Install Python dependencies first for better caching
+# Install Python dependencies
 COPY requirements.txt .
-# Install most requirements first
-RUN grep -v torchcodec requirements.txt > requirements_without_torchcodec.txt && \
-    pip3 install --no-cache-dir -r requirements_without_torchcodec.txt
-# Install torchcodec with CUDA support (for CUDA 12.x which matches our base image)
-RUN pip3 install --no-cache-dir torchcodec --index-url=https://download.pytorch.org/whl/cu124
+RUN pip3 install --no-cache-dir -r requirements.txt
 
 # Verify FFmpeg installation and libraries
 RUN ffmpeg -version && \
