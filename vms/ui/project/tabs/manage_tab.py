@@ -40,12 +40,12 @@ class ManageTab(BaseTab):
             return "🧠 Download weights (.safetensors)"
 
     def get_checkpoint_button_text(self) -> str:
-        """Get the dynamic text for the download checkpoint button"""
+        """Get the dynamic text for the download everything button"""
         try:
             return self.app.training.get_checkpoint_button_text()
         except Exception as e:
             logger.warning(f"Error getting checkpoint button text: {e}")
-            return "📥 Download checkpoints (not available)"
+            return "📥 Download everything (not available)"
 
     def update_download_button_text(self) -> gr.update:
         """Update the download button text"""
@@ -105,6 +105,32 @@ class ManageTab(BaseTab):
                             "📁 Download output directory (.zip)",
                             variant="secondary",
                             size="lg",
+                            visible=False
+                        )
+            
+            with gr.Row():
+                with gr.Column():
+                    gr.Markdown("## 🔄 Restore from backup")
+                    gr.Markdown("Upload a checkpoint ZIP file to restore your training progress. Training must be stopped before restoring.")
+                    
+                    with gr.Row():
+                        self.components["restore_file"] = gr.File(
+                            label="Select backup ZIP file",
+                            file_types=[".zip"],
+                            type="filepath"
+                        )
+                    
+                    with gr.Row():
+                        self.components["restore_btn"] = gr.Button(
+                            "🔄 Restore from backup",
+                            variant="primary",
+                            size="lg"
+                        )
+                    
+                    with gr.Row():
+                        self.components["restore_status"] = gr.Textbox(
+                            label="Restore Status",
+                            interactive=False,
                             visible=False
                         )
             with gr.Row():
@@ -258,7 +284,7 @@ class ManageTab(BaseTab):
         )
         
         self.components["download_checkpoint_btn"].click(
-            fn=self.app.training.create_checkpoint_zip,
+            fn=self.app.training.create_everything_zip,
             outputs=[self.components["download_checkpoint_btn"]]
         )
         
@@ -271,6 +297,13 @@ class ManageTab(BaseTab):
         self.components["cleanup_lora_btn"].click(
             fn=self.cleanup_old_lora_weights,
             outputs=[]
+        )
+        
+        # Restore from backup button
+        self.components["restore_btn"].click(
+            fn=self.handle_restore_backup,
+            inputs=[self.components["restore_file"]],
+            outputs=[self.components["restore_status"]]
         )
         
         # Dataset deletion with modal
@@ -403,6 +436,35 @@ class ManageTab(BaseTab):
             error_msg = f"❌ Failed to cleanup LoRA weights: {str(e)}"
             gr.Error(error_msg)
             logger.error(f"LoRA cleanup failed: {e}")
+    
+    def handle_restore_backup(self, file_path):
+        """Handle restoring from a backup ZIP file
+        
+        Args:
+            file_path: Path to the uploaded ZIP file
+            
+        Returns:
+            gr.update for the status textbox
+        """
+        if not file_path:
+            return gr.update(value="No file selected. Please select a ZIP file to restore.", visible=True)
+        
+        try:
+            # Call the training service to restore the backup
+            success, message = self.app.training.restore_checkpoint_from_zip(file_path)
+            
+            if success:
+                gr.Info(f"✅ {message}")
+                return gr.update(value=message, visible=True)
+            else:
+                gr.Error(f"❌ {message}")
+                return gr.update(value=f"Error: {message}", visible=True)
+                
+        except Exception as e:
+            error_msg = f"Failed to restore backup: {str(e)}"
+            gr.Error(f"❌ {error_msg}")
+            logger.error(f"Restore backup failed: {e}", exc_info=True)
+            return gr.update(value=f"Error: {error_msg}", visible=True)
     
     def delete_dataset(self):
         """Delete dataset files (images, videos, captions)"""

@@ -1821,17 +1821,193 @@ class TrainingService:
                 print(f"Failed to create checkpoint zip: {str(e)}")
                 raise gr.Error(f"Failed to create checkpoint zip: {str(e)}")
 
+    def create_everything_zip(self) -> Optional[str]:
+        """Create a ZIP file containing both the latest checkpoint folder and LoRA weights
+        
+        Returns:
+            Path to created ZIP file or None if no checkpoint found
+        """
+        # Find all checkpoint directories
+        checkpoints = list(self.app.output_path.glob("finetrainers_step_*"))
+        if not checkpoints:
+            logger.info("No checkpoint directories found")
+            raise gr.Error("No checkpoint directories found")
+        
+        # Get the latest checkpoint by step number
+        latest_checkpoint = max(checkpoints, key=lambda x: int(x.name.split("_")[-1]))
+        step_num = int(latest_checkpoint.name.split("_")[-1])
+        
+        # Check if LoRA weights exist
+        lora_weights_path = self.app.output_path / "pytorch_lora_weights.safetensors"
+        if not lora_weights_path.exists():
+            logger.warning("LoRA weights file not found, will only include checkpoint")
+        
+        # Create temporary directory for combining files
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            
+            # Copy checkpoint directory to temp location
+            checkpoint_dest = temp_path / latest_checkpoint.name
+            shutil.copytree(latest_checkpoint, checkpoint_dest)
+            print(f"Copied checkpoint {latest_checkpoint.name} to temporary location")
+            
+            # Copy LoRA weights if they exist
+            if lora_weights_path.exists():
+                lora_dest = temp_path / "pytorch_lora_weights.safetensors"
+                shutil.copy2(lora_weights_path, lora_dest)
+                print(f"Copied LoRA weights to temporary location")
+            
+            # Create temporary zip file
+            with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as temp_zip:
+                temp_zip_path = str(temp_zip.name)
+                print(f"Creating combined zip file with checkpoint and LoRA weights...")
+                try:
+                    # Create the archive with all contents from temp directory
+                    make_archive(temp_path, temp_zip_path)
+                    print(f"Combined zip file created for step {step_num}!")
+                    return temp_zip_path
+                except Exception as e:
+                    print(f"Failed to create combined zip: {str(e)}")
+                    raise gr.Error(f"Failed to create combined zip: {str(e)}")
+
     def get_checkpoint_button_text(self) -> str:
-        """Get the dynamic text for the download checkpoint button based on available checkpoints"""
+        """Get the dynamic text for the download everything button based on available checkpoints"""
         try:
             checkpoints = list(self.app.output_path.glob("finetrainers_step_*"))
             if not checkpoints:
-                return "📥 Download checkpoints (not available)"
+                return "📥 Download everything (not available)"
             
             # Get the latest checkpoint by step number
             latest_checkpoint = max(checkpoints, key=lambda x: int(x.name.split("_")[-1]))
             step_num = int(latest_checkpoint.name.split("_")[-1])
-            return f"📥 Download checkpoints (step {step_num})"
+            return f"📥 Download everything (step {step_num})"
         except Exception as e:
             logger.warning(f"Error getting checkpoint info for button text: {e}")
-            return "📥 Download checkpoints (not available)"
+            return "📥 Download everything (not available)"
+    
+    def restore_checkpoint_from_zip(self, zip_file_path: str) -> Tuple[bool, str]:
+        """Restore checkpoint from a ZIP file
+        
+        Args:
+            zip_file_path: Path to the ZIP file containing checkpoint data
+            
+        Returns:
+            Tuple of (success, message)
+        """
+        try:
+            # Check if training is running
+            if self.is_training_running():
+                return False, "Cannot restore checkpoint while training is running. Please stop training first."
+            
+            import zipfile
+            
+            # Validate ZIP file
+            if not zipfile.is_zipfile(zip_file_path):
+                return False, "The provided file is not a valid ZIP archive."
+            
+            # Extract the ZIP file to a temporary directory first
+            import tempfile
+            with tempfile.TemporaryDirectory() as temp_dir:
+                temp_path = Path(temp_dir)
+                
+                # Extract ZIP
+                with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
+                    zip_ref.extractall(temp_path)
+                    logger.info(f"Extracted backup to temporary directory: {temp_path}")
+                
+                # Check what was extracted
+                extracted_items = list(temp_path.glob("*"))
+                if not extracted_items:
+                    return False, "The ZIP file appears to be empty."
+                
+                logger.info(f"Extracted items: {[item.name for item in extracted_items]}")
+                
+                # Look for checkpoint directory pattern (finetrainers_step_*)
+                checkpoint_dirs = [d for d in extracted_items if d.is_dir() and d.name.startswith("finetrainers_step_")]
+                
+                if checkpoint_dirs:
+                    # We have a checkpoint directory
+                    checkpoint_dir = checkpoint_dirs[0]
+                    checkpoint_name = checkpoint_dir.name
+                    step_num = int(checkpoint_name.split("_")[-1])
+                    
+                    # Check if this checkpoint already exists
+                    target_path = self.app.output_path / checkpoint_name
+                    if target_path.exists():
+                        # Backup existing checkpoint
+                        backup_name = f"{checkpoint_name}_backup_{int(time.time())}"
+                        backup_path = self.app.output_path / backup_name
+                        shutil.move(str(target_path), str(backup_path))
+                        logger.info(f"Backed up existing checkpoint to {backup_name}")
+                    
+                    # Move the checkpoint to output directory
+                    shutil.move(str(checkpoint_dir), str(target_path))
+                    logger.info(f"Restored checkpoint {checkpoint_name} to {target_path}")
+                    
+                    # Also check for LoRA weights in the archive
+                    lora_file = None
+                    for item in extracted_items:
+                        if item.name == "pytorch_lora_weights.safetensors":
+                            lora_file = item
+                            break
+                    
+                    if lora_file:
+                        # Copy LoRA weights to output directory root
+                        target_lora_path = self.app.output_path / "pytorch_lora_weights.safetensors"
+                        if target_lora_path.exists():
+                            backup_lora_name = f"pytorch_lora_weights_backup_{int(time.time())}.safetensors"
+                            backup_lora_path = self.app.output_path / backup_lora_name
+                            shutil.move(str(target_lora_path), str(backup_lora_path))
+                            logger.info(f"Backed up existing LoRA weights to {backup_lora_name}")
+                        
+                        shutil.copy2(str(lora_file), str(target_lora_path))
+                        logger.info(f"Restored LoRA weights to {target_lora_path}")
+                        
+                        return True, f"Successfully restored checkpoint at step {step_num} with LoRA weights"
+                    else:
+                        return True, f"Successfully restored checkpoint at step {step_num}"
+                    
+                else:
+                    # No checkpoint directory found, look for direct files
+                    # This could be an output directory backup
+                    logger.info("No checkpoint directory found, treating as output directory backup")
+                    
+                    # Clear existing output directory (backup first if needed)
+                    if any(self.app.output_path.iterdir()):
+                        backup_dir = self.app.output_path.parent / f"output_backup_{int(time.time())}"
+                        shutil.copytree(str(self.app.output_path), str(backup_dir))
+                        logger.info(f"Backed up existing output to {backup_dir}")
+                        
+                        # Clear output directory
+                        for item in self.app.output_path.iterdir():
+                            if item.is_dir():
+                                shutil.rmtree(item)
+                            else:
+                                item.unlink()
+                    
+                    # Move all extracted items to output directory
+                    for item in extracted_items:
+                        target = self.app.output_path / item.name
+                        shutil.move(str(item), str(target))
+                        logger.info(f"Restored {item.name} to output directory")
+                    
+                    # Check what we restored
+                    restored_checkpoints = list(self.app.output_path.glob("finetrainers_step_*"))
+                    restored_lora = (self.app.output_path / "pytorch_lora_weights.safetensors").exists()
+                    
+                    if restored_checkpoints:
+                        latest = max(restored_checkpoints, key=lambda x: int(x.name.split("_")[-1]))
+                        step_num = int(latest.name.split("_")[-1])
+                        if restored_lora:
+                            return True, f"Successfully restored output directory with checkpoint at step {step_num} and LoRA weights"
+                        else:
+                            return True, f"Successfully restored output directory with checkpoint at step {step_num}"
+                    elif restored_lora:
+                        return True, "Successfully restored output directory with LoRA weights"
+                    else:
+                        return True, "Successfully restored output directory backup"
+                        
+        except Exception as e:
+            error_msg = f"Failed to restore checkpoint: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            return False, error_msg
