@@ -3,6 +3,10 @@
 # For GPU monitoring of NVIDIA chipsets
 pynvml
 
+
+# for video decoding
+torchcodec
+
 # it is recommended to always use the latest version
 diffusers @ git+https://github.com/huggingface/diffusers.git@main
 
