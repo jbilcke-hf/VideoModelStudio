@@ -31,8 +31,7 @@ torchdata==0.10.1
 torchao==0.9.0
 
 # for torch 2.6, we must use torchcodec 0.2
---extra-index-url=https://download.pytorch.org/whl/cu128
-torchcodec==0.2.1
+torchcodec==0.2.1 --index-url=https://download.pytorch.org/whl/cu128
 flash-attn @ https://github.com/Dao-AILab/flash-attention/releases/download/v2.7.4.post1/flash_attn-2.7.4.post1+cu12torch2.6cxx11abiFALSE-cp310-cp310-linux_x86_64.whl
 
 # something broke in Transformers > 4.55.4
