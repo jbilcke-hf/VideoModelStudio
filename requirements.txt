@@ -12,23 +12,24 @@
 #torchcodec
 # flash-attn @ https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3/flash_attn-2.8.3+cu12torch2.8cxx11abiFALSE-cp310-cp310-linux_x86_64.whl
 #
-# our solution for now is to use torch 2.7
+# if we revert back to torch 2.7, then we get another error:
+#  Missing key in checkpoint state_dict: optimizer.param_groups.scale_shift_table.decoupled_weight_decay.
 #
-torch==2.7.1
-torchvision==0.22.1
-torchdata==0.11.0
-torchao==0.12.0
-torchcodec==0.5.0
-flash-attn @ https://github.com/Dao-AILab/flash-attention/releases/download/v2.7.4.post1/flash_attn-2.7.4.post1+cu12torch2.7cxx11abiFALSE-cp310-cp310-linux_x86_64.whl
+#torch==2.7.1
+#torchvision==0.22.1
+#torchdata==0.11.0
+#torchao==0.12.0
+#torchcodec==0.5.0
+#flash-attn @ https://github.com/Dao-AILab/flash-attention/releases/download/v2.7.4.post1/flash_attn-2.7.4.post1+cu12torch2.7cxx11abiFALSE-cp310-cp310-linux_x86_64.whl
 #
-# if that doesn't work, we can still try to revert back to this:
+# so in the end, we have to revert back to the 2.6:
 #
-#torch==2.6.0
-#torchvision==0.21.0
-#torchdata==0.10.1
-#torchao==0.9.0
-#torchcodec==0.4.0
-#flash-attn @ https://github.com/Dao-AILab/flash-attention/releases/download/v2.7.4.post1/flash_attn-2.7.4.post1+cu12torch2.6cxx11abiFALSE-cp310-cp310-linux_x86_64.whl
+torch==2.6.0
+torchvision==0.21.0
+torchdata==0.10.1
+torchao==0.9.0
+torchcodec==0.4.0
+flash-attn @ https://github.com/Dao-AILab/flash-attention/releases/download/v2.7.4.post1/flash_attn-2.7.4.post1+cu12torch2.6cxx11abiFALSE-cp310-cp310-linux_x86_64.whl
 
 # something broke in Transformers > 4.55.4
 transformers==4.55.4
