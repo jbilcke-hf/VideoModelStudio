@@ -1,11 +1,25 @@
 --find-links https://download.pytorch.org/whl/torch_stable.html
-torch==2.8.0
-torchvision==0.23.0
+# we seem to have an issue with Torch 2.8
+# I believe it works but it is incompatible with older weights formats?
+# it looks like they changed the checkpoint format or something
+# python3.10/site-packages/torch/distributed/checkpoint/default_planner.py", line 471, in create_default_local_load_plan
+# RuntimeError: Missing key in checkpoint state_dict: lr_scheduler._is_initial.
+#
+#torch==2.8.0
+#torchvision==0.23.0
+#torchdata==0.11.0
+#torchao==0.12.0
+#torchcodec
+# flash-attn @ https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3/flash_attn-2.8.3+cu12torch2.8cxx11abiFALSE-cp310-cp310-linux_x86_64.whl
+#
+# our solution for now is to use torch 2.7
+#
+torch==2.7.1
+torchvision==0.22.1
 torchdata==0.11.0
 torchao==0.12.0
-torchcodec
-
-flash-attn @ https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3/flash_attn-2.8.3+cu12torch2.8cxx11abiFALSE-cp310-cp310-linux_x86_64.whl
+torchcodec=0.5.0
+flash-attn @ https://github.com/Dao-AILab/flash-attention/releases/download/v2.7.4.post1/flash_attn-2.7.4.post1+cu12torch2.7cxx11abiFALSE-cp310-cp310-linux_x86_64.whl
 
 # something broke in Transformers > 4.55.4
 transformers==4.55.4
