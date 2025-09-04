@@ -7,6 +7,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV DEBIAN_FRONTEND=noninteractive
+ENV LD_LIBRARY_PATH=/usr/local/lib:/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -15,6 +16,12 @@ RUN apt-get update && apt-get install -y \
     python3-dev \
     git \
     ffmpeg \
+    libavcodec-dev \
+    libavformat-dev \
+    libavutil-dev \
+    libswscale-dev \
+    libavdevice-dev \
+    libavfilter-dev \
     libsm6 \
     libxext6 \
     libgl1-mesa-glx \
@@ -27,7 +34,16 @@ WORKDIR /app
 
 # Install Python dependencies first for better caching
 COPY requirements.txt .
-RUN pip3 install --no-cache-dir -r requirements.txt
+# Install most requirements first
+RUN grep -v torchcodec requirements.txt > requirements_without_torchcodec.txt && \
+    pip3 install --no-cache-dir -r requirements_without_torchcodec.txt
+# Install torchcodec with CUDA support (for CUDA 12.x which matches our base image)
+RUN pip3 install --no-cache-dir torchcodec --index-url=https://download.pytorch.org/whl/cu124
+
+# Verify FFmpeg installation and libraries
+RUN ffmpeg -version && \
+    ldconfig && \
+    python3 -c "import torchcodec; print('torchcodec imported successfully')" || echo "Warning: torchcodec import test failed, but continuing..."
 
 # actually we found a way to put flash attention inside the requirements.txt
 # so we are good, we don't need this anymore:

@@ -6,6 +6,8 @@ torchdata==0.10.1
 torchao==0.9.0
 
 # for video decoding
+# Note: We need to install torchcodec with CUDA support for A100
+# This will be handled in the Dockerfile with the correct index-url
 torchcodec
 
 # something broke in Transformers > 4.55.4
