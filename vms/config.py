@@ -492,6 +492,10 @@ HD_TRAINING_BUCKETS = [
 
 # For 1920x1080 images and videos (from 1 frame up to 272)
 FHD_TRAINING_BUCKETS = [
+    # since not all videos might be in 1080p,
+    # we also integrate the 720p buckets in order to increase the quality
+    *HD_TRAINING_BUCKETS,
+
     (NB_FRAMES_1,   FHD_16_9_H, FHD_16_9_W), # 1
     (NB_FRAMES_9,   FHD_16_9_H, FHD_16_9_W), # 8 + 1
     (NB_FRAMES_17,  FHD_16_9_H, FHD_16_9_W), # 16 + 1
