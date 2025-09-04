@@ -18,7 +18,7 @@ torch==2.7.1
 torchvision==0.22.1
 torchdata==0.11.0
 torchao==0.12.0
-torchcodec=0.5.0
+torchcodec==0.5.0
 flash-attn @ https://github.com/Dao-AILab/flash-attention/releases/download/v2.7.4.post1/flash_attn-2.7.4.post1+cu12torch2.7cxx11abiFALSE-cp310-cp310-linux_x86_64.whl
 #
 # if that doesn't work, we can still try to revert back to this:
