@@ -429,19 +429,21 @@ SD_TRAINING_BUCKETS = [
     (NB_FRAMES_257, SD_16_9_H, SD_16_9_W), # 256 + 1
     (NB_FRAMES_265, SD_16_9_H, SD_16_9_W), # 264 + 1
     (NB_FRAMES_273, SD_16_9_H, SD_16_9_W), # 272 + 1
-    (NB_FRAMES_289, SD_16_9_H, SD_16_9_W), # 288 + 1
-    (NB_FRAMES_305, SD_16_9_H, SD_16_9_W), # 304 + 1
-    (NB_FRAMES_321, SD_16_9_H, SD_16_9_W), # 320 + 1
-    (NB_FRAMES_337, SD_16_9_H, SD_16_9_W), # 336 + 1
-    (NB_FRAMES_353, SD_16_9_H, SD_16_9_W), # 352 + 1
-    (NB_FRAMES_369, SD_16_9_H, SD_16_9_W), # 368 + 1
-    (NB_FRAMES_385, SD_16_9_H, SD_16_9_W), # 384 + 1
-    (NB_FRAMES_401, SD_16_9_H, SD_16_9_W), # 400 + 1
-    (NB_FRAMES_417, SD_16_9_H, SD_16_9_W), # 416 + 1
-    (NB_FRAMES_433, SD_16_9_H, SD_16_9_W), # 432 + 1
-    (NB_FRAMES_449, SD_16_9_H, SD_16_9_W), # 448 + 1
-    (NB_FRAMES_465, SD_16_9_H, SD_16_9_W), # 464 + 1
-    (NB_FRAMES_481, SD_16_9_H, SD_16_9_W), # 480 + 1
+
+    # I've tried to use more, but we get an out of memory error on the Nvidia A100
+    # (NB_FRAMES_289, SD_16_9_H, SD_16_9_W), # 288 + 1
+    # (NB_FRAMES_305, SD_16_9_H, SD_16_9_W), # 304 + 1
+    # (NB_FRAMES_321, SD_16_9_H, SD_16_9_W), # 320 + 1
+    # (NB_FRAMES_337, SD_16_9_H, SD_16_9_W), # 336 + 1
+    # (NB_FRAMES_353, SD_16_9_H, SD_16_9_W), # 352 + 1
+    # (NB_FRAMES_369, SD_16_9_H, SD_16_9_W), # 368 + 1
+    # (NB_FRAMES_385, SD_16_9_H, SD_16_9_W), # 384 + 1
+    # (NB_FRAMES_401, SD_16_9_H, SD_16_9_W), # 400 + 1
+    # (NB_FRAMES_417, SD_16_9_H, SD_16_9_W), # 416 + 1
+    # (NB_FRAMES_433, SD_16_9_H, SD_16_9_W), # 432 + 1
+    # (NB_FRAMES_449, SD_16_9_H, SD_16_9_W), # 448 + 1
+    # (NB_FRAMES_465, SD_16_9_H, SD_16_9_W), # 464 + 1
+    # (NB_FRAMES_481, SD_16_9_H, SD_16_9_W), # 480 + 1
 ]
 
 # For 1280x720 images and videos (from 1 frame up to 272)
@@ -475,19 +477,21 @@ HD_TRAINING_BUCKETS = [
     (NB_FRAMES_257, HD_16_9_H, HD_16_9_W), # 256 + 1
     (NB_FRAMES_265, HD_16_9_H, HD_16_9_W), # 264 + 1
     (NB_FRAMES_273, HD_16_9_H, HD_16_9_W), # 272 + 1
-    (NB_FRAMES_289, HD_16_9_H, HD_16_9_W), # 288 + 1
-    (NB_FRAMES_305, HD_16_9_H, HD_16_9_W), # 304 + 1
-    (NB_FRAMES_321, HD_16_9_H, HD_16_9_W), # 320 + 1
-    (NB_FRAMES_337, HD_16_9_H, HD_16_9_W), # 336 + 1
-    (NB_FRAMES_353, HD_16_9_H, HD_16_9_W), # 352 + 1
-    (NB_FRAMES_369, HD_16_9_H, HD_16_9_W), # 368 + 1
-    (NB_FRAMES_385, HD_16_9_H, HD_16_9_W), # 384 + 1
-    (NB_FRAMES_401, HD_16_9_H, HD_16_9_W), # 400 + 1
-    (NB_FRAMES_417, HD_16_9_H, HD_16_9_W), # 416 + 1
-    (NB_FRAMES_433, HD_16_9_H, HD_16_9_W), # 432 + 1
-    (NB_FRAMES_449, HD_16_9_H, HD_16_9_W), # 448 + 1
-    (NB_FRAMES_465, HD_16_9_H, HD_16_9_W), # 464 + 1
-    (NB_FRAMES_481, HD_16_9_H, HD_16_9_W), # 480 + 1
+
+    # I've tried to use more, but we get an out of memory error on the Nvidia A100
+    #(NB_FRAMES_289, HD_16_9_H, HD_16_9_W), # 288 + 1
+    #(NB_FRAMES_305, HD_16_9_H, HD_16_9_W), # 304 + 1
+    #(NB_FRAMES_321, HD_16_9_H, HD_16_9_W), # 320 + 1
+    #(NB_FRAMES_337, HD_16_9_H, HD_16_9_W), # 336 + 1
+    #(NB_FRAMES_353, HD_16_9_H, HD_16_9_W), # 352 + 1
+    #(NB_FRAMES_369, HD_16_9_H, HD_16_9_W), # 368 + 1
+    #(NB_FRAMES_385, HD_16_9_H, HD_16_9_W), # 384 + 1
+    #(NB_FRAMES_401, HD_16_9_H, HD_16_9_W), # 400 + 1
+    #(NB_FRAMES_417, HD_16_9_H, HD_16_9_W), # 416 + 1
+    #(NB_FRAMES_433, HD_16_9_H, HD_16_9_W), # 432 + 1
+    #(NB_FRAMES_449, HD_16_9_H, HD_16_9_W), # 448 + 1
+    #(NB_FRAMES_465, HD_16_9_H, HD_16_9_W), # 464 + 1
+    #(NB_FRAMES_481, HD_16_9_H, HD_16_9_W), # 480 + 1
 ]
 
 # For 1920x1080 images and videos (from 1 frame up to 272)
@@ -524,20 +528,22 @@ FHD_TRAINING_BUCKETS = [
     (NB_FRAMES_249, FHD_16_9_H, FHD_16_9_W), # 248 + 1
     (NB_FRAMES_257, FHD_16_9_H, FHD_16_9_W), # 256 + 1
     (NB_FRAMES_265, FHD_16_9_H, FHD_16_9_W), # 264 + 1
-    (NB_FRAMES_273, FHD_16_9_H, FHD_16_9_W), # 272 + 1
-    (NB_FRAMES_289, FHD_16_9_H, FHD_16_9_W), # 288 + 1
-    (NB_FRAMES_305, FHD_16_9_H, FHD_16_9_W), # 304 + 1
-    (NB_FRAMES_321, FHD_16_9_H, FHD_16_9_W), # 320 + 1
-    (NB_FRAMES_337, FHD_16_9_H, FHD_16_9_W), # 336 + 1
-    (NB_FRAMES_353, FHD_16_9_H, FHD_16_9_W), # 352 + 1
-    (NB_FRAMES_369, FHD_16_9_H, FHD_16_9_W), # 368 + 1
-    (NB_FRAMES_385, FHD_16_9_H, FHD_16_9_W), # 384 + 1
-    (NB_FRAMES_401, FHD_16_9_H, FHD_16_9_W), # 400 + 1
-    (NB_FRAMES_417, FHD_16_9_H, FHD_16_9_W), # 416 + 1
-    (NB_FRAMES_433, FHD_16_9_H, FHD_16_9_W), # 432 + 1
-    (NB_FRAMES_449, FHD_16_9_H, FHD_16_9_W), # 448 + 1
-    (NB_FRAMES_465, FHD_16_9_H, FHD_16_9_W), # 464 + 1
-    (NB_FRAMES_481, FHD_16_9_H, FHD_16_9_W), # 480 + 1
+
+    # I've tried to use more, but we get an out of memory error on the Nvidia A100
+    #(NB_FRAMES_273, FHD_16_9_H, FHD_16_9_W), # 272 + 1
+    #(NB_FRAMES_289, FHD_16_9_H, FHD_16_9_W), # 288 + 1
+    #(NB_FRAMES_305, FHD_16_9_H, FHD_16_9_W), # 304 + 1
+    #(NB_FRAMES_321, FHD_16_9_H, FHD_16_9_W), # 320 + 1
+    #(NB_FRAMES_337, FHD_16_9_H, FHD_16_9_W), # 336 + 1
+    #(NB_FRAMES_353, FHD_16_9_H, FHD_16_9_W), # 352 + 1
+    #(NB_FRAMES_369, FHD_16_9_H, FHD_16_9_W), # 368 + 1
+    #(NB_FRAMES_385, FHD_16_9_H, FHD_16_9_W), # 384 + 1
+    #(NB_FRAMES_401, FHD_16_9_H, FHD_16_9_W), # 400 + 1
+    #(NB_FRAMES_417, FHD_16_9_H, FHD_16_9_W), # 416 + 1
+    #(NB_FRAMES_433, FHD_16_9_H, FHD_16_9_W), # 432 + 1
+    #(NB_FRAMES_449, FHD_16_9_H, FHD_16_9_W), # 448 + 1
+    #(NB_FRAMES_465, FHD_16_9_H, FHD_16_9_W), # 464 + 1
+    #(NB_FRAMES_481, FHD_16_9_H, FHD_16_9_W), # 480 + 1
 ]
 
 
