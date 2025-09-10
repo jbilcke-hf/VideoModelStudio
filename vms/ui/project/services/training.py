@@ -1664,25 +1664,25 @@ class TrainingService:
         # Check in lora_weights directory
         lora_weights_dir = self.app.output_path / "lora_weights"
         if lora_weights_dir.exists():
-            #logger.info(f"Found lora_weights directory: {lora_weights_dir}")
+            logger.info(f"Found lora_weights directory: {lora_weights_dir}")
             
             # Look for the latest checkpoint directory in lora_weights
             lora_checkpoints = [d for d in lora_weights_dir.glob("*") if d.is_dir() and d.name.isdigit()]
             if lora_checkpoints:
                 latest_lora_checkpoint = max(lora_checkpoints, key=lambda x: int(x.name))
-                #logger.info(f"Found latest LoRA checkpoint: {latest_lora_checkpoint}")
+                logger.info(f"Found latest LoRA checkpoint: {latest_lora_checkpoint}")
                 
                 # Extract step count from directory name
                 result["steps"] = int(latest_lora_checkpoint.name)
                 
                 # List contents of the latest checkpoint directory
                 checkpoint_contents = list(latest_lora_checkpoint.glob("*"))
-                #logger.info(f"Contents of LoRA checkpoint {latest_lora_checkpoint.name}: {checkpoint_contents}")
+                logger.info(f"Contents of LoRA checkpoint {latest_lora_checkpoint.name}: {checkpoint_contents}")
                 
                 # Check for weights in the latest LoRA checkpoint
                 lora_safetensors = latest_lora_checkpoint / "pytorch_lora_weights.safetensors"
                 if lora_safetensors.exists():
-                    #logger.info(f"Found weights in latest LoRA checkpoint: {lora_safetensors}")
+                    logger.info(f"Found weights in latest LoRA checkpoint: {lora_safetensors}")
                     result["path"] = str(lora_safetensors)
                     return result
                 
@@ -1697,14 +1697,14 @@ class TrainingService:
                 for weight_file in possible_weight_files:
                     weight_path = latest_lora_checkpoint / weight_file
                     if weight_path.exists():
-                        #logger.info(f"Found weights file {weight_file} in latest LoRA checkpoint: {weight_path}")
+                        logger.info(f"Found weights file {weight_file} in latest LoRA checkpoint: {weight_path}")
                         result["path"] = str(weight_path)
                         return result
                 
                 # Check if any .safetensors files exist
                 safetensors_files = list(latest_lora_checkpoint.glob("*.safetensors"))
                 if safetensors_files:
-                    #logger.info(f"Found .safetensors files in LoRA checkpoint: {safetensors_files}")
+                    logger.info(f"Found .safetensors files in LoRA checkpoint: {safetensors_files}")
                     # Return the first .safetensors file found
                     result["path"] = str(safetensors_files[0])
                     return result
@@ -1712,7 +1712,7 @@ class TrainingService:
             # Fallback: check for direct safetensors file in lora_weights root
             lora_safetensors = lora_weights_dir / "pytorch_lora_weights.safetensors"
             if lora_safetensors.exists():
-                #logger.info(f"Found weights in lora_weights directory: {lora_safetensors}")
+                logger.info(f"Found weights in lora_weights directory: {lora_safetensors}")
                 result["path"] = str(lora_safetensors)
                 return result
             else:
@@ -1753,7 +1753,10 @@ class TrainingService:
         Returns:
             Path to safetensors file or None if not found
         """
-        return self.get_model_output_info()["path"]
+        path = self.get_model_output_info()["path"]
+        if not path:
+            raise gr.Error("No model weights found. Please train a model first.")
+        return path
 
     def create_training_dataset_zip(self) -> str:
         """Create a ZIP file containing all training data
