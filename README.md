@@ -11,6 +11,12 @@ license: apache-2.0
 short_description: All-in-one tool for AI video training
 ---
 
+# Important note
+
+I am currently unable to maintain this project due to scarcity of ressources (time, money, GPUs, contributors).
+
+I recommend to use Ostris AI-Toolkit instead, as it has multiple sponsors (including Hugging Face): [ostris/ai-toolkit](https://github.com/ostris/ai-toolkit?tab=readme-ov-file#current-sponsors)
+
 # 🎥 Video Model Studio (VMS)
 
 ![example](https://media.githubusercontent.com/media/jbilcke-hf/VideoModelStudio/main/docs/screenshots/importing-a-video-dataset.jpg)
